@@ -52,6 +52,21 @@ String formatMinorUnits(
   return '$sign$symbol$majorStr.$fractionStr';
 }
 
+/// Renders [minorUnits] as a plain decimal string for an input field — no
+/// symbol or thousands separators.
+///
+/// Examples:
+/// ```dart
+/// minorUnitsToInput(5000050); // '50000.50'
+/// minorUnitsToInput(5000000); // '50000'
+/// ```
+String minorUnitsToInput(int minorUnits, {int decimals = 2}) {
+  final pow = _pow10(decimals);
+  final major = minorUnits ~/ pow;
+  final fraction = (minorUnits % pow).toString().padLeft(decimals, '0');
+  return fraction == '0' * decimals ? '$major' : '$major.$fraction';
+}
+
 /// Returns the display symbol for a given ISO 4217 [code].
 ///
 /// Falls back to the code itself when the currency is not in the V1 list.

@@ -41,7 +41,8 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
     final initial = widget.initial;
     _nameController = TextEditingController(text: initial?.name ?? '');
     _balanceController = TextEditingController(
-      text: initial == null ? '' : _minorToInput(initial.openingBalanceMinor),
+      text:
+          initial == null ? '' : minorUnitsToInput(initial.openingBalanceMinor),
     );
     _type = initial?.type ?? AccountType.bank;
     _currency = initial?.currency ?? 'BDT';
@@ -206,14 +207,3 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
     }
   }
 }
-
-/// Renders [minorUnits] as a plain decimal string for the balance input field
-/// (no symbol or thousands separators), e.g. `5000050` → `'50000.50'`.
-String _minorToInput(int minorUnits, {int decimals = 2}) {
-  final pow = _pow10(decimals);
-  final major = minorUnits ~/ pow;
-  final fraction = (minorUnits % pow).toString().padLeft(decimals, '0');
-  return fraction == '0' * decimals ? '$major' : '$major.$fraction';
-}
-
-int _pow10(int n) => n == 0 ? 1 : 10 * _pow10(n - 1);
