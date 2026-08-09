@@ -1014,6 +1014,11 @@ when the feature is sufficiently complex.
 
 Do not force every small feature into excessive folder depth.
 
+Features implemented so far:
+
+- **accounts** — Account management (FR-01)
+- **categories** — Category management with built-in seed data (FR-03)
+
 ---
 
 # 32. Core Module
