@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/database/app_database.dart';
 import '../features/accounts/application/account_controller.dart';
 import '../features/accounts/data/account_dao.dart';
+import '../features/categories/application/category_controller.dart';
+import '../features/categories/data/category_dao.dart';
 
 /// The application database singleton.
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
@@ -10,6 +12,10 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
   ref.onDispose(database.close);
   return database;
 });
+
+// ------------------------------------------------------------------
+// Accounts
+// ------------------------------------------------------------------
 
 /// Data-access object for financial accounts.
 final accountDaoProvider = Provider<AccountDao>((ref) {
@@ -24,4 +30,24 @@ final accountControllerProvider = Provider<AccountController>((ref) {
 /// Reactive stream of all accounts (for UI consumers).
 final accountsStreamProvider = StreamProvider<List<FinancialAccountRow>>((ref) {
   return ref.watch(accountDaoProvider).watchAll();
+});
+
+// ------------------------------------------------------------------
+// Categories
+// ------------------------------------------------------------------
+
+/// Data-access object for categories.
+final categoryDaoProvider = Provider<CategoryDao>((ref) {
+  return CategoryDao(ref.watch(appDatabaseProvider));
+});
+
+/// Application service for the category lifecycle.
+final categoryControllerProvider = Provider<CategoryController>((ref) {
+  return CategoryController(ref.watch(categoryDaoProvider));
+});
+
+/// Reactive stream of all categories (for UI consumers), including archived
+/// ones so management screens can render a restore section.
+final categoriesStreamProvider = StreamProvider<List<CategoryRow>>((ref) {
+  return ref.watch(categoryDaoProvider).watchAll();
 });
