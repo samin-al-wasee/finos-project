@@ -14,8 +14,9 @@ void main() {
     );
   }
 
-  testWidgets('renders the bottom navigation shell with four destinations',
-      (tester) async {
+  testWidgets('renders the bottom navigation shell with four destinations', (
+    tester,
+  ) async {
     final database = AppDatabase.inMemory();
 
     await tester.pumpWidget(buildApp(database: database));
@@ -33,15 +34,17 @@ void main() {
     await database.close();
   });
 
-  testWidgets('shows an empty state on the home tab when there are no accounts',
-      (tester) async {
-    final database = AppDatabase.inMemory();
+  testWidgets(
+    'shows an empty state on the home tab when there are no accounts',
+    (tester) async {
+      final database = AppDatabase.inMemory();
 
-    await tester.pumpWidget(buildApp(database: database));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(buildApp(database: database));
+      await tester.pumpAndSettle();
 
-    expect(find.text('No accounts yet'), findsOneWidget);
+      expect(find.text('No accounts yet'), findsOneWidget);
 
-    await database.close();
-  });
+      await database.close();
+    },
+  );
 }
