@@ -65,6 +65,11 @@ class AccountsListScreen extends ConsumerWidget {
           icon: Icons.error_outline,
           title: 'Something went wrong',
           message: error.toString(),
+          action: OutlinedButton.icon(
+            onPressed: () => ref.invalidate(accountsStreamProvider),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
         ),
         loading: () => const Center(
           child: Padding(

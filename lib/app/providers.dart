@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/database/app_database.dart';
@@ -28,8 +30,21 @@ final accountControllerProvider = Provider<AccountController>((ref) {
 });
 
 /// Reactive stream of all accounts (for UI consumers).
+///
+/// A generous timeout converts a hung database-open (e.g. a stuck migration)
+/// into a visible error instead of an infinite spinner.
 final accountsStreamProvider = StreamProvider<List<FinancialAccountRow>>((ref) {
-  return ref.watch(accountDaoProvider).watchAll();
+  return ref
+      .watch(accountDaoProvider)
+      .watchAll()
+      .timeout(
+        const Duration(seconds: 15),
+        onTimeout: (sink) {
+          sink.addError(
+            TimeoutException('Opening the database is taking too long'),
+          );
+        },
+      );
 });
 
 // ------------------------------------------------------------------
@@ -48,6 +63,18 @@ final categoryControllerProvider = Provider<CategoryController>((ref) {
 
 /// Reactive stream of all categories (for UI consumers), including archived
 /// ones so management screens can render a restore section.
+///
+/// Same timeout rationale as [accountsStreamProvider].
 final categoriesStreamProvider = StreamProvider<List<CategoryRow>>((ref) {
-  return ref.watch(categoryDaoProvider).watchAll();
+  return ref
+      .watch(categoryDaoProvider)
+      .watchAll()
+      .timeout(
+        const Duration(seconds: 15),
+        onTimeout: (sink) {
+          sink.addError(
+            TimeoutException('Opening the database is taking too long'),
+          );
+        },
+      );
 });

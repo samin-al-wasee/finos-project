@@ -146,10 +146,11 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
         await controller.create(name: name, type: _type, icon: _icon);
       }
       if (mounted) Navigator.of(context).pop();
-    } catch (_) {
+    } catch (e, s) {
+      debugPrint('[CategoryForm] save error: $e\n$s');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save the category')),
+          SnackBar(content: Text('Could not save the category: $e')),
         );
       }
     } finally {

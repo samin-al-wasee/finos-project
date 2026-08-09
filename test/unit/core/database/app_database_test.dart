@@ -150,6 +150,96 @@ void main() {
       final categories = await migrated.select(migrated.categories).get();
       expect(categories, hasLength(12));
     });
+
+    test('recovers a v2 database whose categories table is empty', () async {
+      final dir = await Directory.systemTemp.createTemp('finos_empty_cats');
+      final file = File('${dir.path}/empty_cats.db');
+      addTearDown(() async {
+        await file.delete();
+        await dir.delete(recursive: true);
+      });
+
+      // A database that claims schema v2 (so no migration runs) but whose
+      // categories table exists with zero rows — as if a previous migration
+      // created the table but the seed failed partway through.
+      final legacy = _LegacyDatabase(NativeDatabase(file));
+      await legacy.customStatement('PRAGMA user_version = 2');
+      await legacy.customStatement('''
+        CREATE TABLE financial_accounts (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'BDT',
+          opening_balance_minor INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'ACTIVE'
+        )
+      ''');
+      await legacy.customStatement('''
+        CREATE TABLE categories (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          origin TEXT NOT NULL DEFAULT 'USER',
+          icon TEXT NOT NULL DEFAULT 'label',
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          created_at INTEGER NOT NULL DEFAULT
+            (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+          updated_at INTEGER NOT NULL DEFAULT
+            (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+        )
+      ''');
+      await legacy.close();
+
+      // Reopen. The beforeOpen safety net must notice the empty table and
+      // re-seed without touching accounts.
+      final reopened = AppDatabase(NativeDatabase(file));
+      addTearDown(reopened.close);
+
+      final categories = await reopened.select(reopened.categories).get();
+      expect(categories, hasLength(12));
+
+      final accounts = await reopened.select(reopened.financialAccounts).get();
+      expect(accounts, isEmpty);
+    });
+
+    test('recovers a v2 database whose categories table is missing', () async {
+      final dir = await Directory.systemTemp.createTemp('finos_missing_cats');
+      final file = File('${dir.path}/missing_cats.db');
+      addTearDown(() async {
+        await file.delete();
+        await dir.delete(recursive: true);
+      });
+
+      // A database that claims schema v2 but has no categories table at all —
+      // as if an interrupted build bumped user_version without creating it.
+      final legacy = _LegacyDatabase(NativeDatabase(file));
+      await legacy.customStatement('PRAGMA user_version = 2');
+      await legacy.customStatement('''
+        CREATE TABLE financial_accounts (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'BDT',
+          opening_balance_minor INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'ACTIVE'
+        )
+      ''');
+      await legacy.close();
+
+      // Reopen. The safety net must recreate the missing table and seed it.
+      final reopened = AppDatabase(NativeDatabase(file));
+      addTearDown(reopened.close);
+
+      final categories = await reopened.select(reopened.categories).get();
+      expect(categories, hasLength(12));
+
+      final accounts = await reopened.select(reopened.financialAccounts).get();
+      expect(accounts, isEmpty);
+    });
   });
 }
 

@@ -194,10 +194,11 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
         );
       }
       if (mounted) Navigator.of(context).pop();
-    } catch (_) {
+    } catch (e, s) {
+      debugPrint('[AccountForm] save error: $e\n$s');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save the account')),
+          SnackBar(content: Text('Could not save the account: $e')),
         );
       }
     } finally {
