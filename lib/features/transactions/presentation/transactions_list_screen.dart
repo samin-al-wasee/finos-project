@@ -7,7 +7,6 @@ import '../../../core/formatting/date.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
-import '../application/transaction_controller.dart';
 import 'transaction_form_screen.dart';
 import 'transaction_tile.dart';
 
@@ -47,6 +46,7 @@ class TransactionsListScreen extends ConsumerWidget {
                     rows: rows,
                     accounts: accountRows,
                     categories: categoryRows,
+                    onDelete: (row) => _confirmDelete(context, ref, row),
                   ),
                   error: (e, _) => _ErrorState(
                     message: e.toString(),
@@ -70,9 +70,55 @@ class TransactionsListScreen extends ConsumerWidget {
   }
 
   void _openForm(BuildContext context) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const TransactionFormScreen()));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const TransactionFormScreen()),
+    );
+  }
+
+  /// Asks for confirmation, then permanently deletes the transaction
+  /// (docs/UI_DESIGN.md §35).
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    TransactionRow row,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this transaction?'),
+        content: const Text(
+          'This permanently removes the transaction and its effect on '
+          'your account balances.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final controller = ref.read(transactionControllerProvider);
+    try {
+      await controller.delete(row.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Transaction deleted')));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete the transaction: $e')),
+        );
+      }
+    }
   }
 }
 
@@ -82,11 +128,15 @@ class _TransactionList extends StatelessWidget {
     required this.rows,
     required this.accounts,
     required this.categories,
+    required this.onDelete,
   });
 
   final List<TransactionRow> rows;
   final List<FinancialAccountRow> accounts;
   final List<CategoryRow> categories;
+
+  /// Called when the user confirms deleting a transaction.
+  final ValueChanged<TransactionRow> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -121,10 +171,11 @@ class _TransactionList extends StatelessWidget {
             destinationAccountName: row.destinationAccountId == null
                 ? null
                 : accountNames[row.destinationAccountId] ??
-                    row.destinationAccountId,
+                      row.destinationAccountId,
             categoryName: category?.name,
             categoryIconKey: category?.icon,
             onTap: () => _openEdit(context, row),
+            onDelete: () => onDelete(row),
           ),
         );
       }
@@ -179,9 +230,7 @@ class _AddTransactionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return FilledButton.icon(
       onPressed: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const TransactionFormScreen(),
-        ),
+        MaterialPageRoute<void>(builder: (_) => const TransactionFormScreen()),
       ),
       icon: const Icon(Icons.add),
       label: const Text('Add transaction'),

@@ -12,6 +12,7 @@ import '../../features/categories/domain/category_origin.dart';
 import '../../features/categories/domain/category_status.dart';
 import '../../features/categories/domain/category_type.dart';
 import '../../features/transactions/data/transaction_table.dart';
+import '../../features/transactions/domain/transaction_type.dart';
 
 part 'app_database.g.dart';
 

@@ -7,6 +7,8 @@ import '../features/accounts/application/account_controller.dart';
 import '../features/accounts/data/account_dao.dart';
 import '../features/categories/application/category_controller.dart';
 import '../features/categories/data/category_dao.dart';
+import '../features/transactions/application/transaction_controller.dart';
+import '../features/transactions/data/transaction_dao.dart';
 
 /// The application database singleton.
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
@@ -68,6 +70,41 @@ final categoryControllerProvider = Provider<CategoryController>((ref) {
 final categoriesStreamProvider = StreamProvider<List<CategoryRow>>((ref) {
   return ref
       .watch(categoryDaoProvider)
+      .watchAll()
+      .timeout(
+        const Duration(seconds: 15),
+        onTimeout: (sink) {
+          sink.addError(
+            TimeoutException('Opening the database is taking too long'),
+          );
+        },
+      );
+});
+
+// ------------------------------------------------------------------
+// Transactions
+// ------------------------------------------------------------------
+
+/// Data-access object for transactions.
+final transactionDaoProvider = Provider<TransactionDao>((ref) {
+  return TransactionDao(ref.watch(appDatabaseProvider));
+});
+
+/// Application service for the transaction lifecycle.
+final transactionControllerProvider = Provider<TransactionController>((ref) {
+  return TransactionController(
+    ref.watch(transactionDaoProvider),
+    ref.watch(accountDaoProvider),
+    ref.watch(categoryDaoProvider),
+  );
+});
+
+/// Reactive stream of all transactions (for UI consumers).
+///
+/// Same timeout rationale as [accountsStreamProvider].
+final transactionsStreamProvider = StreamProvider<List<TransactionRow>>((ref) {
+  return ref
+      .watch(transactionDaoProvider)
       .watchAll()
       .timeout(
         const Duration(seconds: 15),

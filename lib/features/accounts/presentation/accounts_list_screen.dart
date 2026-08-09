@@ -28,8 +28,8 @@ class AccountsListScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Accounts'),
         actions: [
-          // Temporary entry point until the transaction form exposes a real
-          // category picker (FR-03; removed when FR-02 lands).
+          // Category management entry point. The transaction form links to the
+          // category list too, but this stays until a Settings screen exists.
           IconButton(
             icon: const Icon(Icons.category_outlined),
             tooltip: 'Categories',

@@ -23,6 +23,7 @@ class TransactionTile extends StatelessWidget {
     this.categoryName,
     this.categoryIconKey,
     this.onTap,
+    this.onDelete,
     this.trailing,
   });
 
@@ -42,6 +43,9 @@ class TransactionTile extends StatelessWidget {
 
   final VoidCallback? onTap;
 
+  /// Callback for deleting the transaction (with confirmation in the caller).
+  final VoidCallback? onDelete;
+
   /// Optional trailing widget replacing the default signed amount.
   final Widget? trailing;
 
@@ -53,10 +57,10 @@ class TransactionTile extends StatelessWidget {
     final title = isTransfer
         ? 'Transfer · $accountName → $destinationAccountName'
         : (categoryName?.isNotEmpty ?? false)
-            ? categoryName!
-            : (transaction.description.isEmpty
-                ? 'Transaction'
-                : transaction.description);
+        ? categoryName!
+        : (transaction.description.isEmpty
+              ? 'Transaction'
+              : transaction.description);
     final subtitle = isTransfer ? null : accountName;
 
     final IconData leadingIcon;
@@ -66,18 +70,54 @@ class TransactionTile extends StatelessWidget {
       leadingIcon = categoryIcon(categoryIconKey ?? 'label');
     }
 
+    final trailingAmount =
+        trailing ?? _Amount(type: type, amountMinor: transaction.amountMinor);
+    final trailingWidget = onDelete == null
+        ? trailingAmount
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              trailingAmount,
+              _MoreMenuButton(onEdit: onTap, onDelete: onDelete),
+            ],
+          );
+
     return ListTile(
       leading: CircleAvatar(child: Icon(leadingIcon)),
-      title: Text(
-        title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: subtitle == null
           ? null
           : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: trailing ?? _Amount(type: type, amountMinor: transaction.amountMinor),
+      trailing: trailingWidget,
       onTap: onTap,
+    );
+  }
+}
+
+/// The overflow menu on a transaction tile offering edit and delete.
+class _MoreMenuButton extends StatelessWidget {
+  const _MoreMenuButton({required this.onEdit, required this.onDelete});
+
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'Transaction options',
+      onSelected: (value) {
+        switch (value) {
+          case 'edit':
+            onEdit?.call();
+          case 'delete':
+            onDelete?.call();
+        }
+      },
+      itemBuilder: (context) => [
+        if (onEdit != null)
+          const PopupMenuItem(value: 'edit', child: Text('Edit')),
+        const PopupMenuItem(value: 'delete', child: Text('Delete')),
+      ],
     );
   }
 }
