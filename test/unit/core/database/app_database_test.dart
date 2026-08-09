@@ -9,6 +9,8 @@ import 'package:finos_app/features/accounts/domain/account_type.dart';
 import 'package:finos_app/features/categories/domain/category_origin.dart';
 import 'package:finos_app/features/categories/domain/category_status.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
+import 'package:finos_app/features/transactions/data/transaction_dao.dart';
+import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -25,8 +27,8 @@ void main() {
       await database.close();
     });
 
-    test('starts at schema version 2', () {
-      expect(database.schemaVersion, 2);
+    test('starts at schema version 3', () {
+      expect(database.schemaVersion, 3);
     });
 
     test('seeds the built-in categories on a fresh database', () async {
@@ -149,6 +151,152 @@ void main() {
       // Categories table now exists and is seeded exactly once.
       final categories = await migrated.select(migrated.categories).get();
       expect(categories, hasLength(12));
+    });
+
+    test('migrates a v2 database and creates the transactions table', () async {
+      final dir = await Directory.systemTemp.createTemp('finos_v2_to_v3');
+      final file = File('${dir.path}/migration_v3.db');
+      addTearDown(() async {
+        await file.delete();
+        await dir.delete(recursive: true);
+      });
+
+      // Hand-roll a schema-v2 database containing the accounts and categories
+      // tables, mirroring the pre-FR-02 schema.
+      final legacy = _LegacyDatabase(NativeDatabase(file));
+      await legacy.customStatement('PRAGMA user_version = 2');
+      await legacy.customStatement('''
+        CREATE TABLE financial_accounts (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'BDT',
+          opening_balance_minor INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'ACTIVE'
+        )
+      ''');
+      await legacy.customStatement('''
+        CREATE TABLE categories (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          origin TEXT NOT NULL DEFAULT 'USER',
+          icon TEXT NOT NULL DEFAULT 'label',
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          created_at INTEGER NOT NULL DEFAULT
+            (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+          updated_at INTEGER NOT NULL DEFAULT
+            (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+        )
+      ''');
+      await legacy.customStatement('''
+        INSERT INTO financial_accounts
+          (id, name, type, created_at, updated_at)
+        VALUES
+          ('acct-legacy', 'Legacy Bank', 'BANK', 1700000000, 1700000000)
+        ''');
+      await legacy.close();
+
+      // Reopen the same file as the current schema (v3). The migration must
+      // add the transactions table without touching accounts or categories.
+      final migrated = AppDatabase(NativeDatabase(file));
+      addTearDown(migrated.close);
+
+      // Transactions table now exists and accepts inserts.
+      final dao = TransactionDao(migrated);
+      await dao.insertOne(
+        TransactionsCompanion.insert(
+          id: 'tx-001',
+          type: TransactionType.expense,
+          amountMinor: 5000,
+          accountId: 'acct-legacy',
+          date: DateTime(2026, 8, 10),
+        ),
+      );
+      final tx = await dao.getById('tx-001');
+      expect(tx, isNotNull);
+      expect(tx!.type, TransactionType.expense);
+
+      // Existing data is preserved.
+      final accounts = await migrated.select(migrated.financialAccounts).get();
+      expect(accounts, hasLength(1));
+      expect(accounts.single.id, 'acct-legacy');
+    });
+
+    test('recovers a v3 database whose transactions table is missing', () async {
+      final dir = await Directory.systemTemp.createTemp('finos_missing_tx');
+      final file = File('${dir.path}/missing_tx.db');
+      addTearDown(() async {
+        await file.delete();
+        await dir.delete(recursive: true);
+      });
+
+      // A database that claims schema v3 but has no transactions table at all —
+      // as if an interrupted build bumped user_version without creating it.
+      final legacy = _LegacyDatabase(NativeDatabase(file));
+      await legacy.customStatement('PRAGMA user_version = 3');
+      await legacy.customStatement('''
+        CREATE TABLE financial_accounts (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'BDT',
+          opening_balance_minor INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'ACTIVE'
+        )
+      ''');
+      await legacy.customStatement('''
+        CREATE TABLE categories (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          origin TEXT NOT NULL DEFAULT 'USER',
+          icon TEXT NOT NULL DEFAULT 'label',
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          created_at INTEGER NOT NULL DEFAULT
+            (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+          updated_at INTEGER NOT NULL DEFAULT
+            (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+        )
+      ''');
+      await legacy.close();
+
+      // Reopen. The beforeOpen safety net must recreate the missing table.
+      final reopened = AppDatabase(NativeDatabase(file));
+      addTearDown(reopened.close);
+
+      // Seed an account so the transaction's foreign key resolves. The
+      // hand-rolled table has no timestamp defaults, so provide them.
+      final accountDao = AccountDao(reopened);
+      await accountDao.insertOne(
+        FinancialAccountsCompanion.insert(
+          id: 'acct-legacy',
+          name: 'Legacy Bank',
+          type: AccountType.bank,
+          createdAt: Value(DateTime(2026, 8, 10)),
+          updatedAt: Value(DateTime(2026, 8, 10)),
+        ),
+      );
+
+      final dao = TransactionDao(reopened);
+      await dao.insertOne(
+        TransactionsCompanion.insert(
+          id: 'tx-safe',
+          type: TransactionType.income,
+          amountMinor: 100000,
+          accountId: 'acct-legacy',
+          date: DateTime(2026, 8, 10),
+        ),
+      );
+      expect(await dao.getById('tx-safe'), isNotNull);
+
+      final accounts = await reopened.select(reopened.financialAccounts).get();
+      expect(accounts, hasLength(1));
+      expect(accounts.single.id, 'acct-legacy');
     });
 
     test('recovers a v2 database whose categories table is empty', () async {
