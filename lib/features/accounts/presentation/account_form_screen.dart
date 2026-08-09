@@ -41,8 +41,9 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
     final initial = widget.initial;
     _nameController = TextEditingController(text: initial?.name ?? '');
     _balanceController = TextEditingController(
-      text:
-          initial == null ? '' : minorUnitsToInput(initial.openingBalanceMinor),
+      text: initial == null
+          ? ''
+          : minorUnitsToInput(initial.openingBalanceMinor),
     );
     _type = initial?.type ?? AccountType.bank;
     _currency = initial?.currency ?? 'BDT';

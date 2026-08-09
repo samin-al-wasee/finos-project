@@ -36,8 +36,7 @@ class Transactions extends Table {
   /// Optional category classifying income/expense. Always null for transfers
   /// because a transfer must not affect spending or income totals
   /// (docs/DATA_MODEL.md §17).
-  TextColumn get categoryId =>
-      text().nullable().references(Categories, #id)();
+  TextColumn get categoryId => text().nullable().references(Categories, #id)();
 
   /// The calendar date the financial event happened (docs/DATA_MODEL.md §41).
   /// This is the financial event date, not the record-creation timestamp.

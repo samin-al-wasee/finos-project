@@ -31,8 +31,7 @@ class TransactionFormScreen extends ConsumerStatefulWidget {
       _TransactionFormScreenState();
 }
 
-class _TransactionFormScreenState
-    extends ConsumerState<TransactionFormScreen> {
+class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
   /// Amount in major units (e.g. "500" for ৳500.00).
@@ -78,8 +77,9 @@ class _TransactionFormScreenState
     final categories = ref.watch(categoriesStreamProvider);
 
     final accountRows = accounts.valueOrNull ?? [];
-    final activeAccounts =
-        accountRows.where((a) => a.status == AccountStatus.active).toList();
+    final activeAccounts = accountRows
+        .where((a) => a.status == AccountStatus.active)
+        .toList();
     final categoryRows = categories.valueOrNull ?? [];
     final activeCategories = categoryRows
         .where((c) => c.status == CategoryStatus.active)
@@ -113,15 +113,17 @@ class _TransactionFormScreenState
               TextFormField(
                 controller: _amountController,
                 autofocus: !_isEditing,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
                 textAlign: TextAlign.center,
                 decoration: InputDecoration(
                   labelText: 'Amount',
-                  prefixText: '${currencySymbol(activeAccounts.isNotEmpty ? activeAccounts.first.currency : 'BDT')} ',
+                  prefixText:
+                      '${currencySymbol(activeAccounts.isNotEmpty ? activeAccounts.first.currency : 'BDT')} ',
                   border: const OutlineInputBorder(),
                   hintText: '0.00',
                 ),
@@ -165,9 +167,10 @@ class _TransactionFormScreenState
               // ── Account ("From") ────────────────────────────────────────
               DropdownButtonFormField<String>(
                 initialValue:
-                    _accountId.isNotEmpty && activeAccounts.any((a) => a.id == _accountId)
-                        ? _accountId
-                        : null,
+                    _accountId.isNotEmpty &&
+                        activeAccounts.any((a) => a.id == _accountId)
+                    ? _accountId
+                    : null,
                 decoration: const InputDecoration(
                   labelText: 'Account',
                   border: OutlineInputBorder(),
@@ -205,7 +208,9 @@ class _TransactionFormScreenState
                         DropdownMenuItem(value: a.id, child: Text(a.name)),
                   ],
                   onChanged: (value) {
-                    if (value != null) setState(() => _destinationAccountId = value);
+                    if (value != null) {
+                      setState(() => _destinationAccountId = value);
+                    }
                   },
                   validator: (v) => v == null ? 'Select a destination' : null,
                 ),
@@ -269,17 +274,14 @@ class _TransactionFormScreenState
               FilledButton(
                 onPressed: _saving ? null : () => _save(controller),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                   child: _saving
                       ? const SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Text(
-                          _isEditing ? 'Save changes' : 'Add transaction',
-                        ),
+                      : Text(_isEditing ? 'Save changes' : 'Add transaction'),
                 ),
               ),
             ],
@@ -318,8 +320,18 @@ class _TransactionFormScreenState
   String _formatDateShort(DateTime date) {
     final local = date.toLocal();
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[local.month - 1]} ${local.day}, ${local.year}';
   }

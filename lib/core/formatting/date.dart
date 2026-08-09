@@ -5,8 +5,18 @@
 // recorded late at night doesn't shift to another day because of the clock.
 
 const List<String> _monthNames = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 /// Formats [date] as a compact calendar date, e.g. `Aug 10, 2026`.

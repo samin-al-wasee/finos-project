@@ -24,7 +24,11 @@ void main() {
     Future<String> seedAccount(String name) async {
       final id = 'acct-$name';
       await accounts.insertOne(
-        FinancialAccountsCompanion.insert(id: id, name: name, type: AccountType.bank),
+        FinancialAccountsCompanion.insert(
+          id: id,
+          name: name,
+          type: AccountType.bank,
+        ),
       );
       return id;
     }

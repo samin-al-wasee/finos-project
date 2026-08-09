@@ -36,7 +36,11 @@ void main() {
     Future<String> seedAccount(String name) async {
       final id = 'acct-$name';
       await accounts.insertOne(
-        FinancialAccountsCompanion.insert(id: id, name: name, type: AccountType.bank),
+        FinancialAccountsCompanion.insert(
+          id: id,
+          name: name,
+          type: AccountType.bank,
+        ),
       );
       return id;
     }
@@ -72,13 +76,23 @@ void main() {
 
     test('single income adds the full amount', () async {
       final account = await seedAccount('One');
-      await add('i1', account, type: TransactionType.income, amountMinor: 50000);
+      await add(
+        'i1',
+        account,
+        type: TransactionType.income,
+        amountMinor: 50000,
+      );
       expect(await dao.balanceImpactFor(account), 50000);
     });
 
     test('single expense subtracts the full amount', () async {
       final account = await seedAccount('One');
-      await add('e1', account, type: TransactionType.expense, amountMinor: 30000);
+      await add(
+        'e1',
+        account,
+        type: TransactionType.expense,
+        amountMinor: 30000,
+      );
       expect(await dao.balanceImpactFor(account), -30000);
     });
 
@@ -119,17 +133,38 @@ void main() {
         destinationAccountId: destination,
       );
 
-      final total = await dao.balanceImpactFor(source) +
+      final total =
+          await dao.balanceImpactFor(source) +
           await dao.balanceImpactFor(destination);
       expect(total, 0);
     });
 
     test('income and expenses accumulate on the same account', () async {
       final account = await seedAccount('One');
-      await add('i1', account, type: TransactionType.income, amountMinor: 1000000);
-      await add('i2', account, type: TransactionType.income, amountMinor: 250000);
-      await add('e1', account, type: TransactionType.expense, amountMinor: 300000);
-      await add('e2', account, type: TransactionType.expense, amountMinor: 75000);
+      await add(
+        'i1',
+        account,
+        type: TransactionType.income,
+        amountMinor: 1000000,
+      );
+      await add(
+        'i2',
+        account,
+        type: TransactionType.income,
+        amountMinor: 250000,
+      );
+      await add(
+        'e1',
+        account,
+        type: TransactionType.expense,
+        amountMinor: 300000,
+      );
+      await add(
+        'e2',
+        account,
+        type: TransactionType.expense,
+        amountMinor: 75000,
+      );
 
       // 1,000,000 + 250,000 − 300,000 − 75,000
       expect(await dao.balanceImpactFor(account), 875000);
@@ -164,8 +199,18 @@ void main() {
       final savings = await seedAccount('One');
       final budget = await seedAccount('Two');
 
-      await add('salary', savings, type: TransactionType.income, amountMinor: 1200000);
-      await add('rent', budget, type: TransactionType.expense, amountMinor: 400000);
+      await add(
+        'salary',
+        savings,
+        type: TransactionType.income,
+        amountMinor: 1200000,
+      );
+      await add(
+        'rent',
+        budget,
+        type: TransactionType.expense,
+        amountMinor: 400000,
+      );
       await add(
         'to-budget',
         savings,
@@ -173,7 +218,12 @@ void main() {
         amountMinor: 500000,
         destinationAccountId: budget,
       );
-      await add('groceries', budget, type: TransactionType.expense, amountMinor: 150000);
+      await add(
+        'groceries',
+        budget,
+        type: TransactionType.expense,
+        amountMinor: 150000,
+      );
 
       // Savings: +1,200,000 − 500,000 = 700,000
       expect(await dao.balanceImpactFor(savings), 700000);

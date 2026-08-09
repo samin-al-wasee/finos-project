@@ -24,18 +24,16 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   )..orderBy([(t) => OrderingTerm.desc(t.date)])).watch();
 
   /// All transactions, newest first (one-shot query).
-  Future<List<TransactionRow>> getAll() => (select(
-    transactions,
-  )..orderBy([(t) => OrderingTerm.desc(t.date)])).get();
+  Future<List<TransactionRow>> getAll() =>
+      (select(transactions)..orderBy([(t) => OrderingTerm.desc(t.date)])).get();
 
   /// Persists a new transaction row.
   Future<void> insertOne(TransactionsCompanion entry) =>
       into(transactions).insert(entry);
 
   /// Returns a single transaction by its [id], or `null` if not found.
-  Future<TransactionRow?> getById(String id) => (select(
-    transactions,
-  )..where((t) => t.id.equals(id))).getSingleOrNull();
+  Future<TransactionRow?> getById(String id) =>
+      (select(transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
 
   /// Replaces the entire row for an existing transaction.
   ///
@@ -76,7 +74,12 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       FROM transactions
       WHERE account_id = ? OR destination_account_id = ?
       ''',
-      variables: [Variable(accountId), Variable(accountId), Variable(accountId), Variable(accountId)],
+      variables: [
+        Variable(accountId),
+        Variable(accountId),
+        Variable(accountId),
+        Variable(accountId),
+      ],
     ).getSingle();
 
     return row.read<int>('impact');

@@ -149,7 +149,10 @@ void main() {
       });
 
       test('rejects an archived account', () async {
-        final source = await seedAccount('Archived', status: AccountStatus.archived);
+        final source = await seedAccount(
+          'Archived',
+          status: AccountStatus.archived,
+        );
         expect(
           () => controller.create(
             type: TransactionType.expense,
@@ -216,7 +219,10 @@ void main() {
 
       test('rejects an incompatible category type', () async {
         final source = await seedAccount('One');
-        final incomeCategory = await seedCategory('Salary', type: CategoryType.income);
+        final incomeCategory = await seedCategory(
+          'Salary',
+          type: CategoryType.income,
+        );
         expect(
           () => controller.create(
             type: TransactionType.expense,
