@@ -7,6 +7,7 @@ import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../categories/presentation/categories_list_screen.dart';
 import '../domain/account_status.dart';
 import 'account_details_screen.dart';
 import 'account_form_screen.dart';
@@ -24,7 +25,22 @@ class AccountsListScreen extends ConsumerWidget {
     final accounts = ref.watch(accountsStreamProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Accounts')),
+      appBar: AppBar(
+        title: const Text('Accounts'),
+        actions: [
+          // Temporary entry point until the transaction form exposes a real
+          // category picker (FR-03; removed when FR-02 lands).
+          IconButton(
+            icon: const Icon(Icons.category_outlined),
+            tooltip: 'Categories',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const CategoriesListScreen(),
+              ),
+            ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openForm(context),
         tooltip: 'Add account',
