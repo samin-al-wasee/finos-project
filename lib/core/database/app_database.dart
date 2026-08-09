@@ -11,6 +11,7 @@ import '../../features/categories/data/category_table.dart';
 import '../../features/categories/domain/category_origin.dart';
 import '../../features/categories/domain/category_status.dart';
 import '../../features/categories/domain/category_type.dart';
+import '../../features/transactions/data/transaction_table.dart';
 
 part 'app_database.g.dart';
 
@@ -18,7 +19,7 @@ part 'app_database.g.dart';
 ///
 /// All Drift tables live in the features they belong to; this class aggregates
 /// them and owns migration strategy and lifecycle.
-@DriftDatabase(tables: [FinancialAccounts, Categories])
+@DriftDatabase(tables: [FinancialAccounts, Categories, Transactions])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
@@ -33,7 +34,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -51,6 +52,10 @@ class AppDatabase extends _$AppDatabase {
         // Seed with insertOrIgnore so a partially-seeded table doesn't crash.
         await _seedBuiltInCategories();
       }
+      if (from < 3) {
+        // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
+        await m.createTable(transactions);
+      }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
     beforeOpen: (details) async {
@@ -67,6 +72,13 @@ class AppDatabase extends _$AppDatabase {
       // and re-seed so the app isn't stuck without categories.
       if (details.versionNow >= 2 && !details.wasCreated) {
         await _ensureCategoriesSeeded();
+      }
+
+      // Safety net: if a v3 database opens with a missing transactions table
+      // (e.g. an interrupted migration that bumped user_version without
+      // creating the table), recreate it so the app doesn't crash on queries.
+      if (details.versionNow >= 3 && !details.wasCreated) {
+        await _ensureTransactionsTable();
       }
     },
   );
@@ -118,5 +130,16 @@ class AppDatabase extends _$AppDatabase {
       'SELECT COUNT(*) AS c FROM categories',
     ).getSingleOrNull();
     debugPrint('[AppDatabase] re-seeded → ${after?.read<int>('c')} rows');
+  }
+
+  /// Safety net for a v3 database whose transactions table is missing.
+  ///
+  /// Catches interrupted migrations (e.g. `user_version` was bumped but the
+  /// table was never created). Uses drift's own DDL via [Migrator.createTable]
+  /// so the schema is always exactly what drift expects — no hand-maintained
+  /// SQL to drift out of sync.
+  Future<void> _ensureTransactionsTable() async {
+    final migrator = Migrator(this);
+    await migrator.createTable(transactions);
   }
 }
