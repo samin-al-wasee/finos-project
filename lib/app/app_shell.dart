@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../core/widgets/empty_state.dart';
+import '../features/accounts/presentation/accounts_list_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 
 /// The root scaffold hosting the bottom navigation shell.
 ///
-/// Hosts the four primary destinations from docs/UI_DESIGN.md §12. The Home tab
-/// renders [DashboardScreen]; the remaining tabs are placeholders until their
-/// features land in later phases.
+/// Hosts the four primary destinations from docs/UI_DESIGN.md §12. The Home and
+/// Accounts tabs render their feature screens; the remaining tabs are
+/// placeholders until their features land in later phases.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -53,11 +54,7 @@ class _AppShellState extends State<AppShell> {
             title: 'Transactions',
             message: 'Transactions are coming in Phase 1.',
           ),
-          _PlaceholderScreen(
-            icon: Icons.account_balance_wallet,
-            title: 'Accounts',
-            message: 'Account management is coming in Phase 1.',
-          ),
+          AccountsListScreen(),
           _PlaceholderScreen(
             icon: Icons.pie_chart,
             title: 'Budgets',
