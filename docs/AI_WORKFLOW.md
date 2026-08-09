@@ -1080,16 +1080,22 @@ Never hide failures.
 
 AI agents may prepare changes for commit.
 
-Commit messages should follow the project's established convention.
+Commit messages should follow the project's established convention:
+
+```text
+[type] Sentence case description
+```
+
+Types: feat, fix, test, docs, chore
 
 Examples:
 
 ```text id="x8kgjc"
-feat: add transaction filtering
-fix: prevent duplicate transfer records
-test: add loan repayment tests
-refactor: extract money formatter
-docs: update architecture guide
+[feat] Add transaction filtering
+[fix] Prevent duplicate transfer records
+[test] Add loan repayment tests
+[chore] Extract money formatter
+[docs] Update architecture guide
 ```
 
 Agents should not create commits unless explicitly authorized by the development workflow or user.
