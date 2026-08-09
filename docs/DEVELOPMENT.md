@@ -956,14 +956,51 @@ AI agents must perform the appropriate validation before reporting completion.
 
 # 40. Git Workflow
 
+## Branching
+
+Each change lives on a dedicated branch. Branch names follow the pattern:
+
+```text
+<type>/<short-kebab-case-slug>
+```
+
+Types:
+
+```text
+feat/
+fix/
+chore/
+docs/
+test/
+```
+
+Examples:
+
+```text
+feat/transaction-management
+fix/transfer-validation
+docs/git-workflow
+test/balance-calculation
+```
+
+## Merge Strategy
+
+`main` is the long-lived integration branch. Feature branches merge back into
+`main` using fast-forward only. If a branch has diverged, rebase onto `main`
+before merging.
+
+Merge commits are avoided to keep `main` history linear.
+
+## Commits
+
 Use small, focused commits.
 
 Good:
 
 ```text
-feat: add transaction creation
-test: add transaction balance tests
-fix: prevent negative budget remaining
+[feat] Add transaction creation
+[test] Add transaction balance tests
+[fix] Prevent negative budget remaining
 ```
 
 Avoid:
@@ -975,7 +1012,9 @@ fix
 misc
 ```
 
-Commit messages should describe the actual change.
+Commit messages use the format: `[type] Sentence case description`.
+
+Types: feat, fix, test, docs, chore
 
 ---
 
