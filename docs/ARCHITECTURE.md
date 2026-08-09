@@ -1018,6 +1018,7 @@ Features implemented so far:
 
 - **accounts** — Account management (FR-01)
 - **categories** — Category management with built-in seed data (FR-03)
+- **transactions** — Income/expense/transfer entry, listing, and balance impact (FR-02)
 
 ---
 
