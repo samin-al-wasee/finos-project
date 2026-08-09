@@ -185,7 +185,9 @@ The initial architecture is:
 └─────────────────────────────────────────────┘
 ```
 
-The exact libraries used for state management and local persistence should be selected separately and documented when finalized.
+The state-management and local-persistence technologies were selected in
+[ADR-002](adr/002-local-database.md) (Drift) and
+[ADR-003](adr/003-state-management.md) (Riverpod).
 
 ---
 
@@ -432,7 +434,7 @@ The selected database technology should support:
 
 The database technology must support Android and iOS.
 
-The final database choice should be documented once selected.
+The database choice is documented in [ADR-002](adr/002-local-database.md).
 
 ---
 
@@ -765,7 +767,7 @@ Directly calculates all financial rules
 Directly manipulates database
 ```
 
-The exact state-management technology should be selected separately.
+The state-management technology is documented in [ADR-003](adr/003-state-management.md).
 
 ---
 
