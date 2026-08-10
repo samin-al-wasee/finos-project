@@ -190,6 +190,33 @@ void main() {
     await database.close();
   });
 
+  testWidgets('no spurious open-timeout error after an idle period', (
+    tester,
+  ) async {
+    final database = await pumpDashboard(tester);
+    final accounts = AccountDao(database);
+
+    await accounts.insertOne(
+      FinancialAccountsCompanion.insert(
+        id: 'acct-1',
+        name: 'Main Bank',
+        type: AccountType.bank,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Idle longer than the 15s stream-open timeout. The in-memory database
+    // opened immediately, so a healthy-but-quiet stream must stay silent
+    // instead of surfacing "Opening the database is taking too long".
+    await tester.pump(const Duration(seconds: 16));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Total Balance'), findsOneWidget);
+    expect(find.textContaining('taking too long'), findsNothing);
+
+    await database.close();
+  });
+
   testWidgets('accounts but no transactions shows zero totals and no crash', (
     tester,
   ) async {
