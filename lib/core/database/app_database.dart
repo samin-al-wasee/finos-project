@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import '../../features/accounts/data/account_table.dart';
 import '../../features/accounts/domain/account_status.dart';
 import '../../features/accounts/domain/account_type.dart';
+import '../../features/budgets/data/budget_table.dart';
+import '../../features/budgets/domain/budget_period.dart';
+import '../../features/budgets/domain/budget_status.dart';
 import '../../features/categories/data/built_in_categories.dart';
 import '../../features/categories/data/category_table.dart';
 import '../../features/categories/domain/category_origin.dart';
@@ -20,7 +23,7 @@ part 'app_database.g.dart';
 ///
 /// All Drift tables live in the features they belong to; this class aggregates
 /// them and owns migration strategy and lifecycle.
-@DriftDatabase(tables: [FinancialAccounts, Categories, Transactions])
+@DriftDatabase(tables: [FinancialAccounts, Categories, Transactions, Budgets])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
@@ -35,7 +38,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -56,6 +59,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 3) {
         // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
         await m.createTable(transactions);
+      }
+      if (from < 4) {
+        // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
+        await m.createTable(budgets);
       }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
@@ -80,6 +87,11 @@ class AppDatabase extends _$AppDatabase {
       // creating the table), recreate it so the app doesn't crash on queries.
       if (details.versionNow >= 3 && !details.wasCreated) {
         await _ensureTransactionsTable();
+      }
+
+      // Same safety net for the v4 budgets table.
+      if (details.versionNow >= 4 && !details.wasCreated) {
+        await _ensureBudgetsTable();
       }
     },
   );
@@ -142,5 +154,15 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _ensureTransactionsTable() async {
     final migrator = Migrator(this);
     await migrator.createTable(transactions);
+  }
+
+  /// Safety net for a v4 database whose budgets table is missing.
+  ///
+  /// Same rationale as [_ensureTransactionsTable]: an interrupted migration can
+  /// bump `user_version` without creating the table, which would otherwise crash
+  /// the Budgets tab on every query.
+  Future<void> _ensureBudgetsTable() async {
+    final migrator = Migrator(this);
+    await migrator.createTable(budgets);
   }
 }
