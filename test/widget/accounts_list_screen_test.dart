@@ -7,6 +7,8 @@ import 'package:finos_app/features/accounts/domain/account_status.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
 import 'package:finos_app/features/accounts/presentation/account_form_screen.dart';
 import 'package:finos_app/features/accounts/presentation/accounts_list_screen.dart';
+import 'package:finos_app/features/transactions/data/transaction_dao.dart';
+import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -78,6 +80,49 @@ void main() {
     expect(find.text('৳2,500.50'), findsOneWidget);
     // No archived section when nothing is archived.
     expect(find.text('Archived'), findsNothing);
+
+    await database.close();
+  });
+
+  testWidgets('account balances reflect transaction activity', (tester) async {
+    final database = await pumpList(
+      tester,
+      seed: [
+        seedRow('a1', 'Main Bank', type: AccountType.bank, balance: 1000000),
+      ],
+    );
+
+    // Opening balance is shown before any transactions.
+    expect(find.text('৳10,000.00'), findsOneWidget);
+
+    final transactions = TransactionDao(database);
+    await transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: 'tx-expense',
+        type: TransactionType.expense,
+        amountMinor: 250000,
+        accountId: 'a1',
+        date: DateTime.now(),
+        description: const Value('Lunch'),
+      ),
+    );
+    await transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: 'tx-income',
+        type: TransactionType.income,
+        amountMinor: 500000,
+        accountId: 'a1',
+        date: DateTime.now(),
+        description: const Value('Salary'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // 10,000 + 5,000 - 2,500 = 12,500.00 — the live balance, not the opening
+    // balance.
+    expect(find.text('৳12,500.00'), findsOneWidget);
+    expect(find.text('৳10,000.00'), findsNothing);
 
     await database.close();
   });

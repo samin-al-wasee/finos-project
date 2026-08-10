@@ -7,6 +7,8 @@ import 'package:finos_app/features/accounts/domain/account_status.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
 import 'package:finos_app/features/accounts/presentation/account_details_screen.dart';
 import 'package:finos_app/features/accounts/presentation/account_form_screen.dart';
+import 'package:finos_app/features/transactions/data/transaction_dao.dart';
+import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -51,6 +53,35 @@ void main() {
     expect(find.text('Bank'), findsOneWidget);
     expect(find.text('BDT'), findsOneWidget);
     expect(find.text('Active'), findsOneWidget);
+
+    await database.close();
+  });
+
+  testWidgets('shows live balance including transaction impact', (
+    tester,
+  ) async {
+    final database = await pumpDetails(tester, id: 'a1', name: 'Main Bank');
+
+    // Opening balance is shown before any transactions.
+    expect(find.text('৳50,000.00'), findsOneWidget);
+
+    final transactions = TransactionDao(database);
+    await transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: 'tx-expense',
+        type: TransactionType.expense,
+        amountMinor: 500000,
+        accountId: 'a1',
+        date: DateTime.now(),
+        description: const Value('Lunch'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // 50,000 - 5,000 = 45,000.00 — the live balance, not the opening balance.
+    expect(find.text('৳45,000.00'), findsOneWidget);
+    expect(find.text('৳50,000.00'), findsNothing);
 
     await database.close();
   });
