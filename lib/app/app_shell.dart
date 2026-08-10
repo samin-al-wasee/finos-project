@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import '../features/accounts/presentation/accounts_list_screen.dart';
 import '../features/budgets/presentation/budgets_list_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
+import '../features/loans/presentation/loans_list_screen.dart';
 import '../features/transactions/presentation/transactions_list_screen.dart';
 
 /// The root scaffold hosting the bottom navigation shell.
 ///
-/// Hosts the four primary destinations from docs/UI_DESIGN.md §12: Home,
-/// Transactions, Accounts, and Budgets.
+/// Hosts the primary destinations from docs/UI_DESIGN.md §12: Home,
+/// Transactions, Accounts, Budgets, and Loans. Loans earns a tab rather than
+/// hiding under Accounts because docs/UI_DESIGN.md §7 treats it as a top-level
+/// financial area.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -40,6 +43,11 @@ class _AppShellState extends State<AppShell> {
       selectedIcon: Icon(Icons.pie_chart),
       label: 'Budgets',
     ),
+    NavigationDestination(
+      icon: Icon(Icons.handshake_outlined),
+      selectedIcon: Icon(Icons.handshake),
+      label: 'Loans',
+    ),
   ];
 
   @override
@@ -52,6 +60,7 @@ class _AppShellState extends State<AppShell> {
           TransactionsListScreen(),
           AccountsListScreen(),
           BudgetsListScreen(),
+          LoansListScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(

@@ -7,6 +7,7 @@ import '../../../core/formatting/date.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../domain/transaction_type.dart';
 import 'transaction_form_screen.dart';
 import 'transaction_tile.dart';
 
@@ -167,6 +168,10 @@ class _TransactionList extends StatelessWidget {
         final category = row.categoryId == null
             ? null
             : categoriesById[row.categoryId];
+        // Loan movements are read-only here. Editing or deleting one directly
+        // would let a loan's outstanding balance diverge from the transactions it
+        // is derived from, so they are managed from the loan itself (ADR-004).
+        final isLoan = isLoanTransaction(row.type);
         children.add(
           TransactionTile(
             key: ValueKey(row.id),
@@ -178,8 +183,8 @@ class _TransactionList extends StatelessWidget {
                       row.destinationAccountId,
             categoryName: category?.name,
             categoryIconKey: category?.icon,
-            onTap: () => _openEdit(context, row),
-            onDelete: () => onDelete(row),
+            onTap: isLoan ? null : () => _openEdit(context, row),
+            onDelete: isLoan ? null : () => onDelete(row),
           ),
         );
       }
