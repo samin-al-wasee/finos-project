@@ -38,13 +38,17 @@ abstract final class BackupFormat {
   // them, which is also a safe insert order on restore.
   static const accountsKey = 'accounts';
   static const categoriesKey = 'categories';
+  static const loansKey = 'loans';
   static const transactionsKey = 'transactions';
   static const budgetsKey = 'budgets';
 
-  /// Every table a backup carries.
+  /// Every table a backup carries, parents before their dependents.
+  ///
+  /// Loans precede transactions because a loan movement references its loan.
   static const tableKeys = [
     accountsKey,
     categoriesKey,
+    loansKey,
     transactionsKey,
     budgetsKey,
   ];
@@ -70,20 +74,23 @@ class BackupCounts {
     required this.categories,
     required this.transactions,
     required this.budgets,
+    required this.loans,
   });
 
   const BackupCounts.empty()
     : accounts = 0,
       categories = 0,
       transactions = 0,
-      budgets = 0;
+      budgets = 0,
+      loans = 0;
 
   final int accounts;
   final int categories;
   final int transactions;
   final int budgets;
+  final int loans;
 
-  int get total => accounts + categories + transactions + budgets;
+  int get total => accounts + categories + transactions + budgets + loans;
 
   bool get isEmpty => total == 0;
 
@@ -93,13 +100,15 @@ class BackupCounts {
       other.accounts == accounts &&
       other.categories == categories &&
       other.transactions == transactions &&
-      other.budgets == budgets;
+      other.budgets == budgets &&
+      other.loans == loans;
 
   @override
-  int get hashCode => Object.hash(accounts, categories, transactions, budgets);
+  int get hashCode =>
+      Object.hash(accounts, categories, transactions, budgets, loans);
 
   @override
   String toString() =>
       'BackupCounts(accounts: $accounts, categories: $categories, '
-      'transactions: $transactions, budgets: $budgets)';
+      'transactions: $transactions, budgets: $budgets, loans: $loans)';
 }

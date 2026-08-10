@@ -7,6 +7,8 @@ import '../../budgets/domain/budget_status.dart';
 import '../../categories/domain/category_origin.dart';
 import '../../categories/domain/category_status.dart';
 import '../../categories/domain/category_type.dart';
+import '../../loans/domain/loan_direction.dart';
+import '../../loans/domain/loan_status.dart';
 import '../../transactions/domain/transaction_type.dart';
 
 /// Converts database rows to and from the JSON maps in a backup file.
@@ -56,8 +58,24 @@ abstract final class BackupSerializer {
     'account_id': row.accountId,
     'destination_account_id': row.destinationAccountId,
     'category_id': row.categoryId,
+    'loan_id': row.loanId,
     'date': _dateToJson(row.date),
     'description': row.description,
+    'created_at': _dateToJson(row.createdAt),
+    'updated_at': _dateToJson(row.updatedAt),
+  };
+
+  static Map<String, Object?> loanToJson(LoanRow row) => {
+    'id': row.id,
+    'type': const LoanDirectionConverter().toSql(row.type),
+    'name': row.name,
+    'principal_minor': row.principalMinor,
+    'currency': row.currency,
+    'start_date': _dateToJson(row.startDate),
+    'due_date': row.dueDate == null ? null : _dateToJson(row.dueDate!),
+    'description': row.description,
+    'disbursement_account_id': row.disbursementAccountId,
+    'status': const LoanStatusConverter().toSql(row.status),
     'created_at': _dateToJson(row.createdAt),
     'updated_at': _dateToJson(row.updatedAt),
   };
@@ -160,8 +178,50 @@ abstract final class BackupSerializer {
         where,
       ),
       categoryId: _optionalString(json, 'category_id', where),
+      loanId: _optionalString(json, 'loan_id', where),
       date: _date(json, 'date', where),
       description: _string(json, 'description', where, allowEmpty: true),
+      createdAt: _date(json, 'created_at', where),
+      updatedAt: _date(json, 'updated_at', where),
+    );
+  }
+
+  static LoanRow loanFromJson(Map<String, Object?> json) {
+    const where = 'loan';
+    final principalMinor = _int(json, 'principal_minor', where);
+    // The invariant from docs/DATA_MODEL.md §46.
+    if (principalMinor <= 0) {
+      throw ValidationException(
+        'A loan in the backup has a principal of $principalMinor; '
+        'it must be greater than zero.',
+      );
+    }
+    final dueDateValue = json['due_date'];
+    return LoanRow(
+      id: _id(json, where),
+      type: _enumValue(
+        json,
+        'type',
+        where,
+        const LoanDirectionConverter().fromSql,
+      ),
+      name: _string(json, 'name', where),
+      principalMinor: principalMinor,
+      currency: _currency(json, where),
+      startDate: _date(json, 'start_date', where),
+      dueDate: dueDateValue == null ? null : _date(json, 'due_date', where),
+      description: _string(json, 'description', where, allowEmpty: true),
+      disbursementAccountId: _optionalString(
+        json,
+        'disbursement_account_id',
+        where,
+      ),
+      status: _enumValue(
+        json,
+        'status',
+        where,
+        const LoanStatusConverter().fromSql,
+      ),
       createdAt: _date(json, 'created_at', where),
       updatedAt: _date(json, 'updated_at', where),
     );

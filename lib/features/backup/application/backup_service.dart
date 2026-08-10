@@ -36,6 +36,7 @@ class BackupService {
   Future<String> export({DateTime? now}) async {
     final accounts = await _database.select(_database.financialAccounts).get();
     final categories = await _database.select(_database.categories).get();
+    final loans = await _database.select(_database.loans).get();
     final transactions = await _database.select(_database.transactions).get();
     final budgets = await _database.select(_database.budgets).get();
 
@@ -49,6 +50,7 @@ class BackupService {
       BackupFormat.categoriesKey: categories
           .map(BackupSerializer.categoryToJson)
           .toList(),
+      BackupFormat.loansKey: loans.map(BackupSerializer.loanToJson).toList(),
       BackupFormat.transactionsKey: transactions
           .map(BackupSerializer.transactionToJson)
           .toList(),
@@ -69,6 +71,7 @@ class BackupService {
       categories: await _count(_database.categories),
       transactions: await _count(_database.transactions),
       budgets: await _count(_database.budgets),
+      loans: await _count(_database.loans),
     );
   }
 
@@ -109,6 +112,11 @@ class BackupService {
       BackupFormat.categoriesKey,
       BackupSerializer.categoryFromJson,
     );
+    final loans = _readTable(
+      decoded,
+      BackupFormat.loansKey,
+      BackupSerializer.loanFromJson,
+    );
     final transactions = _readTable(
       decoded,
       BackupFormat.transactionsKey,
@@ -122,12 +130,14 @@ class BackupService {
 
     _validateUniqueIds(accounts.map((a) => a.id), 'account');
     _validateUniqueIds(categories.map((c) => c.id), 'category');
+    _validateUniqueIds(loans.map((l) => l.id), 'loan');
     _validateUniqueIds(transactions.map((t) => t.id), 'transaction');
     _validateUniqueIds(budgets.map((b) => b.id), 'budget');
 
     _validateReferences(
       accounts: accounts,
       categories: categories,
+      loans: loans,
       transactions: transactions,
       budgets: budgets,
     );
@@ -135,6 +145,7 @@ class BackupService {
     return ParsedBackup(
       accounts: accounts,
       categories: categories,
+      loans: loans,
       transactions: transactions,
       budgets: budgets,
     );
@@ -150,10 +161,11 @@ class BackupService {
   Future<BackupCounts> restore(ParsedBackup backup) async {
     try {
       await _database.transaction(() async {
-        // Children first: transactions and budgets reference accounts and
-        // categories.
+        // Children first. Transactions reference accounts, categories, and
+        // loans; loans reference accounts.
         await _database.delete(_database.transactions).go();
         await _database.delete(_database.budgets).go();
+        await _database.delete(_database.loans).go();
         await _database.delete(_database.categories).go();
         await _database.delete(_database.financialAccounts).go();
 
@@ -161,6 +173,7 @@ class BackupService {
         await _database.batch((b) {
           b.insertAll(_database.financialAccounts, backup.accounts);
           b.insertAll(_database.categories, backup.categories);
+          b.insertAll(_database.loans, backup.loans);
           b.insertAll(_database.transactions, backup.transactions);
           b.insertAll(_database.budgets, backup.budgets);
         });
@@ -264,11 +277,33 @@ class BackupService {
   void _validateReferences({
     required List<FinancialAccountRow> accounts,
     required List<CategoryRow> categories,
+    required List<LoanRow> loans,
     required List<TransactionRow> transactions,
     required List<BudgetRow> budgets,
   }) {
     final accountIds = accounts.map((a) => a.id).toSet();
     final categoryIds = categories.map((c) => c.id).toSet();
+    final loanIds = loans.map((l) => l.id).toSet();
+
+    for (final loan in loans) {
+      final disbursement = loan.disbursementAccountId;
+      if (disbursement != null && !accountIds.contains(disbursement)) {
+        throw ValidationException(
+          'A loan in this backup refers to an account that the backup does not '
+          'contain (id "$disbursement").',
+        );
+      }
+    }
+
+    for (final transaction in transactions) {
+      final loanId = transaction.loanId;
+      if (loanId != null && !loanIds.contains(loanId)) {
+        throw ValidationException(
+          'A loan movement in this backup refers to a loan that the backup does '
+          'not contain (id "$loanId").',
+        );
+      }
+    }
 
     for (final transaction in transactions) {
       if (!accountIds.contains(transaction.accountId)) {
@@ -318,17 +353,20 @@ class ParsedBackup {
     required this.categories,
     required this.transactions,
     required this.budgets,
+    this.loans = const [],
   });
 
   final List<FinancialAccountRow> accounts;
   final List<CategoryRow> categories;
   final List<TransactionRow> transactions;
   final List<BudgetRow> budgets;
+  final List<LoanRow> loans;
 
   BackupCounts get counts => BackupCounts(
     accounts: accounts.length,
     categories: categories.length,
     transactions: transactions.length,
     budgets: budgets.length,
+    loans: loans.length,
   );
 }
