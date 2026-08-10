@@ -3,13 +3,18 @@
 Two configurations, both built from `Dockerfile` via separate targets so the
 Flutter install is defined once.
 
-| Configuration | Use it for | Size |
+| Configuration | Use it for | Disk |
 | --- | --- | --- |
-| **FinOS (analysis & tests)** — the default | `flutter analyze`, `flutter test`, `dart format`, `dart run build_runner build` | 3.3 GB |
-| **FinOS (Android toolchain)** — `android/` | everything above plus `flutter build apk` | ~9 GB |
+| **FinOS (analysis & tests)** — the default | `flutter analyze`, `flutter test`, `dart format`, `dart run build_runner build` | ~2.1 GB |
+| **FinOS (Android toolchain)** — `android/` | everything above plus `flutter build apk` | ~5.7 GB |
+
+Sizes are filesystem usage measured inside each image. They share the Flutter
+layers, so having both costs about 5.7 GB rather than the sum. Note that
+`docker images` reports notably smaller numbers on Docker Desktop because it
+shows compressed layer sizes.
 
 Most of the light image is the Flutter SDK and its precached artifacts; the C
-toolchain adds roughly 250 MB.
+toolchain adds roughly 250 MB. In the Android image the NDK alone is 2.2 GB.
 
 VS Code offers both when you run **Dev Containers: Reopen in Container**. Pick the
 light one unless you specifically need to build an APK.
@@ -89,19 +94,41 @@ issues and the full suite passes inside it. Expect the container run to be slowe
 than the host — roughly 25 s to analyse and 23 s to run the tests on Apple
 Silicon, against about 3 s and 19 s natively.
 
-## Host architecture
+## Host architecture — read this before using the Android image
 
 The images build for the host architecture. On an Apple Silicon Mac that means
-`linux/arm64`, and the light image works normally there.
+`linux/arm64`, where the **light image works normally** — verified.
 
-The Android SDK is a different story: some Google-supplied build-tools binaries
-are x86-64 only, so `flutter build apk` may fail on an arm64 host. If that
-happens, build the Android variant for amd64 and accept the emulation penalty:
+**The Android image builds on arm64 but cannot build an APK there**, and it fails
+in a way designed to mislead you. `flutter doctor` reports:
+
+```text
+[✓] Android toolchain - develop for Android devices (Android SDK version 36.0.0)
+```
+
+because it never checks whether the SDK's binaries can actually execute. They
+cannot: Google ships the Linux NDK and `adb` as x86-64 only, so running the NDK's
+clang on an arm64 container gives
+
+```text
+rosetta error: failed to open elf at /lib64/ld-linux-x86-64.so.2
+Trace/breakpoint trap
+```
+
+Since `package:sqlite3` compiles SQLite through that clang for every ABI, an APK
+build dies there — after several minutes of Gradle work, with an error that looks
+nothing like an architecture problem.
+
+On an **x86-64 host** (most CI runners, Intel Macs, Linux desktops) the Android
+image works as intended.
+
+On **Apple Silicon**, build it for amd64 and accept the emulation penalty:
 
 ```bash
 docker build --platform linux/amd64 --target android \
   -t finos-dev:android -f .devcontainer/Dockerfile .devcontainer
 ```
 
-or add `"runArgs": ["--platform=linux/amd64"]` to
-`.devcontainer/android/devcontainer.json`.
+or uncomment the `runArgs` line in `android/devcontainer.json`. That path is the
+standard workaround but has not been verified here — an emulated build of this
+image takes far longer than a native one.

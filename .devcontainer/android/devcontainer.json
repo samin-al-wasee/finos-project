@@ -6,6 +6,12 @@
     "target": "android"
   },
 
+  // On an arm64 host (Apple Silicon) this image builds but cannot build an APK:
+  // Google ships the Linux NDK and adb as x86-64 only, and `flutter doctor` still
+  // reports the toolchain as fine. Uncomment to run the whole container emulated,
+  // which works but is slow. See README.md → "Host architecture".
+  // "runArgs": ["--platform=linux/amd64"],
+
   // Gradle's cache is added here on top of the light variant's volumes: without
   // it every container rebuild re-downloads AGP, Kotlin, and the dependency
   // graph, which dominates the first build of an APK.

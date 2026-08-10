@@ -82,6 +82,10 @@ The containers deliberately cannot do everything:
   checkout rather than a replacement for one.
 * An Android **emulator** needs nested virtualisation, which a container does not
   have. Use a device, or an emulator on the host.
+* On an **arm64 host** (Apple Silicon) the Android variant builds but cannot
+  produce an APK, because Google ships the Linux NDK and `adb` as x86-64 only.
+  `flutter doctor` reports the toolchain as healthy regardless, so the failure
+  surfaces late and looks unrelated. Build that image for `linux/amd64` instead.
 * The **share sheet and file picker** used by backup export/import need a real
   mobile runtime; in tests they are replaced by a fake.
 
