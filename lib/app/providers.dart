@@ -109,6 +109,30 @@ final transactionsStreamProvider = StreamProvider<List<TransactionRow>>((ref) {
 });
 
 // ------------------------------------------------------------------
+// Balances
+// ------------------------------------------------------------------
+
+/// Live per-account balances (opening balance + net transaction impact),
+/// keyed by account id.
+///
+/// The opening balance is captured when an account is created and never
+/// changes, so screens that want "what does this account hold right now" must
+/// add the cumulative effect of income, expense, and transfer transactions.
+/// Watching `.future` on both streams keeps the map in sync with every change.
+/// Sums are in minor units without currency conversion — every account
+/// defaults to BDT in V1 (docs/DATA_MODEL.md §5).
+final accountBalancesProvider = FutureProvider<Map<String, int>>((ref) async {
+  final accounts = await ref.watch(accountsStreamProvider.future);
+  await ref.watch(transactionsStreamProvider.future);
+  final dao = ref.watch(transactionDaoProvider);
+  return {
+    for (final account in accounts)
+      account.id:
+          account.openingBalanceMinor + await dao.balanceImpactFor(account.id),
+  };
+});
+
+// ------------------------------------------------------------------
 // Dashboard
 // ------------------------------------------------------------------
 

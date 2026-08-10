@@ -23,6 +23,9 @@ class AccountsListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final accounts = ref.watch(accountsStreamProvider);
+    // Live balances (opening balance + net transaction impact), so the list
+    // reflects recent transactions instead of the balance at creation time.
+    final balances = ref.watch(accountBalancesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -60,7 +63,10 @@ class AccountsListScreen extends ConsumerWidget {
                   label: const Text('Add account'),
                 ),
               )
-            : _AccountList(rows: rows),
+            : _AccountList(
+                rows: rows,
+                balances: balances.valueOrNull ?? const <String, int>{},
+              ),
         error: (error, _) => EmptyState(
           icon: Icons.error_outline,
           title: 'Something went wrong',
@@ -90,9 +96,12 @@ class AccountsListScreen extends ConsumerWidget {
 
 /// Groups [rows] into active and archived sections with a shared tile builder.
 class _AccountList extends StatelessWidget {
-  const _AccountList({required this.rows});
+  const _AccountList({required this.rows, required this.balances});
 
   final List<FinancialAccountRow> rows;
+
+  /// Live balance (opening + net transaction impact) per account id.
+  final Map<String, int> balances;
 
   @override
   Widget build(BuildContext context) {
@@ -111,10 +120,19 @@ class _AccountList extends StatelessWidget {
           ),
         )
       else
-        for (final row in active) _AccountTile(row: row),
+        for (final row in active)
+          _AccountTile(
+            row: row,
+            balanceMinor: balances[row.id] ?? row.openingBalanceMinor,
+          ),
       if (archived.isNotEmpty) ...[
         const _SectionHeader(title: 'Archived'),
-        for (final row in archived) _AccountTile(row: row, archived: true),
+        for (final row in archived)
+          _AccountTile(
+            row: row,
+            balanceMinor: balances[row.id] ?? row.openingBalanceMinor,
+            archived: true,
+          ),
       ],
     ];
 
@@ -151,9 +169,16 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _AccountTile extends StatelessWidget {
-  const _AccountTile({required this.row, this.archived = false});
+  const _AccountTile({
+    required this.row,
+    required this.balanceMinor,
+    this.archived = false,
+  });
 
   final FinancialAccountRow row;
+
+  /// Live balance for this account (opening balance + net transaction impact).
+  final int balanceMinor;
   final bool archived;
 
   @override
@@ -166,10 +191,7 @@ class _AccountTile extends StatelessWidget {
       title: Text(row.name),
       subtitle: Text(accountTypeLabel(row.type)),
       trailing: Text(
-        formatMinorUnits(
-          row.openingBalanceMinor,
-          symbol: currencySymbol(row.currency),
-        ),
+        formatMinorUnits(balanceMinor, symbol: currencySymbol(row.currency)),
         style: theme.textTheme.titleSmall?.copyWith(
           color: archived ? colors.mutedText : null,
         ),

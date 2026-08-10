@@ -66,6 +66,11 @@ class _DetailsBody extends ConsumerWidget {
     final theme = Theme.of(context);
     final colors = theme.extension<FinosColors>()!;
     final controller = ref.read(accountControllerProvider);
+    // Live balance (opening balance + net transaction impact), so the headline
+    // reflects recent transactions instead of the balance at creation time.
+    final balances = ref.watch(accountBalancesProvider);
+    final balanceMinor =
+        balances.valueOrNull?[account.id] ?? account.openingBalanceMinor;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -87,7 +92,7 @@ class _DetailsBody extends ConsumerWidget {
         const SizedBox(height: AppSpacing.xl),
         Text(
           formatMinorUnits(
-            account.openingBalanceMinor,
+            balanceMinor,
             symbol: currencySymbol(account.currency),
           ),
           style: theme.textTheme.headlineMedium,
