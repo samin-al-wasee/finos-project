@@ -12,6 +12,9 @@ import '../features/budgets/domain/budget_progress.dart';
 import '../features/categories/application/category_controller.dart';
 import '../features/categories/data/category_dao.dart';
 import '../features/dashboard/domain/dashboard_data.dart';
+import '../features/settings/application/settings_controller.dart';
+import '../features/settings/data/settings_dao.dart';
+import '../features/settings/domain/app_settings.dart';
 import '../features/transactions/application/transaction_controller.dart';
 import '../features/transactions/data/transaction_dao.dart';
 
@@ -20,6 +23,30 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final database = AppDatabase.open();
   ref.onDispose(database.close);
   return database;
+});
+
+// ------------------------------------------------------------------
+// Settings
+// ------------------------------------------------------------------
+
+/// Data-access object for user preferences.
+final settingsDaoProvider = Provider<SettingsDao>((ref) {
+  return SettingsDao(ref.watch(appDatabaseProvider));
+});
+
+/// Application service for reading and writing preferences.
+final settingsControllerProvider = Provider<SettingsController>((ref) {
+  return SettingsController(ref.watch(settingsDaoProvider));
+});
+
+/// Reactive user preferences, typed (docs/UI_DESIGN.md §23).
+///
+/// Deliberately *not* wrapped in [_guardOpenTimeout]: this is read while the root
+/// widget builds, so a slow or failed open must degrade to defaults rather than
+/// block the app from rendering. Screens that show financial data still surface
+/// database errors through their own guarded providers.
+final appSettingsProvider = StreamProvider<AppSettings>((ref) {
+  return ref.watch(settingsDaoProvider).watchAll().map(AppSettings.fromRows);
 });
 
 // ------------------------------------------------------------------
