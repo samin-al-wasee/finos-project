@@ -32,22 +32,37 @@ final accountControllerProvider = Provider<AccountController>((ref) {
   return AccountController(ref.watch(accountDaoProvider));
 });
 
-/// Reactive stream of all accounts (for UI consumers).
+/// Wraps a Drift watch stream with an "opening" timeout that only fires before
+/// the first emission.
 ///
-/// A generous timeout converts a hung database-open (e.g. a stuck migration)
-/// into a visible error instead of an infinite spinner.
-final accountsStreamProvider = StreamProvider<List<FinancialAccountRow>>((ref) {
-  return ref
-      .watch(accountDaoProvider)
-      .watchAll()
+/// Drift's `watchAll()` emits once, then only re-emits on database changes, so
+/// a plain `.timeout()` errors on any quiet-but-healthy stream — after 15 idle
+/// seconds the app would claim the database is slow to open when it already
+/// opened fine. The guard still surfaces a genuinely hung open (stuck
+/// migration, no first emission) as a visible error, but lets an already-open
+/// stream stay silent.
+Stream<T> _guardOpenTimeout<T>(Stream<T> source) {
+  var opened = false;
+  return source
       .timeout(
         const Duration(seconds: 15),
         onTimeout: (sink) {
-          sink.addError(
-            TimeoutException('Opening the database is taking too long'),
-          );
+          if (!opened) {
+            sink.addError(
+              TimeoutException('Opening the database is taking too long'),
+            );
+          }
         },
-      );
+      )
+      .map((event) {
+        opened = true;
+        return event;
+      });
+}
+
+/// Reactive stream of all accounts (for UI consumers).
+final accountsStreamProvider = StreamProvider<List<FinancialAccountRow>>((ref) {
+  return _guardOpenTimeout(ref.watch(accountDaoProvider).watchAll());
 });
 
 // ------------------------------------------------------------------
@@ -66,20 +81,8 @@ final categoryControllerProvider = Provider<CategoryController>((ref) {
 
 /// Reactive stream of all categories (for UI consumers), including archived
 /// ones so management screens can render a restore section.
-///
-/// Same timeout rationale as [accountsStreamProvider].
 final categoriesStreamProvider = StreamProvider<List<CategoryRow>>((ref) {
-  return ref
-      .watch(categoryDaoProvider)
-      .watchAll()
-      .timeout(
-        const Duration(seconds: 15),
-        onTimeout: (sink) {
-          sink.addError(
-            TimeoutException('Opening the database is taking too long'),
-          );
-        },
-      );
+  return _guardOpenTimeout(ref.watch(categoryDaoProvider).watchAll());
 });
 
 // ------------------------------------------------------------------
@@ -101,20 +104,8 @@ final transactionControllerProvider = Provider<TransactionController>((ref) {
 });
 
 /// Reactive stream of all transactions (for UI consumers).
-///
-/// Same timeout rationale as [accountsStreamProvider].
 final transactionsStreamProvider = StreamProvider<List<TransactionRow>>((ref) {
-  return ref
-      .watch(transactionDaoProvider)
-      .watchAll()
-      .timeout(
-        const Duration(seconds: 15),
-        onTimeout: (sink) {
-          sink.addError(
-            TimeoutException('Opening the database is taking too long'),
-          );
-        },
-      );
+  return _guardOpenTimeout(ref.watch(transactionDaoProvider).watchAll());
 });
 
 // ------------------------------------------------------------------
