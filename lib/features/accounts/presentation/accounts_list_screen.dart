@@ -7,7 +7,6 @@ import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
-import '../../categories/presentation/categories_list_screen.dart';
 import '../domain/account_status.dart';
 import 'account_details_screen.dart';
 import 'account_form_screen.dart';
@@ -28,22 +27,9 @@ class AccountsListScreen extends ConsumerWidget {
     final balances = ref.watch(accountBalancesProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Accounts'),
-        actions: [
-          // Category management entry point. The transaction form links to the
-          // category list too, but this stays until a Settings screen exists.
-          IconButton(
-            icon: const Icon(Icons.category_outlined),
-            tooltip: 'Categories',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const CategoriesListScreen(),
-              ),
-            ),
-          ),
-        ],
-      ),
+      // Category management now lives under Settings → Categories, so this
+      // screen no longer carries a shortcut for it.
+      appBar: AppBar(title: const Text('Accounts')),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openForm(context),
         tooltip: 'Add account',

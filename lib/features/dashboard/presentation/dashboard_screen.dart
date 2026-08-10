@@ -11,6 +11,7 @@ import '../../accounts/domain/account_status.dart';
 import '../../accounts/presentation/account_details_screen.dart';
 import '../../accounts/presentation/account_form_screen.dart';
 import '../../accounts/presentation/account_type_label.dart';
+import '../../settings/presentation/settings_screen.dart';
 import '../../transactions/presentation/transaction_form_screen.dart';
 import '../../transactions/presentation/transaction_tile.dart';
 import '../domain/dashboard_data.dart';
@@ -32,7 +33,18 @@ class DashboardScreen extends ConsumerWidget {
     };
 
     return Scaffold(
-      appBar: AppBar(title: const Text('FinOS')),
+      appBar: AppBar(
+        title: const Text('FinOS'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+        ],
+      ),
       body: dashboard.when(
         data: (data) => data.accountBalances.isEmpty
             ? const EmptyState(

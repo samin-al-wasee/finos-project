@@ -6,6 +6,7 @@ import '../../../core/constants/currencies.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../settings/domain/app_settings.dart';
 import '../application/account_controller.dart';
 import '../domain/account_type.dart';
 import 'account_type_label.dart';
@@ -46,7 +47,18 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
           : minorUnitsToInput(initial.openingBalanceMinor),
     );
     _type = initial?.type ?? AccountType.bank;
-    _currency = initial?.currency ?? 'BDT';
+    // A new account starts on the currency chosen in Settings; an existing one
+    // keeps its own, since changing it would reinterpret its stored balance.
+    // The preference has always emitted by this point because the root widget
+    // watches it, but fall back to the column default if it somehow hasn't.
+    _currency =
+        initial?.currency ??
+        ref
+            .read(appSettingsProvider)
+            .maybeWhen(
+              data: (settings) => settings.defaultCurrency,
+              orElse: () => AppSettings.defaultCurrencyFallback,
+            );
   }
 
   @override
