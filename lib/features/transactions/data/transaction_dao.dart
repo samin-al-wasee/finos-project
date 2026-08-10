@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../../core/database/app_database.dart';
+import '../domain/period_totals.dart';
 import '../domain/transaction_type.dart';
 import 'transaction_table.dart';
 
@@ -81,6 +82,54 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         Variable(accountId),
       ],
     ).getSingle();
+
+    return row.read<int>('impact');
+  }
+
+  /// Sums income and expense for transactions dated `from <= date < to`
+  /// (half-open range).
+  ///
+  /// Transfers are excluded — they move money between accounts and are neither
+  /// income nor expense (docs/DATA_MODEL.md §17).
+  Future<PeriodTotals> totalsForPeriod(DateTime from, DateTime to) async {
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(
+        CASE WHEN type = '${TransactionType.income.name.toUpperCase()}'
+             THEN amount_minor ELSE 0 END
+      ), 0) AS income,
+      COALESCE(SUM(
+        CASE WHEN type = '${TransactionType.expense.name.toUpperCase()}'
+             THEN amount_minor ELSE 0 END
+      ), 0) AS expense
+      FROM transactions
+      WHERE date >= ? AND date < ?
+      ''',
+      variables: [Variable(from), Variable(to)],
+    ).getSingle();
+
+    return PeriodTotals(
+      incomeMinor: row.read<int>('income'),
+      expenseMinor: row.read<int>('expense'),
+    );
+  }
+
+  /// Sum of balance impact across all accounts.
+  ///
+  /// Transfers net to zero globally (source −amount, destination +amount), so
+  /// this equals total income minus total expense. Returns 0 for an empty
+  /// table.
+  Future<int> totalBalanceImpact() async {
+    final row = await customSelect('''
+      SELECT COALESCE(SUM(
+        CASE
+          WHEN type = '${TransactionType.income.name.toUpperCase()}' THEN amount_minor
+          WHEN type = '${TransactionType.expense.name.toUpperCase()}' THEN -amount_minor
+          ELSE 0
+        END
+      ), 0) AS impact
+      FROM transactions
+      ''').getSingle();
 
     return row.read<int>('impact');
   }
