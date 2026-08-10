@@ -17,6 +17,12 @@ import 'package:flutter_test/flutter_test.dart';
 /// pending once the widget tree is disposed.
 void main() {
   Future<void> pumpSettings(WidgetTester tester, AppDatabase database) async {
+    // A tall viewport fits every section, so rows near the bottom (About) are
+    // built and hit-testable without scrolling.
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appDatabaseProvider.overrideWithValue(database)],
@@ -38,7 +44,8 @@ void main() {
     expect(find.text('Theme'), findsOneWidget);
     expect(find.text('Default currency'), findsOneWidget);
     expect(find.text('Categories'), findsOneWidget);
-    expect(find.text('Export and import'), findsOneWidget);
+    expect(find.text('Export backup'), findsOneWidget);
+    expect(find.text('Import backup'), findsOneWidget);
     expect(find.text('FinOS'), findsOneWidget);
 
     await database.close();
@@ -134,17 +141,16 @@ void main() {
     await database.close();
   });
 
-  testWidgets('export and import is shown but disabled', (tester) async {
+  testWidgets('the data rows are enabled', (tester) async {
     final database = AppDatabase.inMemory();
     await pumpSettings(tester, database);
 
-    final tile = tester.widget<ListTile>(
-      find.ancestor(
-        of: find.text('Export and import'),
-        matching: find.byType(ListTile),
-      ),
-    );
-    expect(tile.enabled, isFalse);
+    for (final label in ['Export backup', 'Import backup']) {
+      final tile = tester.widget<ListTile>(
+        find.ancestor(of: find.text(label), matching: find.byType(ListTile)),
+      );
+      expect(tile.enabled, isTrue, reason: '"$label" should be tappable');
+    }
 
     await database.close();
   });

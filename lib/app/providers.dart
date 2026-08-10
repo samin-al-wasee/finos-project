@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/database/app_database.dart';
 import '../features/accounts/application/account_controller.dart';
 import '../features/accounts/data/account_dao.dart';
+import '../features/backup/application/backup_service.dart';
+import '../features/backup/data/backup_file_store.dart';
 import '../features/budgets/application/budget_controller.dart';
 import '../features/budgets/data/budget_dao.dart';
 import '../features/budgets/domain/budget_period.dart';
@@ -47,6 +49,23 @@ final settingsControllerProvider = Provider<SettingsController>((ref) {
 /// database errors through their own guarded providers.
 final appSettingsProvider = StreamProvider<AppSettings>((ref) {
   return ref.watch(settingsDaoProvider).watchAll().map(AppSettings.fromRows);
+});
+
+// ------------------------------------------------------------------
+// Backup
+// ------------------------------------------------------------------
+
+/// Moves backup files in and out of the app.
+///
+/// Overridden with a fake in tests, where plugin method channels are
+/// unavailable.
+final backupFileStoreProvider = Provider<BackupFileStore>((ref) {
+  return const PlatformBackupFileStore();
+});
+
+/// Serialises, validates, and restores backups (FR-08).
+final backupServiceProvider = Provider<BackupService>((ref) {
+  return BackupService(ref.watch(appDatabaseProvider));
 });
 
 // ------------------------------------------------------------------

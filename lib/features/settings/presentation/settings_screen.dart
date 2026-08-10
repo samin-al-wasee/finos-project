@@ -5,6 +5,7 @@ import '../../../app/providers.dart';
 import '../../../core/constants/currencies.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../backup/presentation/backup_section.dart';
 import '../../categories/presentation/categories_list_screen.dart';
 import '../domain/app_settings.dart';
 import '../domain/theme_preference.dart';
@@ -61,12 +62,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
 
           const _SectionHeader(title: 'Data'),
-          const ListTile(
-            enabled: false,
-            leading: Icon(Icons.download_outlined),
-            title: Text('Export and import'),
-            subtitle: Text('Backup and restore are not available yet'),
-          ),
+          const BackupSection(),
 
           const _SectionHeader(title: 'About'),
           const _AboutTile(),
