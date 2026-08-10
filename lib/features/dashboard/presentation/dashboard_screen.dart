@@ -163,6 +163,7 @@ class _TotalBalanceCard extends StatelessWidget {
             Text(
               formatMinorUnits(totalBalanceMinor),
               style: theme.textTheme.headlineMedium,
+              key: const ValueKey('totalBalance'),
             ),
           ],
         ),
