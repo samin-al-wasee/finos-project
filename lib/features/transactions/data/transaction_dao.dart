@@ -7,6 +7,16 @@ import 'transaction_table.dart';
 
 part 'transaction_dao.g.dart';
 
+/// The storage value for [type], taken from the same converter the schema uses.
+///
+/// Previously these queries spelled the value as `type.name.toUpperCase()`, which
+/// happens to match for single-word types but silently produces `LOANRECEIPT`
+/// instead of `LOAN_RECEIPT`. Going through the converter removes that whole class
+/// of mismatch. The values are our own literals, so interpolating them carries no
+/// injection risk.
+String _storage(TransactionType type) =>
+    const TransactionTypeConverter().toSql(type);
+
 /// Data-access object for financial transactions.
 ///
 /// Sits between the application layer and the Drift database; keeps UI and
@@ -54,7 +64,9 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   /// Net balance impact of every transaction touching [accountId].
   ///
   /// Income and incoming transfers add to the balance; expenses and outgoing
-  /// transfers subtract from it. Returns 0 for an account with no transactions.
+  /// transfers subtract from it. Loan receipts add and loan payments subtract:
+  /// money genuinely moves through the account when a loan is made or repaid
+  /// (ADR-004). Returns 0 for an account with no transactions.
   ///
   /// This is a derived value (docs/DATA_MODEL.md §45) computed from the
   /// transaction table rather than stored alongside the account.
@@ -63,12 +75,14 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       '''
       SELECT COALESCE(SUM(
         CASE
-          WHEN type = '${TransactionType.income.name.toUpperCase()}' THEN amount_minor
-          WHEN type = '${TransactionType.expense.name.toUpperCase()}' THEN -amount_minor
-          WHEN type = '${TransactionType.transfer.name.toUpperCase()}'
+          WHEN type = '${_storage(TransactionType.income)}' THEN amount_minor
+          WHEN type = '${_storage(TransactionType.expense)}' THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.transfer)}'
                AND account_id = ? THEN -amount_minor
-          WHEN type = '${TransactionType.transfer.name.toUpperCase()}'
+          WHEN type = '${_storage(TransactionType.transfer)}'
                AND destination_account_id = ? THEN amount_minor
+          WHEN type = '${_storage(TransactionType.loanReceipt)}' THEN amount_minor
+          WHEN type = '${_storage(TransactionType.loanPayment)}' THEN -amount_minor
           ELSE 0
         END
       ), 0) AS impact
@@ -89,17 +103,19 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   /// Sums income and expense for transactions dated `from <= date < to`
   /// (half-open range).
   ///
-  /// Transfers are excluded — they move money between accounts and are neither
-  /// income nor expense (docs/DATA_MODEL.md §17).
+  /// Only income and expense are counted, so transfers and loan movements are
+  /// excluded by construction: a transfer moves money between the user's own
+  /// accounts, and a loan movement is a balance-sheet event, not earning or
+  /// spending (docs/DATA_MODEL.md §17, ADR-004).
   Future<PeriodTotals> totalsForPeriod(DateTime from, DateTime to) async {
     final row = await customSelect(
       '''
       SELECT COALESCE(SUM(
-        CASE WHEN type = '${TransactionType.income.name.toUpperCase()}'
+        CASE WHEN type = '${_storage(TransactionType.income)}'
              THEN amount_minor ELSE 0 END
       ), 0) AS income,
       COALESCE(SUM(
-        CASE WHEN type = '${TransactionType.expense.name.toUpperCase()}'
+        CASE WHEN type = '${_storage(TransactionType.expense)}'
              THEN amount_minor ELSE 0 END
       ), 0) AS expense
       FROM transactions
@@ -132,7 +148,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       '''
       SELECT COALESCE(SUM(amount_minor), 0) AS spent
       FROM transactions
-      WHERE type = '${TransactionType.expense.name.toUpperCase()}'
+      WHERE type = '${_storage(TransactionType.expense)}'
         AND category_id = ?
         AND date >= ? AND date < ?
       ''',
@@ -144,15 +160,24 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
 
   /// Sum of balance impact across all accounts.
   ///
-  /// Transfers net to zero globally (source −amount, destination +amount), so
-  /// this equals total income minus total expense. Returns 0 for an empty
-  /// table.
+  /// Transfers are omitted because they net to zero globally — the source loses
+  /// exactly what the destination gains.
+  ///
+  /// Loan movements are **not** omitted, and that asymmetry is the point: the
+  /// other side of a loan is a person or bank outside FinOS, so nothing cancels
+  /// them out. Lending money genuinely reduces the total the user holds, and
+  /// borrowing genuinely increases it (ADR-004). Leaving them out would quietly
+  /// overstate the portfolio total by every rupee ever lent.
+  ///
+  /// Returns 0 for an empty table.
   Future<int> totalBalanceImpact() async {
     final row = await customSelect('''
       SELECT COALESCE(SUM(
         CASE
-          WHEN type = '${TransactionType.income.name.toUpperCase()}' THEN amount_minor
-          WHEN type = '${TransactionType.expense.name.toUpperCase()}' THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.income)}' THEN amount_minor
+          WHEN type = '${_storage(TransactionType.expense)}' THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.loanReceipt)}' THEN amount_minor
+          WHEN type = '${_storage(TransactionType.loanPayment)}' THEN -amount_minor
           ELSE 0
         END
       ), 0) AS impact
@@ -160,5 +185,50 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       ''').getSingle();
 
     return row.read<int>('impact');
+  }
+
+  /// Sum of the loan movements of one [type] belonging to [loanId].
+  ///
+  /// Used to derive a loan's outstanding balance. Because origination and
+  /// repayment always sit on opposite sides for a given loan, passing the
+  /// repayment type returns exactly the repayments, with no risk of counting the
+  /// origination movement (ADR-004).
+  Future<int> loanMovementTotal(String loanId, TransactionType type) async {
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(amount_minor), 0) AS total
+      FROM transactions
+      WHERE loan_id = ? AND type = ?
+      ''',
+      variables: [Variable(loanId), Variable(_storage(type))],
+    ).getSingle();
+
+    return row.read<int>('total');
+  }
+
+  /// Every transaction belonging to [loanId], newest first.
+  Future<List<TransactionRow>> forLoan(String loanId) {
+    return (select(transactions)
+          ..where((t) => t.loanId.equals(loanId))
+          ..orderBy([(t) => OrderingTerm.desc(t.date)]))
+        .get();
+  }
+
+  /// Whether [loanId] has any transaction of [type].
+  Future<bool> hasLoanMovement(String loanId, TransactionType type) async {
+    final rows =
+        await (select(transactions)
+              ..where((t) => t.loanId.equals(loanId) & t.type.equalsValue(type))
+              ..limit(1))
+            .get();
+    return rows.isNotEmpty;
+  }
+
+  /// Deletes every transaction belonging to [loanId].
+  ///
+  /// Used when a loan is deleted outright; the caller is responsible for running
+  /// this inside the same transaction as the loan's own deletion.
+  Future<void> deleteForLoan(String loanId) async {
+    await (delete(transactions)..where((t) => t.loanId.equals(loanId))).go();
   }
 }
