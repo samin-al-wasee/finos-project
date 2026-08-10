@@ -331,6 +331,26 @@ TRANSFER
 
 These types have distinct financial semantics.
 
+### V1 implementation — loan movements
+
+Two further types record cash moving because of a loan (ADR-004):
+
+```text
+LOAN_RECEIPT   money entering an account because of a loan
+LOAN_PAYMENT   money leaving an account because of a loan
+```
+
+They exist because a loan's cash movements are recorded as transactions rather
+than in a separate table, which keeps the transactions table the single source of
+truth for account balances. Direction is intrinsic to the type, so a balance query
+never has to join to the loan to discover the sign.
+
+Like transfers, they are balance-sheet movements: they change account balances but
+never count as income or expense (§17, §35). They always carry a null `category_id`
+and a non-null `loan_id`, and they are created only through the loan feature — a
+user cannot enter one directly, because editing one by hand would let a loan's
+outstanding balance diverge from the movements it is derived from.
+
 ---
 
 # 13. Income
@@ -874,6 +894,27 @@ Loan
 └── updated_at
 ```
 
+### V1 implementation
+
+The `loans` table (schema v6) follows this model with three deliberate
+differences, all recorded in ADR-004:
+
+* **`outstanding_amount` is not stored.** It is derived as
+  `principal − Σ(repayments)` on every read (§35, §45), so it cannot disagree with
+  the movements behind it.
+* **`status` stores only `ACTIVE` / `ARCHIVED`.** `PAID` and `OVERDUE` are derived
+  — see §33.
+* **A nullable `disbursement_account_id` is added.** It records the account the
+  principal moved through when the loan was made. When set, creating the loan also
+  creates the origination movement, atomically. When null, the loan pre-dates FinOS
+  and moves no money today — opening state, exactly as an account's opening balance
+  is (§9). Without this, a loan made today would leave the user's cash balance
+  overstated until they recorded the movement by hand.
+
+The `LoanRepayment` entity in §34 does not exist as a table. Repayments are
+transactions of type `LOAN_RECEIPT` / `LOAN_PAYMENT` carrying the loan's id (§12),
+so account balances stay derived from one table.
+
 ---
 
 # 33. Loan Status
@@ -903,6 +944,20 @@ PAID
 
 The implementation should avoid unnecessary duplicated state.
 
+### V1 derived states
+
+Only the lifecycle is stored. The other two are computed at read time (ADR-004):
+
+```text
+outstanding == 0                          → PAID
+due_date < today AND outstanding > 0      → OVERDUE
+otherwise                                 → OUTSTANDING
+```
+
+A loan with no due date is never overdue, and a fully repaid loan is never overdue
+regardless of its due date. The due date is a calendar date, so a loan is not
+overdue *on* its due date — the user has the whole day (§42).
+
 ---
 
 # 34. Loan Repayment
@@ -921,6 +976,27 @@ LoanRepayment
 ├── description
 └── created_at
 ```
+
+### V1 implementation — repayments are transactions
+
+There is **no `loan_repayments` table**. A repayment carries exactly the fields
+above, and it also moves real money through an account, so it is recorded as a
+transaction (§12) with `loan_id` set:
+
+```text
+LENT      repayment received → LOAN_RECEIPT   (account balance ↑)
+BORROWED  repayment paid     → LOAN_PAYMENT   (account balance ↓)
+```
+
+The origination movement always sits on the opposite side from repayments for a
+given loan, so repayments are identifiable by type alone — no extra flag is needed
+to tell them apart.
+
+The reasoning is recorded in ADR-004: modelling repayments as their own entity
+would make account balance a sum over two tables, which `AGENTS.md` §9 warns
+against, and would keep repayments out of the transaction history where users look
+for them. Deleting a repayment is deleting a transaction, which correctly raises
+the loan's outstanding amount again.
 
 ---
 
@@ -949,6 +1025,26 @@ BORROWED
 
 The system must preserve the distinction.
 
+### V1 balance effects
+
+The distinction is preserved by which side each movement falls on, and loans affect
+account balances in both directions:
+
+| | Origination | Repayment |
+| --- | --- | --- |
+| `LENT` | cash out (balance ↓) | cash in (balance ↑) |
+| `BORROWED` | cash in (balance ↑) | cash out (balance ↓) |
+
+Lending money and being repaid in full therefore returns the user exactly where
+they started — no income, no expense, no net change.
+
+Note one asymmetry with transfers: transfers net to zero across all accounts, so
+the whole-portfolio total ignores them. Loan movements do **not** net to zero,
+because the counterparty is a person or bank outside FinOS. The portfolio total
+must include them, or it would overstate the user's holdings by every rupee ever
+lent out. Interest and fees are not modelled in V1, so a loan's total repayable
+amount is exactly its principal.
+
 ---
 
 # 36. Loan Repayment Integrity
@@ -962,6 +1058,19 @@ Repayment > Outstanding Balance
 ```
 
 Repayment operations should be atomic.
+
+### V1 behaviour
+
+Overpayment is **rejected**, not clamped, and the check runs against the live
+outstanding amount so earlier repayments are accounted for. A repayment is also
+refused on a fully repaid or archived loan, and through an archived account.
+
+Creating a loan with a disbursement account writes the loan and its origination
+movement in one database transaction, so neither can exist without the other.
+
+Deleting a loan is refused once it has repayments — those are financial history, so
+archiving is the way to retire it (§47). A loan with only an origination movement
+can be deleted, and the movement goes with it in the same transaction.
 
 ---
 
@@ -983,6 +1092,28 @@ Category             Loan
       ▼
    Budget
 ```
+
+### V1 implementation
+
+Because repayments are transactions rather than their own entity (§34), the
+implemented shape has a single path from accounts to money:
+
+```text
+FinancialAccount
+      │
+      │ 1                          ┌──────────────┐
+      │ N                          │              │
+      ▼                            ▼              │ disbursement
+Transaction ─── loan_id ───────▶ Loan ────────────┘
+      │
+      ├── category_id ──▶ Category ──▶ Budget
+      │
+      └── destination_account_id ──▶ FinancialAccount   (transfers)
+```
+
+A loan optionally points back at the account its principal moved through, and every
+loan movement points at its loan. Ordinary transactions leave `loan_id` null;
+loan movements leave `category_id` null.
 
 Recurring transactions generate or schedule actual transactions:
 
@@ -1370,14 +1501,18 @@ exists today.
 ```json
 {
   "backup_version": 1,
-  "app_schema_version": 5,
+  "app_schema_version": 6,
   "exported_at": "2026-08-10T14:32:00.000",
   "accounts": [],
   "categories": [],
+  "loans": [],
   "transactions": [],
   "budgets": []
 }
 ```
+
+Tables appear parents-first: `loans` precedes `transactions` because a loan
+movement references its loan.
 
 * `backup_version` versions the **envelope**, independent of the database schema.
   Bump it only when the file's shape changes in a way an older importer could not
@@ -1386,8 +1521,13 @@ exists today.
 * `app_schema_version` records the schema that produced the data, so a future
   importer can migrate older payloads.
 * Tables absent from the file are treated as empty, so a backup taken before a
-  feature existed still restores. `recurring_transactions`, `loans`, and
-  `loan_repayments` will simply appear once those features do.
+  feature existed still restores — a pre-loans backup restores cleanly today.
+  `recurring_transactions` will simply appear once that feature does.
+* The reverse is not promised: a build that predates loans cannot restore a backup
+  containing `LOAN_RECEIPT` rows, and rejects it with an "unrecognised type"
+  message. The envelope version is not bumped for this, because loan-free backups
+  stay fully compatible and a per-record error is more useful than refusing the
+  whole file.
 * Rows mirror their table columns using `snake_case` keys. Amounts are the same
   integer minor units used in storage (§4) — a decimal amount is rejected on
   import, because it means precision was already lost upstream.

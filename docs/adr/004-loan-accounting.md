@@ -1,6 +1,6 @@
 # ADR-004: Loan Accounting
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-10
 
 ## Context

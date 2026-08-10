@@ -1040,6 +1040,7 @@ Features implemented so far:
 - **budgets** — Per-category spending limits with derived spent/remaining/health (FR-04)
 - **settings** — Theme and default-currency preferences, plus the entry points to category management and backup (docs/ROADMAP.md §6.8). Preferences live in a key-value `preferences` table so a new setting needs no schema migration; `AppSettings` is the typed facade over it.
 - **backup** — Versioned JSON export and atomic replace-restore (FR-08, docs/DATA_MODEL.md §48). Serialization, validation, and restore are plain Dart; all platform file handling sits behind the `BackupFileStore` interface (see §26). CSV transaction export is not implemented yet.
+- **loans** — Money lent and borrowed, with repayments and derived outstanding/paid/overdue state (FR-06, [ADR-004](adr/004-loan-accounting.md)). Loan cash movements are transactions under two directional types, so account balances stay derived from one table; the loan record itself holds no outstanding amount. Loan transactions are read-only in the transaction list — they are created and removed only through this feature.
 - **dashboard** — Financial overview with balances and recent activity (FR-07). Budget status on the dashboard and spending-by-category are deferred until a dedicated analytics pass; the Budgets tab covers budget status for now.
 
 ---
