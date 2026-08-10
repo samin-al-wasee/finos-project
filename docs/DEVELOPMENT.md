@@ -64,6 +64,30 @@ No FinOS backend
 
 Cloud synchronization is a future capability.
 
+## 2.1 Local environment
+
+Work either directly on a host with the Flutter SDK installed, or in the dev
+containers under `.devcontainer/`. Both are pinned to the Flutter revision
+recorded in `.metadata`, so they agree with each other.
+
+```text
+.devcontainer/                 analysis, tests, codegen   (default)
+.devcontainer/android/         the above plus APK builds
+```
+
+The containers deliberately cannot do everything:
+
+* **iOS needs macOS and Xcode**, so it cannot run in a Linux container at all.
+  Since iOS is a first-class target, a container is a supplement to a Mac
+  checkout rather than a replacement for one.
+* An Android **emulator** needs nested virtualisation, which a container does not
+  have. Use a device, or an emulator on the host.
+* The **share sheet and file picker** used by backup export/import need a real
+  mobile runtime; in tests they are replaced by a fake.
+
+See `.devcontainer/README.md` for the pinned versions, the caches, and why a C
+toolchain is required even to run the test suite.
+
 ---
 
 # 3. Development Philosophy

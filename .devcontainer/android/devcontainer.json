@@ -1,0 +1,37 @@
+{
+  "name": "FinOS (Android toolchain)",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "..",
+    "target": "android"
+  },
+
+  // Gradle's cache is added here on top of the light variant's volumes: without
+  // it every container rebuild re-downloads AGP, Kotlin, and the dependency
+  // graph, which dominates the first build of an APK.
+  "mounts": [
+    "source=finos-pub-cache,target=/home/vscode/.pub-cache,type=volume",
+    "source=finos-dart-tool,target=${containerWorkspaceFolder}/.dart_tool,type=volume",
+    "source=finos-gradle-cache,target=/home/vscode/.gradle,type=volume"
+  ],
+
+  "onCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.pub-cache /home/vscode/.gradle ${containerWorkspaceFolder}/.dart_tool",
+
+  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && flutter pub get",
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["Dart-Code.dart-code", "Dart-Code.flutter"],
+      "settings": {
+        "dart.flutterSdkPath": "/opt/flutter",
+        "editor.formatOnSave": true,
+        "[dart]": {
+          "editor.defaultFormatter": "Dart-Code.dart-code",
+          "editor.rulers": [80]
+        }
+      }
+    }
+  },
+
+  "remoteUser": "vscode"
+}
