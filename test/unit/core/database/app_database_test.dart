@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart' hide isNotNull;
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/features/accounts/data/account_dao.dart';
@@ -9,6 +9,8 @@ import 'package:finos_app/features/accounts/domain/account_type.dart';
 import 'package:finos_app/features/budgets/data/budget_dao.dart';
 import 'package:finos_app/features/budgets/domain/budget_period.dart';
 import 'package:finos_app/features/budgets/domain/budget_status.dart';
+import 'package:finos_app/features/loans/data/loan_dao.dart';
+import 'package:finos_app/features/loans/domain/loan_direction.dart';
 import 'package:finos_app/features/categories/domain/category_origin.dart';
 import 'package:finos_app/features/categories/domain/category_status.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
@@ -31,8 +33,8 @@ void main() {
       await database.close();
     });
 
-    test('starts at schema version 5', () {
-      expect(database.schemaVersion, 5);
+    test('starts at schema version 6', () {
+      expect(database.schemaVersion, 6);
     });
 
     test('seeds the built-in categories on a fresh database', () async {
@@ -395,6 +397,150 @@ void main() {
       expect(await dao.getValue('default_currency'), 'USD');
     });
 
+    test(
+      'migrates a v5 database, adding loans and the loan_id column',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('finos_v5_to_v6');
+        final file = File('${dir.path}/migration_v6.db');
+        addTearDown(() async {
+          await file.delete();
+          await dir.delete(recursive: true);
+        });
+
+        // Hand-roll a schema-v5 database: everything except loans, and a
+        // transactions table with no loan_id column.
+        final legacy = _LegacyDatabase(NativeDatabase(file));
+        await legacy.customStatement('PRAGMA user_version = 5');
+        await legacy.customStatement(_legacyAccountsDdl);
+        await legacy.customStatement(_legacyCategoriesDdl);
+        await legacy.customStatement(_legacyTransactionsDdl);
+        await legacy.customStatement(_legacyBudgetsDdl);
+        await legacy.customStatement(_legacyPreferencesDdl);
+        await legacy.customStatement('''
+        INSERT INTO financial_accounts
+          (id, name, type, created_at, updated_at)
+        VALUES
+          ('acct-legacy', 'Legacy Bank', 'BANK', 1700000000, 1700000000)
+        ''');
+        await legacy.customStatement('''
+        INSERT INTO transactions
+          (id, type, amount_minor, currency, account_id, date,
+           description, created_at, updated_at)
+        VALUES
+          ('tx-legacy', 'EXPENSE', 5000, 'BDT', 'acct-legacy', 1755000000,
+           '', 1755000000, 1755000000)
+        ''');
+        await legacy.close();
+
+        final migrated = AppDatabase(NativeDatabase(file));
+        addTearDown(migrated.close);
+
+        // The loans table exists and accepts inserts.
+        final dao = LoanDao(migrated);
+        await dao.insertOne(
+          LoansCompanion.insert(
+            id: 'loan-001',
+            type: LoanDirection.borrowed,
+            name: 'Bank Loan',
+            principalMinor: 25000000,
+            startDate: DateTime(2026, 8, 1),
+          ),
+        );
+        expect(await dao.getById('loan-001'), isNotNull);
+
+        // The existing transaction survived and gained a null loan_id.
+        final existing = await TransactionDao(migrated).getById('tx-legacy');
+        expect(existing, isNotNull);
+        expect(existing!.loanId, isNull);
+        expect(existing.amountMinor, 5000);
+      },
+    );
+
+    test('migrates a v1 database straight through to loans', () async {
+      // Regression test: a v1 upgrade creates the transactions table from the
+      // *current* schema, which already includes loan_id. Adding the column again
+      // in the v6 step threw "duplicate column name" until the step learned to
+      // check first.
+      final dir = await Directory.systemTemp.createTemp('finos_v1_to_v6');
+      final file = File('${dir.path}/migration_v1_v6.db');
+      addTearDown(() async {
+        await file.delete();
+        await dir.delete(recursive: true);
+      });
+
+      final legacy = _LegacyDatabase(NativeDatabase(file));
+      await legacy.customStatement('PRAGMA user_version = 1');
+      await legacy.customStatement(_legacyAccountsDdl);
+      await legacy.customStatement('''
+        INSERT INTO financial_accounts
+          (id, name, type, created_at, updated_at)
+        VALUES
+          ('acct-legacy', 'Legacy Bank', 'BANK', 1700000000, 1700000000)
+        ''');
+      await legacy.close();
+
+      final migrated = AppDatabase(NativeDatabase(file));
+      addTearDown(migrated.close);
+
+      // Every table from every version now exists, and the account survived.
+      expect(await LoanDao(migrated).getAll(), isEmpty);
+      expect(await TransactionDao(migrated).getAll(), isEmpty);
+      final accounts = await migrated.select(migrated.financialAccounts).get();
+      expect(accounts.single.id, 'acct-legacy');
+    });
+
+    test('recovers a v6 database whose loans table is missing', () async {
+      final dir = await Directory.systemTemp.createTemp('finos_missing_loans');
+      final file = File('${dir.path}/missing_loans.db');
+      addTearDown(() async {
+        await file.delete();
+        await dir.delete(recursive: true);
+      });
+
+      // Claims v6 but has neither the loans table nor the loan_id column — an
+      // interrupted migration that got as far as bumping user_version.
+      final legacy = _LegacyDatabase(NativeDatabase(file));
+      await legacy.customStatement('PRAGMA user_version = 6');
+      await legacy.customStatement(_legacyAccountsDdl);
+      await legacy.customStatement(_legacyCategoriesDdl);
+      await legacy.customStatement(_legacyTransactionsDdl);
+      await legacy.customStatement(_legacyBudgetsDdl);
+      await legacy.customStatement(_legacyPreferencesDdl);
+      await legacy.customStatement('''
+        INSERT INTO financial_accounts
+          (id, name, type, created_at, updated_at)
+        VALUES
+          ('acct-legacy', 'Legacy Bank', 'BANK', 1700000000, 1700000000)
+        ''');
+      await legacy.close();
+
+      final reopened = AppDatabase(NativeDatabase(file));
+      addTearDown(reopened.close);
+
+      // The safety net recreated both halves, so a loan and its movement work.
+      await LoanDao(reopened).insertOne(
+        LoansCompanion.insert(
+          id: 'loan-safe',
+          type: LoanDirection.lent,
+          name: 'John',
+          principalMinor: 2000000,
+          startDate: DateTime(2026, 8, 1),
+        ),
+      );
+      final dao = TransactionDao(reopened);
+      await dao.insertOne(
+        TransactionsCompanion.insert(
+          id: 'tx-safe',
+          type: TransactionType.loanPayment,
+          amountMinor: 2000000,
+          accountId: 'acct-legacy',
+          loanId: const Value('loan-safe'),
+          date: DateTime(2026, 8, 1),
+        ),
+      );
+      expect((await dao.getById('tx-safe'))!.loanId, 'loan-safe');
+    });
+
     test('recovers a v3 database whose transactions table is missing', () async {
       final dir = await Directory.systemTemp.createTemp('finos_missing_tx');
       final file = File('${dir.path}/missing_tx.db');
@@ -624,6 +770,15 @@ const _legacyBudgetsDdl = '''
     status TEXT NOT NULL DEFAULT 'ACTIVE',
     created_at INTEGER NOT NULL DEFAULT
       (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+    updated_at INTEGER NOT NULL DEFAULT
+      (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+  )
+''';
+
+const _legacyPreferencesDdl = '''
+  CREATE TABLE preferences (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL,
     updated_at INTEGER NOT NULL DEFAULT
       (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
   )

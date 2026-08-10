@@ -14,7 +14,7 @@ void main() {
     );
   }
 
-  testWidgets('renders the bottom navigation shell with four destinations', (
+  testWidgets('renders the bottom navigation shell with five destinations', (
     tester,
   ) async {
     final database = AppDatabase.inMemory();
@@ -27,6 +27,7 @@ void main() {
     expect(find.text('Transactions'), findsOneWidget);
     expect(find.text('Accounts'), findsOneWidget);
     expect(find.text('Budgets'), findsOneWidget);
+    expect(find.text('Loans'), findsOneWidget);
 
     // Closing the database before the test body ends shuts down drift's
     // stream-query store, so no internal timers remain pending when the test
@@ -85,7 +86,7 @@ void main() {
         .map((fab) => fab.heroTag)
         .toList();
 
-    expect(tags, hasLength(3)); // Transactions, Accounts, Budgets
+    expect(tags, hasLength(4)); // Transactions, Accounts, Budgets, Loans
     expect(tags.toSet(), hasLength(tags.length));
 
     await database.close();
