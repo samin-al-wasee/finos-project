@@ -54,18 +54,32 @@ class TransactionTile extends StatelessWidget {
     final type = transaction.type;
 
     final isTransfer = type == TransactionType.transfer;
-    final title = isTransfer
-        ? 'Transfer · $accountName → $destinationAccountName'
-        : (categoryName?.isNotEmpty ?? false)
-        ? categoryName!
-        : (transaction.description.isEmpty
-              ? 'Transaction'
-              : transaction.description);
+    final isLoan = isLoanTransaction(type);
+
+    // Loan movements carry a description written by the loan feature (e.g.
+    // "Lent to John" or "Repayment · Bank Loan"), so the title reads correctly
+    // without threading loan names through every caller of this tile.
+    final String title;
+    if (isTransfer) {
+      title = 'Transfer · $accountName → $destinationAccountName';
+    } else if (isLoan) {
+      title = transaction.description.isEmpty
+          ? 'Loan'
+          : transaction.description;
+    } else if (categoryName?.isNotEmpty ?? false) {
+      title = categoryName!;
+    } else {
+      title = transaction.description.isEmpty
+          ? 'Transaction'
+          : transaction.description;
+    }
     final subtitle = isTransfer ? null : accountName;
 
     final IconData leadingIcon;
     if (isTransfer) {
       leadingIcon = Icons.swap_horiz;
+    } else if (isLoan) {
+      leadingIcon = Icons.handshake_outlined;
     } else {
       leadingIcon = categoryIcon(categoryIconKey ?? 'label');
     }
@@ -145,6 +159,16 @@ class _Amount extends StatelessWidget {
         color = colors.expense;
       case TransactionType.transfer:
         sign = '';
+        color = colors.transfer;
+      // Loan movements are balance-sheet events, so they borrow the transfer
+      // colour rather than the income/expense ones — but they do carry a sign,
+      // because unlike a transfer they really do change the total the user holds
+      // (ADR-004).
+      case TransactionType.loanReceipt:
+        sign = '+';
+        color = colors.transfer;
+      case TransactionType.loanPayment:
+        sign = '-';
         color = colors.transfer;
     }
 

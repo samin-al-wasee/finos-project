@@ -14,6 +14,9 @@ import '../../features/categories/data/category_table.dart';
 import '../../features/categories/domain/category_origin.dart';
 import '../../features/categories/domain/category_status.dart';
 import '../../features/categories/domain/category_type.dart';
+import '../../features/loans/data/loan_table.dart';
+import '../../features/loans/domain/loan_direction.dart';
+import '../../features/loans/domain/loan_status.dart';
 import '../../features/settings/data/settings_table.dart';
 import '../../features/transactions/data/transaction_table.dart';
 import '../../features/transactions/domain/transaction_type.dart';
@@ -25,7 +28,14 @@ part 'app_database.g.dart';
 /// All Drift tables live in the features they belong to; this class aggregates
 /// them and owns migration strategy and lifecycle.
 @DriftDatabase(
-  tables: [FinancialAccounts, Categories, Transactions, Budgets, Preferences],
+  tables: [
+    FinancialAccounts,
+    Categories,
+    Transactions,
+    Budgets,
+    Preferences,
+    Loans,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
@@ -41,7 +51,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -72,6 +82,18 @@ class AppDatabase extends _$AppDatabase {
         // Nothing is seeded: every preference falls back to a default when its
         // row is absent, so an empty table is a valid fresh state.
         await m.createTable(preferences);
+      }
+      if (from < 6) {
+        // Loans first: transactions.loan_id references it.
+        await m.createTable(loans);
+        // Additive column, null for every existing row — no ordinary transaction
+        // belongs to a loan (ADR-004).
+        //
+        // Checked rather than added blindly: when upgrading from before v3, the
+        // step above created the transactions table from the *current* schema,
+        // which already includes this column, and a second ALTER would fail with
+        // "duplicate column name".
+        await _addLoanIdColumnIfMissing();
       }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
@@ -106,6 +128,11 @@ class AppDatabase extends _$AppDatabase {
       // Same safety net for the v5 preferences table.
       if (details.versionNow >= 5 && !details.wasCreated) {
         await _ensurePreferencesTable();
+      }
+
+      // Safety net for v6, which both added a table and altered an existing one.
+      if (details.versionNow >= 6 && !details.wasCreated) {
+        await _ensureLoansSchema();
       }
     },
   );
@@ -188,5 +215,45 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _ensurePreferencesTable() async {
     final migrator = Migrator(this);
     await migrator.createTable(preferences);
+  }
+
+  /// Safety net for a v6 database missing part of the loans schema.
+  ///
+  /// v6 is the first migration that both created a table and altered an existing
+  /// one, so an interruption can leave either half undone. [Migrator.createTable]
+  /// is `CREATE TABLE IF NOT EXISTS` and so is safe to repeat, but `ALTER TABLE
+  /// ADD COLUMN` is not — the column is checked for first via `PRAGMA table_info`.
+  /// The DDL still comes from drift's own definition, so there is no
+  /// hand-maintained SQL to drift out of sync.
+  Future<void> _ensureLoansSchema() async {
+    final migrator = Migrator(this);
+    await migrator.createTable(loans);
+    await _addLoanIdColumnIfMissing();
+  }
+
+  /// Adds `transactions.loan_id` only when it is absent.
+  ///
+  /// `ALTER TABLE ADD COLUMN` is not idempotent, and there are two ways the
+  /// column can already exist: the transactions table may have just been created
+  /// from the current schema earlier in the same upgrade, or a previous run may
+  /// have added it before being interrupted. The DDL still comes from drift's own
+  /// definition, so there is no hand-maintained SQL to drift out of sync.
+  Future<void> _addLoanIdColumnIfMissing() async {
+    final columns = await customSelect('PRAGMA table_info(transactions)').get();
+
+    // An empty result means the table does not exist at all. That happens when a
+    // database claims v3+ but never got its transactions table: `onUpgrade` runs
+    // before the `beforeOpen` net that recreates it, so there is nothing to alter
+    // yet. Skipping is correct — the net creates the table from the current
+    // schema, which already includes this column.
+    if (columns.isEmpty) return;
+
+    final hasLoanId = columns.any(
+      (row) => row.read<String>('name') == 'loan_id',
+    );
+    if (hasLoanId) return;
+
+    debugPrint('[AppDatabase] transactions.loan_id missing — adding');
+    await Migrator(this).addColumn(transactions, transactions.loanId);
   }
 }

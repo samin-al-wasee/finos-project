@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../../accounts/data/account_table.dart';
 import '../../categories/data/category_table.dart';
+import '../../loans/data/loan_table.dart';
 import '../domain/transaction_type.dart';
 
 /// Drift table for financial transactions (docs/DATA_MODEL.md §11).
@@ -33,10 +34,14 @@ class Transactions extends Table {
   TextColumn get destinationAccountId =>
       text().nullable().references(FinancialAccounts, #id)();
 
-  /// Optional category classifying income/expense. Always null for transfers
-  /// because a transfer must not affect spending or income totals
-  /// (docs/DATA_MODEL.md §17).
+  /// Optional category classifying income/expense. Always null for transfers and
+  /// loan movements, because neither may affect spending or income totals
+  /// (docs/DATA_MODEL.md §17, ADR-004).
   TextColumn get categoryId => text().nullable().references(Categories, #id)();
+
+  /// The loan this movement belongs to. Set only for `LOAN_RECEIPT` and
+  /// `LOAN_PAYMENT` rows, and null for all ordinary activity (ADR-004).
+  TextColumn get loanId => text().nullable().references(Loans, #id)();
 
   /// The calendar date the financial event happened (docs/DATA_MODEL.md §41).
   /// This is the financial event date, not the record-creation timestamp.
