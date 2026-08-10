@@ -239,4 +239,224 @@ void main() {
 
     await database.close();
   });
+
+  group('search and filter', () {
+    /// Seeds two accounts, a category, and three transactions of different
+    /// types so search/filter can be exercised meaningfully.
+    Future<AppDatabase> pumpWithData(WidgetTester tester) async {
+      final database = await pumpList(tester);
+      final accounts = AccountDao(database);
+      final categories = CategoryDao(database);
+      final transactions = TransactionDao(database);
+
+      await accounts.insertOne(
+        FinancialAccountsCompanion.insert(
+          id: 'acct-bank',
+          name: 'Main Bank',
+          type: AccountType.bank,
+        ),
+      );
+      await accounts.insertOne(
+        FinancialAccountsCompanion.insert(
+          id: 'acct-cash',
+          name: 'Cash',
+          type: AccountType.cash,
+        ),
+      );
+      await categories.insertOne(
+        CategoriesCompanion.insert(
+          id: 'cat-test-food',
+          name: 'Groceries',
+          type: CategoryType.expense,
+        ),
+      );
+      await transactions.insertOne(
+        TransactionsCompanion.insert(
+          id: 'tx-groceries',
+          type: TransactionType.expense,
+          amountMinor: 50000,
+          accountId: 'acct-bank',
+          categoryId: const Value('cat-test-food'),
+          date: DateTime(2026, 8, 10),
+          description: const Value('Weekly groceries'),
+        ),
+      );
+      await transactions.insertOne(
+        TransactionsCompanion.insert(
+          id: 'tx-salary',
+          type: TransactionType.income,
+          amountMinor: 1000000,
+          accountId: 'acct-bank',
+          date: DateTime(2026, 8, 9),
+          description: const Value('Salary'),
+        ),
+      );
+      await transactions.insertOne(
+        TransactionsCompanion.insert(
+          id: 'tx-transfer',
+          type: TransactionType.transfer,
+          amountMinor: 250000,
+          accountId: 'acct-bank',
+          destinationAccountId: const Value('acct-cash'),
+          date: DateTime(2026, 8, 8),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return database;
+    }
+
+    testWidgets('typing in search narrows the list', (tester) async {
+      final database = await pumpWithData(tester);
+
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'salary');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Salary'), findsOneWidget);
+      expect(find.text('Groceries'), findsNothing);
+      expect(find.text('Transfer · Main Bank → Cash'), findsNothing);
+      expect(find.text('1 of 3 transactions'), findsOneWidget);
+
+      await database.close();
+    });
+
+    testWidgets('a search with no matches offers to clear it', (tester) async {
+      final database = await pumpWithData(tester);
+
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'nonexistent merchant');
+      await tester.pumpAndSettle();
+
+      expect(find.text('No matching transactions'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Clear filters'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Salary'), findsOneWidget);
+      expect(find.text('Groceries'), findsOneWidget);
+
+      await database.close();
+    });
+
+    testWidgets('closing search clears it and restores the full list', (
+      tester,
+    ) async {
+      final database = await pumpWithData(tester);
+
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'salary');
+      await tester.pumpAndSettle();
+      expect(find.text('Groceries'), findsNothing);
+
+      await tester.tap(find.byTooltip('Close search'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Groceries'), findsOneWidget);
+      expect(find.text('Salary'), findsOneWidget);
+
+      await database.close();
+    });
+
+    testWidgets('filtering by type shows only matching transactions', (
+      tester,
+    ) async {
+      final database = await pumpWithData(tester);
+
+      await tester.tap(find.byTooltip('Filter'));
+      await tester.pumpAndSettle();
+      expect(find.text('Filter transactions'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilterChip, 'Income'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Salary'), findsOneWidget);
+      expect(find.text('Groceries'), findsNothing);
+      expect(find.text('Transfer · Main Bank → Cash'), findsNothing);
+      expect(find.text('1 of 3 transactions'), findsOneWidget);
+
+      await database.close();
+    });
+
+    testWidgets('filtering by account shows only that account\'s activity', (
+      tester,
+    ) async {
+      final database = await pumpWithData(tester);
+
+      await tester.tap(find.byTooltip('Filter'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(DropdownButtonFormField<String?>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cash').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await tester.pumpAndSettle();
+
+      // The transfer touches Cash as its destination.
+      expect(find.text('Transfer · Main Bank → Cash'), findsOneWidget);
+      expect(find.text('Salary'), findsNothing);
+      expect(find.text('Groceries'), findsNothing);
+
+      await database.close();
+    });
+
+    testWidgets('the summary bar Clear button removes every filter', (
+      tester,
+    ) async {
+      final database = await pumpWithData(tester);
+
+      await tester.tap(find.byTooltip('Filter'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilterChip, 'Income'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await tester.pumpAndSettle();
+      expect(find.text('Groceries'), findsNothing);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Clear'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Salary'), findsOneWidget);
+      expect(find.text('Groceries'), findsOneWidget);
+      expect(find.text('Transfer · Main Bank → Cash'), findsOneWidget);
+
+      await database.close();
+    });
+
+    testWidgets('Clear inside the filter sheet keeps the active search', (
+      tester,
+    ) async {
+      final database = await pumpWithData(tester);
+
+      // Search for a term that matches both the salary and a filtered type,
+      // so the interaction between search and structured filters is visible.
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'a');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Filter'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilterChip, 'Income'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await tester.pumpAndSettle();
+      expect(find.text('Salary'), findsOneWidget);
+      expect(find.text('Transfer · Main Bank → Cash'), findsNothing);
+
+      // Clearing the structured filters should not clear the search text.
+      await tester.tap(find.byTooltip('Filter'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Clear'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Salary'), findsOneWidget);
+      final searchField = tester.widget<TextField>(find.byType(TextField));
+      expect(searchField.controller!.text, 'a');
+
+      await database.close();
+    });
+  });
 }

@@ -7,6 +7,7 @@ import '../../../core/formatting/date.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../domain/transaction_filter.dart';
 import '../domain/transaction_type.dart';
 import 'transaction_form_screen.dart';
 import 'transaction_tile.dart';
@@ -17,17 +18,78 @@ import 'transaction_tile.dart';
 /// ("Today" / "Yesterday" / calendar date). A floating action button opens the
 /// create form; per-tile popup menus offer edit and delete (with confirmation
 /// — docs/UI_DESIGN.md §35).
-class TransactionsListScreen extends ConsumerWidget {
+///
+/// Search and filter (FR-02) run over the already-loaded list rather than a
+/// database query: this is a local, single-user dataset, not a scale problem,
+/// so a plain client-side predicate keeps the feature simple (AGENTS.md §22).
+class TransactionsListScreen extends ConsumerStatefulWidget {
   const TransactionsListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TransactionsListScreen> createState() =>
+      _TransactionsListScreenState();
+}
+
+class _TransactionsListScreenState
+    extends ConsumerState<TransactionsListScreen> {
+  final _searchController = TextEditingController();
+  TransactionFilter _filter = const TransactionFilter();
+  bool _searching = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final transactions = ref.watch(transactionsStreamProvider);
     final accounts = ref.watch(accountsStreamProvider);
     final categories = ref.watch(categoriesStreamProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Transactions')),
+      appBar: AppBar(
+        title: _searching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Search transactions',
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) =>
+                    setState(() => _filter = _filter.copyWith(query: value)),
+              )
+            : const Text('Transactions'),
+        actions: [
+          IconButton(
+            icon: Icon(_searching ? Icons.close : Icons.search),
+            tooltip: _searching ? 'Close search' : 'Search',
+            onPressed: () => setState(() {
+              _searching = !_searching;
+              if (!_searching) {
+                _searchController.clear();
+                _filter = _filter.copyWith(query: '');
+              }
+            }),
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.filter_list,
+              color: _hasStructuredFilter
+                  ? Theme.of(context).colorScheme.primary
+                  : null,
+            ),
+            tooltip: 'Filter',
+            onPressed: () => _openFilterSheet(
+              context,
+              accounts.valueOrNull ?? const [],
+              categories.valueOrNull ?? const [],
+            ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         // The app shell keeps every tab alive in an IndexedStack, so all the tab
         // FABs share one route. Without distinct hero tags they collide and any
@@ -47,11 +109,10 @@ class TransactionsListScreen extends ConsumerWidget {
               )
             : accounts.when(
                 data: (accountRows) => categories.when(
-                  data: (categoryRows) => _TransactionList(
+                  data: (categoryRows) => _buildFiltered(
                     rows: rows,
                     accounts: accountRows,
                     categories: categoryRows,
-                    onDelete: (row) => _confirmDelete(context, ref, row),
                   ),
                   error: (e, _) => _ErrorState(
                     message: e.toString(),
@@ -72,6 +133,116 @@ class TransactionsListScreen extends ConsumerWidget {
         loading: () => const _LoadingState(),
       ),
     );
+  }
+
+  /// Whether any filter beyond the search text is active — drives the filter
+  /// icon's highlight, since the search field already shows its own state.
+  bool get _hasStructuredFilter =>
+      _filter.accountId != null ||
+      _filter.categoryId != null ||
+      _filter.types.isNotEmpty ||
+      _filter.from != null ||
+      _filter.to != null;
+
+  Widget _buildFiltered({
+    required List<TransactionRow> rows,
+    required List<FinancialAccountRow> accounts,
+    required List<CategoryRow> categories,
+  }) {
+    final accountNames = {for (final a in accounts) a.id: a.name};
+    final categoriesById = {for (final c in categories) c.id: c};
+
+    final filtered = _filter.isActive
+        ? rows
+              .where(
+                (row) => _filter.matches(
+                  row,
+                  accountName: accountNames[row.accountId] ?? row.accountId,
+                  destinationAccountName: row.destinationAccountId == null
+                      ? null
+                      : accountNames[row.destinationAccountId],
+                  categoryName: categoriesById[row.categoryId]?.name,
+                ),
+              )
+              .toList()
+        : rows;
+
+    if (filtered.isEmpty) {
+      return EmptyState(
+        icon: Icons.search_off,
+        title: 'No matching transactions',
+        message: 'Try a different search or clear your filters.',
+        action: OutlinedButton(
+          onPressed: _clearFilters,
+          child: const Text('Clear filters'),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        if (_filter.isActive)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              0,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${filtered.length} of ${rows.length} transactions',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(
+                        context,
+                      ).extension<FinosColors>()!.mutedText,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _clearFilters,
+                  child: const Text('Clear'),
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: _TransactionList(
+            rows: filtered,
+            accounts: accounts,
+            categories: categories,
+            onDelete: (row) => _confirmDelete(context, ref, row),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _filter = const TransactionFilter();
+      _searchController.clear();
+      _searching = false;
+    });
+  }
+
+  Future<void> _openFilterSheet(
+    BuildContext context,
+    List<FinancialAccountRow> accounts,
+    List<CategoryRow> categories,
+  ) async {
+    final result = await showModalBottomSheet<TransactionFilter>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _FilterSheet(
+        initial: _filter,
+        accounts: accounts,
+        categories: categories,
+      ),
+    );
+    if (result != null) setState(() => _filter = result);
   }
 
   void _openForm(BuildContext context) {
@@ -202,6 +373,200 @@ class _TransactionList extends StatelessWidget {
         builder: (_) => TransactionFormScreen(initial: row),
       ),
     );
+  }
+}
+
+/// Modal sheet for setting the structured filters (account, category, type,
+/// date range). The free-text search lives in the app bar instead, since it's
+/// meant to be typed continuously rather than "applied".
+class _FilterSheet extends StatefulWidget {
+  const _FilterSheet({
+    required this.initial,
+    required this.accounts,
+    required this.categories,
+  });
+
+  final TransactionFilter initial;
+  final List<FinancialAccountRow> accounts;
+  final List<CategoryRow> categories;
+
+  @override
+  State<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends State<_FilterSheet> {
+  late String? _accountId = widget.initial.accountId;
+  late String? _categoryId = widget.initial.categoryId;
+  final Set<TransactionTypeFilter> _types = {};
+  DateTime? _from;
+  DateTime? _to;
+
+  @override
+  void initState() {
+    super.initState();
+    _types.addAll(widget.initial.types);
+    _from = widget.initial.from;
+    _to = widget.initial.to;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Filter transactions', style: theme.textTheme.titleMedium),
+              const SizedBox(height: AppSpacing.lg),
+              DropdownButtonFormField<String?>(
+                initialValue: _accountId,
+                decoration: const InputDecoration(
+                  labelText: 'Account',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All accounts'),
+                  ),
+                  for (final a in widget.accounts)
+                    DropdownMenuItem(value: a.id, child: Text(a.name)),
+                ],
+                onChanged: (value) => setState(() => _accountId = value),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              DropdownButtonFormField<String?>(
+                initialValue: _categoryId,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All categories'),
+                  ),
+                  for (final c in widget.categories)
+                    DropdownMenuItem(value: c.id, child: Text(c.name)),
+                ],
+                onChanged: (value) => setState(() => _categoryId = value),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text('Type', style: theme.textTheme.labelLarge),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.sm,
+                children: [
+                  for (final type in TransactionTypeFilter.values)
+                    FilterChip(
+                      label: Text(_typeLabel(type)),
+                      selected: _types.contains(type),
+                      onSelected: (selected) => setState(() {
+                        if (selected) {
+                          _types.add(type);
+                        } else {
+                          _types.remove(type);
+                        }
+                      }),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text('Date range', style: theme.textTheme.labelLarge),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _pickDate(isFrom: true),
+                      child: Text(_from == null ? 'From' : formatDate(_from!)),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _pickDate(isFrom: false),
+                      child: Text(_to == null ? 'To' : formatDate(_to!)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).pop(TransactionFilter(query: widget.initial.query)),
+                      child: const Text('Clear'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(context).pop(
+                        widget.initial.copyWith(
+                          accountId: _accountId,
+                          clearAccountId: _accountId == null,
+                          categoryId: _categoryId,
+                          clearCategoryId: _categoryId == null,
+                          types: _types,
+                          from: _from,
+                          clearFrom: _from == null,
+                          to: _to,
+                          clearTo: _to == null,
+                        ),
+                      ),
+                      child: const Text('Apply'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDate({required bool isFrom}) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: (isFrom ? _from : _to) ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) {
+        _from = picked;
+      } else {
+        _to = picked;
+      }
+    });
+  }
+
+  static String _typeLabel(TransactionTypeFilter type) {
+    switch (type) {
+      case TransactionTypeFilter.income:
+        return 'Income';
+      case TransactionTypeFilter.expense:
+        return 'Expense';
+      case TransactionTypeFilter.transfer:
+        return 'Transfer';
+      case TransactionTypeFilter.loan:
+        return 'Loan';
+    }
   }
 }
 
