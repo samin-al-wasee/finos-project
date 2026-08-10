@@ -14,6 +14,9 @@ import '../features/budgets/domain/budget_progress.dart';
 import '../features/categories/application/category_controller.dart';
 import '../features/categories/data/category_dao.dart';
 import '../features/dashboard/domain/dashboard_data.dart';
+import '../features/loans/application/loan_controller.dart';
+import '../features/loans/data/loan_dao.dart';
+import '../features/loans/domain/loan_progress.dart';
 import '../features/settings/application/settings_controller.dart';
 import '../features/settings/data/settings_dao.dart';
 import '../features/settings/domain/app_settings.dart';
@@ -229,6 +232,67 @@ final budgetProgressProvider = FutureProvider<List<BudgetProgress>>((
   }
   return progress;
 });
+
+// ------------------------------------------------------------------
+// Loans
+// ------------------------------------------------------------------
+
+/// Data-access object for loans.
+final loanDaoProvider = Provider<LoanDao>((ref) {
+  return LoanDao(ref.watch(appDatabaseProvider));
+});
+
+/// Application service for the loan lifecycle.
+final loanControllerProvider = Provider<LoanController>((ref) {
+  return LoanController(
+    ref.watch(appDatabaseProvider),
+    ref.watch(loanDaoProvider),
+    ref.watch(transactionDaoProvider),
+    ref.watch(accountDaoProvider),
+  );
+});
+
+/// Reactive stream of all loans, including archived ones.
+final loansStreamProvider = StreamProvider<List<LoanRow>>((ref) {
+  return _guardOpenTimeout(ref.watch(loanDaoProvider).watchAll());
+});
+
+/// Loans paired with everything derived from their repayments (FR-06).
+///
+/// Watches the transaction stream as well as the loan stream, so recording a
+/// repayment immediately updates the outstanding amount. Outstanding is derived
+/// on every read rather than stored (ADR-004), so it cannot drift from the
+/// transactions behind it.
+final loanProgressProvider = FutureProvider<List<LoanProgress>>((ref) async {
+  final loans = await ref.watch(loansStreamProvider.future);
+  await ref.watch(transactionsStreamProvider.future);
+  final controller = ref.watch(loanControllerProvider);
+
+  final progress = <LoanProgress>[];
+  for (final loan in loans) {
+    progress.add(await controller.progressFor(loan));
+  }
+  return progress;
+});
+
+/// Derived figures for one loan, for the details screen.
+final loanProgressByIdProvider = FutureProvider.family<LoanProgress?, String>((
+  ref,
+  loanId,
+) async {
+  final all = await ref.watch(loanProgressProvider.future);
+  for (final entry in all) {
+    if (entry.loan.id == loanId) return entry;
+  }
+  return null;
+});
+
+/// The transactions belonging to one loan, newest first.
+final loanMovementsProvider =
+    FutureProvider.family<List<TransactionRow>, String>((ref, loanId) async {
+      await ref.watch(transactionsStreamProvider.future);
+      return ref.watch(transactionDaoProvider).forLoan(loanId);
+    });
 
 // ------------------------------------------------------------------
 // Balances
