@@ -1410,9 +1410,63 @@ Future functionality may support:
 
 These are outside the current V1 scope.
 
+### V1 default-currency preference
+
+The Settings screen stores a **default currency**, which preselects the currency
+when creating a new account. It is a convenience default only:
+
+* It never rewrites the currency stored on an existing record. Changing it would
+  reinterpret a stored balance without converting it.
+* It is not a base currency. Nothing converts between currencies, and totals
+  (dashboard balance, budget spending) are summed in minor units without
+  conversion — correct only while a user's accounts share one currency.
+
+Transactions and budgets still take the `BDT` column default rather than this
+preference, because their currency should follow the account they belong to. That
+correctness question is part of real multi-currency support and stays out of V1.
+
 ---
 
-# 51. Investment Extensibility
+# 51. User Preferences
+
+Preferences are user settings, not financial records, and are stored separately
+from the financial model.
+
+```text
+Preference
+├── key
+├── value
+└── updated_at
+```
+
+The `preferences` table (schema v5) is deliberately key-value rather than one
+typed column per setting: preferences are heterogeneous and keep accruing, and a
+key-value table absorbs each new one without a schema migration. Type safety is
+restored one layer up by `AppSettings`, the only reader of these rows.
+
+Rules:
+
+* **An absent row means "use the default."** Nothing is seeded, so an empty table
+  is a valid fresh state and a wiped table degrades to defaults rather than
+  breaking.
+* **Unknown keys and unparseable values fall back rather than throwing.** The
+  theme is read while the root widget builds, so a row written by a future
+  version must never make the app unlaunchable.
+* **Keys are schema.** Renaming one without a migration silently reverts the
+  user's choice to its default.
+* This table holds preferences only. Amounts, limits, and balances belong in
+  their own tables where they can be typed and validated.
+
+Current keys:
+
+```text
+theme_preference   SYSTEM | LIGHT | DARK
+default_currency   ISO 4217 code from the V1 currency list
+```
+
+---
+
+# 52. Investment Extensibility
 
 Investment functionality is not part of V1.
 
@@ -1434,7 +1488,7 @@ These should not be added to V1 merely for future-proofing.
 
 ---
 
-# 52. AI Extensibility
+# 53. AI Extensibility
 
 AI-generated insights should not become persistent financial truth.
 
@@ -1465,7 +1519,7 @@ The underlying transaction data remains authoritative.
 
 ---
 
-# 53. Data Ownership
+# 54. Data Ownership
 
 The user owns their financial records.
 
@@ -1489,7 +1543,7 @@ The application should not make the user dependent on a developer-controlled ser
 
 ---
 
-# 54. Privacy Boundary
+# 55. Privacy Boundary
 
 The following data should be considered sensitive:
 
@@ -1507,7 +1561,7 @@ This data should remain local in V1 unless the user explicitly initiates a futur
 
 ---
 
-# 55. Data Model Evolution Rules
+# 56. Data Model Evolution Rules
 
 Any future change to the data model should answer:
 
@@ -1523,7 +1577,7 @@ Any future change to the data model should answer:
 
 ---
 
-# 56. Final Data Model Principle
+# 57. Final Data Model Principle
 
 The FinOS data model should follow one central principle:
 

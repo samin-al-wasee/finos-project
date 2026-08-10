@@ -1020,6 +1020,7 @@ Features implemented so far:
 - **categories** — Category management with built-in seed data (FR-03)
 - **transactions** — Income/expense/transfer entry, listing, and balance impact (FR-02)
 - **budgets** — Per-category spending limits with derived spent/remaining/health (FR-04)
+- **settings** — Theme and default-currency preferences, plus the entry point to category management (docs/ROADMAP.md §6.8). Preferences live in a key-value `preferences` table so a new setting needs no schema migration; `AppSettings` is the typed facade over it. Export/import is shown disabled until that feature lands.
 - **dashboard** — Financial overview with balances and recent activity (FR-07). Budget status on the dashboard and spending-by-category are deferred until a dedicated analytics pass; the Budgets tab covers budget status for now.
 
 ---
