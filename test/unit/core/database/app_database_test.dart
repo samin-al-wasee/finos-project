@@ -12,6 +12,7 @@ import 'package:finos_app/features/budgets/domain/budget_status.dart';
 import 'package:finos_app/features/categories/domain/category_origin.dart';
 import 'package:finos_app/features/categories/domain/category_status.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
+import 'package:finos_app/features/settings/data/settings_dao.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
 import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,8 +31,8 @@ void main() {
       await database.close();
     });
 
-    test('starts at schema version 4', () {
-      expect(database.schemaVersion, 4);
+    test('starts at schema version 5', () {
+      expect(database.schemaVersion, 5);
     });
 
     test('seeds the built-in categories on a fresh database', () async {
@@ -325,6 +326,75 @@ void main() {
       expect(await dao.getById('budget-safe'), isNotNull);
     });
 
+    test('migrates a v4 database and creates the preferences table', () async {
+      final dir = await Directory.systemTemp.createTemp('finos_v4_to_v5');
+      final file = File('${dir.path}/migration_v5.db');
+      addTearDown(() async {
+        await file.delete();
+        await dir.delete(recursive: true);
+      });
+
+      // Hand-roll a schema-v4 database — everything except preferences.
+      final legacy = _LegacyDatabase(NativeDatabase(file));
+      await legacy.customStatement('PRAGMA user_version = 4');
+      await legacy.customStatement(_legacyAccountsDdl);
+      await legacy.customStatement(_legacyCategoriesDdl);
+      await legacy.customStatement(_legacyTransactionsDdl);
+      await legacy.customStatement(_legacyBudgetsDdl);
+      await legacy.customStatement('''
+        INSERT INTO financial_accounts
+          (id, name, type, created_at, updated_at)
+        VALUES
+          ('acct-legacy', 'Legacy Bank', 'BANK', 1700000000, 1700000000)
+        ''');
+      await legacy.close();
+
+      // Reopen as the current schema (v5).
+      final migrated = AppDatabase(NativeDatabase(file));
+      addTearDown(migrated.close);
+
+      // The table exists and starts empty — preferences are never seeded,
+      // because an absent row means "use the default".
+      final dao = SettingsDao(migrated);
+      expect(await dao.getAll(), isEmpty);
+
+      await dao.put('theme_preference', 'DARK');
+      expect(await dao.getValue('theme_preference'), 'DARK');
+
+      // Existing financial data survives untouched.
+      final accounts = await migrated.select(migrated.financialAccounts).get();
+      expect(accounts, hasLength(1));
+      expect(accounts.single.id, 'acct-legacy');
+    });
+
+    test('recovers a v5 database whose preferences table is missing', () async {
+      final dir = await Directory.systemTemp.createTemp('finos_missing_prefs');
+      final file = File('${dir.path}/missing_prefs.db');
+      addTearDown(() async {
+        await file.delete();
+        await dir.delete(recursive: true);
+      });
+
+      // A database claiming schema v5 with no preferences table — an
+      // interrupted migration. This one must recover, because the theme is read
+      // while the root widget builds.
+      final legacy = _LegacyDatabase(NativeDatabase(file));
+      await legacy.customStatement('PRAGMA user_version = 5');
+      await legacy.customStatement(_legacyAccountsDdl);
+      await legacy.customStatement(_legacyCategoriesDdl);
+      await legacy.customStatement(_legacyTransactionsDdl);
+      await legacy.customStatement(_legacyBudgetsDdl);
+      await legacy.close();
+
+      final reopened = AppDatabase(NativeDatabase(file));
+      addTearDown(reopened.close);
+
+      final dao = SettingsDao(reopened);
+      expect(await dao.getAll(), isEmpty);
+      await dao.put('default_currency', 'USD');
+      expect(await dao.getValue('default_currency'), 'USD');
+    });
+
     test('recovers a v3 database whose transactions table is missing', () async {
       final dir = await Directory.systemTemp.createTemp('finos_missing_tx');
       final file = File('${dir.path}/missing_tx.db');
@@ -535,6 +605,23 @@ const _legacyTransactionsDdl = '''
     category_id TEXT REFERENCES categories (id),
     date INTEGER NOT NULL,
     description TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL DEFAULT
+      (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+    updated_at INTEGER NOT NULL DEFAULT
+      (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+  )
+''';
+
+const _legacyBudgetsDdl = '''
+  CREATE TABLE budgets (
+    id TEXT NOT NULL PRIMARY KEY,
+    category_id TEXT NOT NULL REFERENCES categories (id),
+    amount_minor INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'BDT',
+    period TEXT NOT NULL,
+    start_date INTEGER NOT NULL,
+    end_date INTEGER,
+    status TEXT NOT NULL DEFAULT 'ACTIVE',
     created_at INTEGER NOT NULL DEFAULT
       (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
     updated_at INTEGER NOT NULL DEFAULT
