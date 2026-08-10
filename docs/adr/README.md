@@ -8,6 +8,7 @@ This directory records significant architectural decisions for FinOS.
 | --- | ------ | ----- |
 | [002](002-local-database.md) | Accepted | Local database technology |
 | [003](003-state-management.md) | Accepted | State management approach |
+| [004](004-loan-accounting.md) | Proposed | Loan accounting |
 
 ## Conventions
 
