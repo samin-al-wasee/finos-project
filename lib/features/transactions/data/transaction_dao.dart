@@ -158,6 +158,32 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return row.read<int>('spent');
   }
 
+  /// Sums expenses grouped by category, dated `from <= date < to`.
+  ///
+  /// Mirrors [expenseTotalForCategory] but for every category at once, for the
+  /// dashboard's spending-by-category view (FR-07). A `null` key holds expenses
+  /// with no assigned category rather than dropping them from the total.
+  Future<Map<String?, int>> expenseTotalsByCategory(
+    DateTime from,
+    DateTime to,
+  ) async {
+    final rows = await customSelect(
+      '''
+      SELECT category_id AS categoryId, SUM(amount_minor) AS spent
+      FROM transactions
+      WHERE type = '${_storage(TransactionType.expense)}'
+        AND date >= ? AND date < ?
+      GROUP BY category_id
+      ''',
+      variables: [Variable(from), Variable(to)],
+    ).get();
+
+    return {
+      for (final row in rows)
+        row.read<String?>('categoryId'): row.read<int>('spent'),
+    };
+  }
+
   /// Sum of balance impact across all accounts.
   ///
   /// Transfers are omitted because they net to zero globally — the source loses

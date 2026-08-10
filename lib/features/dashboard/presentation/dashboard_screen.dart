@@ -5,12 +5,14 @@ import '../../../app/providers.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../accounts/domain/account_status.dart';
 import '../../accounts/presentation/account_details_screen.dart';
 import '../../accounts/presentation/account_form_screen.dart';
 import '../../accounts/presentation/account_type_label.dart';
+import '../../categories/presentation/category_icon.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../../transactions/presentation/transaction_form_screen.dart';
 import '../../transactions/presentation/transaction_tile.dart';
@@ -19,8 +21,9 @@ import '../domain/dashboard_data.dart';
 /// Home tab content (FR-07).
 ///
 /// Shows the financial overview: total balance, this-month income and expenses,
-/// per-account balances, and the five most recent transactions. Recomputes
-/// automatically whenever accounts or transactions change.
+/// per-account balances, this-month spending by category, and the five most
+/// recent transactions. Recomputes automatically whenever accounts or
+/// transactions change.
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -117,6 +120,15 @@ class _DashboardBody extends StatelessWidget {
         const _SectionHeader(title: 'Accounts'),
         for (final accountBalance in data.accountBalances)
           _AccountBalanceTile(accountBalance: accountBalance),
+        if (data.categorySpending.isNotEmpty) ...[
+          const _SectionHeader(title: 'Spending by category'),
+          for (final spending in data.categorySpending)
+            _CategorySpendingTile(
+              spending: spending,
+              category: categoriesById[spending.categoryId],
+              totalExpenseMinor: data.expenseMinor,
+            ),
+        ],
         const _SectionHeader(title: 'Recent transactions'),
         if (data.recentTransactions.isEmpty)
           Padding(
@@ -273,6 +285,81 @@ class _AccountBalanceTile extends StatelessWidget {
         MaterialPageRoute<void>(
           builder: (_) => AccountDetailsScreen(accountId: account.id),
         ),
+      ),
+    );
+  }
+}
+
+/// One category's row in the "Spending by category" section.
+///
+/// The bar shows this category's share of *total expense for the period*, not
+/// a budget limit — there may be no budget for the category at all. The share
+/// is naturally within 0–1 since it is one part of the same total, so no
+/// clamping is needed (unlike a budget bar, which can exceed its limit).
+class _CategorySpendingTile extends StatelessWidget {
+  const _CategorySpendingTile({
+    required this.spending,
+    required this.category,
+    required this.totalExpenseMinor,
+  });
+
+  final CategorySpending spending;
+  final CategoryRow? category;
+  final int totalExpenseMinor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<FinosColors>()!;
+    final share = totalExpenseMinor <= 0
+        ? 0.0
+        : spending.amountMinor / totalExpenseMinor;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.xs,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                categoryIcon(category?.icon ?? 'label'),
+                size: 18,
+                color: colors.mutedText,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  category?.name ?? 'Uncategorized',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+              Text(
+                formatMinorUnits(spending.amountMinor),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.expense,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.full),
+            child: LinearProgressIndicator(
+              value: share,
+              minHeight: AppSpacing.sm,
+              backgroundColor: colors.border,
+              color: colors.expense,
+              semanticsLabel: '${category?.name ?? 'Uncategorized'} spending',
+            ),
+          ),
+        ],
       ),
     );
   }

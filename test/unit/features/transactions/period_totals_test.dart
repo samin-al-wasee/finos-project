@@ -45,6 +45,7 @@ void main() {
     TransactionType type = TransactionType.expense,
     int amountMinor = 1000,
     String? destinationAccountId,
+    String? categoryId,
   }) async {
     await dao.insertOne(
       TransactionRow(
@@ -54,7 +55,7 @@ void main() {
         currency: 'BDT',
         accountId: accountId,
         destinationAccountId: destinationAccountId,
-        categoryId: null,
+        categoryId: categoryId,
         date: date,
         description: '',
         createdAt: date,
@@ -340,6 +341,91 @@ void main() {
           await dao.balanceImpactFor(savings) +
           await dao.balanceImpactFor(budget);
       expect(await dao.totalBalanceImpact(), perAccount);
+    });
+  });
+
+  group('expenseTotalsByCategory', () {
+    final from = DateTime(2026, 8, 1);
+    final to = DateTime(2026, 9, 1);
+
+    test('empty period returns an empty map', () async {
+      final account = await seedAccount('One');
+      await add('outside', account, date: DateTime(2026, 7, 15));
+
+      expect(await dao.expenseTotalsByCategory(from, to), isEmpty);
+    });
+
+    test('sums expenses per category', () async {
+      final account = await seedAccount('One');
+      await add(
+        'food-1',
+        account,
+        date: DateTime(2026, 8, 5),
+        amountMinor: 30000,
+        categoryId: 'cat-food',
+      );
+      await add(
+        'food-2',
+        account,
+        date: DateTime(2026, 8, 15),
+        amountMinor: 20000,
+        categoryId: 'cat-food',
+      );
+      await add(
+        'transport',
+        account,
+        date: DateTime(2026, 8, 10),
+        amountMinor: 5000,
+        categoryId: 'cat-transport',
+      );
+
+      final byCategory = await dao.expenseTotalsByCategory(from, to);
+      expect(byCategory['cat-food'], 50000);
+      expect(byCategory['cat-transport'], 5000);
+    });
+
+    test('an uncategorized expense is grouped under a null key', () async {
+      final account = await seedAccount('One');
+      await add('uncategorized', account, date: DateTime(2026, 8, 5));
+
+      final byCategory = await dao.expenseTotalsByCategory(from, to);
+      expect(byCategory[null], 1000);
+    });
+
+    test('income and transfers are excluded', () async {
+      final source = await seedAccount('One');
+      final destination = await seedAccount('Two');
+      await add(
+        'salary',
+        source,
+        date: DateTime(2026, 8, 1),
+        type: TransactionType.income,
+        amountMinor: 50000,
+        categoryId: 'cat-food',
+      );
+      await add(
+        'transfer',
+        source,
+        date: DateTime(2026, 8, 2),
+        type: TransactionType.transfer,
+        amountMinor: 20000,
+        destinationAccountId: destination,
+      );
+
+      expect(await dao.expenseTotalsByCategory(from, to), isEmpty);
+    });
+
+    test('transactions outside the period are excluded', () async {
+      final account = await seedAccount('One');
+      await add(
+        'before',
+        account,
+        date: DateTime(2026, 7, 31),
+        amountMinor: 1000,
+        categoryId: 'cat-food',
+      );
+
+      expect(await dao.expenseTotalsByCategory(from, to), isEmpty);
     });
   });
 }

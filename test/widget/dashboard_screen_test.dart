@@ -113,7 +113,9 @@ void main() {
     expect(find.text('Income'), findsOneWidget);
     expect(find.text(formatMinorUnits(50000)), findsOneWidget);
     expect(find.text('Expenses'), findsOneWidget);
-    expect(find.text(formatMinorUnits(30000)), findsOneWidget);
+    // Appears on both the Expenses card and the "Spending by category" tile,
+    // since the one expense is entirely in the 'Food' category.
+    expect(find.text(formatMinorUnits(30000)), findsNWidgets(2));
 
     // Net cash flow.
     expect(
@@ -126,8 +128,92 @@ void main() {
 
     // Recent transactions — category title 'Food' for the expense, and the
     // description 'Salary' for the uncategorized income.
-    expect(find.text('Food'), findsOneWidget);
+    expect(find.text('Food'), findsWidgets);
     expect(find.text('Salary'), findsOneWidget);
+
+    // Spending by category section is present.
+    expect(find.text('Spending by category'), findsOneWidget);
+
+    await database.close();
+  });
+
+  testWidgets('spending by category ranks categories by amount', (
+    tester,
+  ) async {
+    final database = await pumpDashboard(tester);
+    final accounts = AccountDao(database);
+    final transactions = TransactionDao(database);
+
+    await accounts.insertOne(
+      FinancialAccountsCompanion.insert(
+        id: 'acct-1',
+        name: 'Main Bank',
+        type: AccountType.bank,
+      ),
+    );
+    // 'cat-food' and 'cat-transport' are built-in categories, seeded on every
+    // fresh database — no need to insert them.
+
+    final now = DateTime.now();
+    await transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: 'tx-transport',
+        type: TransactionType.expense,
+        amountMinor: 5000,
+        accountId: 'acct-1',
+        categoryId: Value('cat-transport'),
+        date: now,
+      ),
+    );
+    await transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: 'tx-food',
+        type: TransactionType.expense,
+        amountMinor: 30000,
+        accountId: 'acct-1',
+        categoryId: Value('cat-food'),
+        date: now,
+      ),
+    );
+    await transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: 'tx-uncategorized',
+        type: TransactionType.expense,
+        amountMinor: 1000,
+        accountId: 'acct-1',
+        date: now,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Highest spend first: Food, then Transport, then Uncategorized.
+    final sectionTop = tester.getTopLeft(find.text('Spending by category'));
+    final foodTop = tester.getTopLeft(find.text('Food').last);
+    final transportTop = tester.getTopLeft(find.text('Transport'));
+    final uncategorizedTop = tester.getTopLeft(find.text('Uncategorized'));
+    expect(foodTop.dy, greaterThan(sectionTop.dy));
+    expect(transportTop.dy, greaterThan(foodTop.dy));
+    expect(uncategorizedTop.dy, greaterThan(transportTop.dy));
+
+    await database.close();
+  });
+
+  testWidgets('no expenses hides the spending-by-category section', (
+    tester,
+  ) async {
+    final database = await pumpDashboard(tester);
+    final accounts = AccountDao(database);
+
+    await accounts.insertOne(
+      FinancialAccountsCompanion.insert(
+        id: 'acct-1',
+        name: 'Main Bank',
+        type: AccountType.bank,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Spending by category'), findsNothing);
 
     await database.close();
   });

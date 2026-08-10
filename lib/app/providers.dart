@@ -340,10 +340,19 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
   final dao = ref.watch(transactionDaoProvider);
 
   final now = DateTime.now();
-  final totals = await dao.totalsForPeriod(
-    DateTime(now.year, now.month),
-    DateTime(now.year, now.month + 1),
+  final periodStart = DateTime(now.year, now.month);
+  final periodEnd = DateTime(now.year, now.month + 1);
+  final totals = await dao.totalsForPeriod(periodStart, periodEnd);
+  final expenseByCategory = await dao.expenseTotalsByCategory(
+    periodStart,
+    periodEnd,
   );
+
+  final categorySpending =
+      expenseByCategory.entries
+          .map((e) => CategorySpending(categoryId: e.key, amountMinor: e.value))
+          .toList()
+        ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
 
   final accountBalances = <AccountBalance>[
     for (final account in accounts)
@@ -363,6 +372,7 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
     incomeMinor: totals.incomeMinor,
     expenseMinor: totals.expenseMinor,
     accountBalances: accountBalances,
+    categorySpending: categorySpending.take(5).toList(),
     recentTransactions: transactions.take(5).toList(),
   );
 });
