@@ -14,6 +14,7 @@ import '../../features/categories/data/category_table.dart';
 import '../../features/categories/domain/category_origin.dart';
 import '../../features/categories/domain/category_status.dart';
 import '../../features/categories/domain/category_type.dart';
+import '../../features/settings/data/settings_table.dart';
 import '../../features/transactions/data/transaction_table.dart';
 import '../../features/transactions/domain/transaction_type.dart';
 
@@ -23,7 +24,9 @@ part 'app_database.g.dart';
 ///
 /// All Drift tables live in the features they belong to; this class aggregates
 /// them and owns migration strategy and lifecycle.
-@DriftDatabase(tables: [FinancialAccounts, Categories, Transactions, Budgets])
+@DriftDatabase(
+  tables: [FinancialAccounts, Categories, Transactions, Budgets, Preferences],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
@@ -38,7 +41,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -63,6 +66,12 @@ class AppDatabase extends _$AppDatabase {
       if (from < 4) {
         // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
         await m.createTable(budgets);
+      }
+      if (from < 5) {
+        // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
+        // Nothing is seeded: every preference falls back to a default when its
+        // row is absent, so an empty table is a valid fresh state.
+        await m.createTable(preferences);
       }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
@@ -92,6 +101,11 @@ class AppDatabase extends _$AppDatabase {
       // Same safety net for the v4 budgets table.
       if (details.versionNow >= 4 && !details.wasCreated) {
         await _ensureBudgetsTable();
+      }
+
+      // Same safety net for the v5 preferences table.
+      if (details.versionNow >= 5 && !details.wasCreated) {
+        await _ensurePreferencesTable();
       }
     },
   );
@@ -164,5 +178,15 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _ensureBudgetsTable() async {
     final migrator = Migrator(this);
     await migrator.createTable(budgets);
+  }
+
+  /// Safety net for a v5 database whose preferences table is missing.
+  ///
+  /// Same rationale as [_ensureTransactionsTable]. This one matters at launch:
+  /// the theme is read from preferences while the app builds, so a missing table
+  /// would fail before any screen renders.
+  Future<void> _ensurePreferencesTable() async {
+    final migrator = Migrator(this);
+    await migrator.createTable(preferences);
   }
 }
