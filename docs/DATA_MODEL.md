@@ -588,6 +588,25 @@ Budget
 └── status
 ```
 
+### V1 implementation
+
+The `budgets` table (schema v4) follows this model directly, with these
+decisions:
+
+* `category_id` is **required** and must reference an active **expense**
+  category. Budgets cap spending, and only expenses are spending (§24), so an
+  income category could never consume a limit. Whole-account or category-less
+  budgets are not part of V1.
+* `amount_minor` holds the limit in integer minor units (§4).
+* `status` stores only the lifecycle state `ACTIVE` / `ARCHIVED`. Budget
+  performance is derived at read time, never stored (§25).
+* Only **one ACTIVE budget may exist per category and period**, so spending can
+  never be attributed to two competing limits at once. Archiving or deleting a
+  budget frees the slot.
+* The category is fixed once a budget is created. Changing it would silently
+  reinterpret every past reading of that budget, so the application archives and
+  recreates instead.
+
 ---
 
 # 23. Budget Period
@@ -602,6 +621,28 @@ CUSTOM
 ```
 
 The architecture should allow additional period definitions later.
+
+### V1 window derivation
+
+A budget is measured over a half-open calendar range `[from, to)` — `from`
+included, `to` excluded — so a transaction dated exactly on a boundary belongs to
+exactly one period and can never be counted twice.
+
+The recurring periods take their window from the **calendar**, not from
+`start_date`, so a monthly budget always means "this calendar month" regardless
+of the day it was created on:
+
+```text
+WEEKLY    Monday 00:00 → the following Monday 00:00
+MONTHLY   1st of the month → 1st of the next month
+YEARLY    Jan 1 → Jan 1 of the next year
+CUSTOM    start_date → end_date inclusive
+```
+
+`start_date` records when the budget takes effect and is the authoritative window
+start for `CUSTOM`. `end_date` is required for `CUSTOM` and null for the
+recurring periods, which have no end. Both bounds are calendar dates with the
+time component discarded (§42).
 
 ---
 
@@ -631,6 +672,24 @@ Transfers must not be included as spending.
 
 Income must not be included as spending.
 
+### V1 consumption rule
+
+Spending against a budget is the sum of `amount_minor` over transactions where:
+
+```text
+type       = EXPENSE
+category_id = the budget's category
+date       ∈ the budget's window   (§23, half-open)
+```
+
+Income is excluded because it is not spending. Transfers are excluded because
+they move the user's own money between accounts (§17); they additionally always
+carry a null `category_id`, so they cannot match a budget's category at all.
+Uncategorised expenses consume no budget.
+
+Spending is recomputed from the transaction table on every read rather than
+cached on the budget row (§45), so the two can never disagree.
+
 ---
 
 # 25. Budget Status
@@ -654,6 +713,24 @@ Spent / Limit = 80%
 may trigger a warning threshold.
 
 The exact threshold should be defined in product/UI requirements rather than embedded in database semantics.
+
+### V1 derived states
+
+These three states are derived on read and never stored. The warning threshold
+lives in the application layer (`BudgetProgress.nearLimitThreshold`), not in the
+database:
+
+```text
+spent > limit            → EXCEEDED
+spent / limit >= 0.80    → NEAR_LIMIT
+otherwise                → UNDER_LIMIT
+```
+
+Spending exactly equal to the limit is `NEAR_LIMIT`, not `EXCEEDED` — the user has
+spent their plan, not overspent it.
+
+`remaining = limit - spent` is allowed to go negative so the UI can report how
+far over budget the user is instead of clamping to zero.
 
 ---
 
