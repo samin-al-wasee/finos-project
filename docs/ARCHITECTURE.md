@@ -832,6 +832,24 @@ Analytics
 
 The domain layer should never directly depend on a specific external provider.
 
+### Platform integrations in use
+
+Backup export/import is the first feature needing platform services, and it
+follows the pattern below: `BackupFileStore` is an interface, and
+`PlatformBackupFileStore` is the only file in the project that touches these
+packages. Everything else — serialization, validation, restore — is plain Dart and
+is tested with an in-memory fake, because plugin method channels are unavailable
+under `flutter test`.
+
+| Package | Why |
+| --- | --- |
+| `share_plus` | Hands the exported file to the OS. On both Android and iOS the share sheet is the route to "save to Files", Drive, or email, and there is no cross-platform save dialog on mobile. |
+| `file_selector` | System file picker for choosing a backup to restore. Maintained by the Flutter team. |
+| `path_provider` | Locates the temporary directory the export is written to before sharing. The file is deleted afterwards so a readable copy of the user's finances does not linger in a cache. |
+
+None of these adds a backend, an account, or network access, so the local-first
+guarantee (FR-09) is unchanged.
+
 Prefer:
 
 ```text
@@ -1020,7 +1038,8 @@ Features implemented so far:
 - **categories** — Category management with built-in seed data (FR-03)
 - **transactions** — Income/expense/transfer entry, listing, and balance impact (FR-02)
 - **budgets** — Per-category spending limits with derived spent/remaining/health (FR-04)
-- **settings** — Theme and default-currency preferences, plus the entry point to category management (docs/ROADMAP.md §6.8). Preferences live in a key-value `preferences` table so a new setting needs no schema migration; `AppSettings` is the typed facade over it. Export/import is shown disabled until that feature lands.
+- **settings** — Theme and default-currency preferences, plus the entry points to category management and backup (docs/ROADMAP.md §6.8). Preferences live in a key-value `preferences` table so a new setting needs no schema migration; `AppSettings` is the typed facade over it.
+- **backup** — Versioned JSON export and atomic replace-restore (FR-08, docs/DATA_MODEL.md §48). Serialization, validation, and restore are plain Dart; all platform file handling sits behind the `BackupFileStore` interface (see §26). CSV transaction export is not implemented yet.
 - **dashboard** — Financial overview with balances and recent activity (FR-07). Budget status on the dashboard and spending-by-category are deferred until a dedicated analytics pass; the Budgets tab covers budget status for now.
 
 ---

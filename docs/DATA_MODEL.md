@@ -1362,6 +1362,64 @@ Conceptually:
 
 The exact serialization format is an implementation detail.
 
+### V1 backup format
+
+A backup is one JSON object: a short header, then one array per table that
+exists today.
+
+```json
+{
+  "backup_version": 1,
+  "app_schema_version": 5,
+  "exported_at": "2026-08-10T14:32:00.000",
+  "accounts": [],
+  "categories": [],
+  "transactions": [],
+  "budgets": []
+}
+```
+
+* `backup_version` versions the **envelope**, independent of the database schema.
+  Bump it only when the file's shape changes in a way an older importer could not
+  read. A backup whose version this build does not know is refused outright — a
+  half-understood restore is worse than none.
+* `app_schema_version` records the schema that produced the data, so a future
+  importer can migrate older payloads.
+* Tables absent from the file are treated as empty, so a backup taken before a
+  feature existed still restores. `recurring_transactions`, `loans`, and
+  `loan_repayments` will simply appear once those features do.
+* Rows mirror their table columns using `snake_case` keys. Amounts are the same
+  integer minor units used in storage (§4) — a decimal amount is rejected on
+  import, because it means precision was already lost upstream.
+* Dates are ISO-8601 **local wall-clock** strings with no timezone designator,
+  and are parsed back as local. A calendar date therefore survives a round trip
+  unchanged rather than shifting a day across timezones (§42).
+* User preferences are **not** included (§51). They describe a device, not the
+  user's finances, so restoring must not silently repaint the app.
+
+### V1 restore semantics
+
+Restore **replaces** every financial record; it does not merge. Merging would
+need a rule for every ID collision and could silently double-count transactions,
+which corrupts balances.
+
+The sequence is:
+
+```text
+parse + validate (no database access)
+        ↓
+confirm with the user, stating what is written and what is lost
+        ↓
+single transaction:  delete all → insert all
+```
+
+Validation runs to completion before any write and checks field types, enum
+values, the `amount > 0` invariant (§46), duplicate IDs, and that every reference
+resolves **within the backup** — a transaction cannot point at an account the
+file does not contain. The whole restore then runs in one transaction, with
+deletes children-first and inserts parents-first so foreign keys hold throughout
+(§44). Any failure rolls back, leaving existing data untouched.
+
 ---
 
 # 49. Schema Evolution
