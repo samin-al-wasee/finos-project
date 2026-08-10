@@ -6,6 +6,9 @@ import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/features/accounts/data/account_dao.dart';
 import 'package:finos_app/features/accounts/domain/account_status.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
+import 'package:finos_app/features/budgets/data/budget_dao.dart';
+import 'package:finos_app/features/budgets/domain/budget_period.dart';
+import 'package:finos_app/features/budgets/domain/budget_status.dart';
 import 'package:finos_app/features/categories/domain/category_origin.dart';
 import 'package:finos_app/features/categories/domain/category_status.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
@@ -27,8 +30,8 @@ void main() {
       await database.close();
     });
 
-    test('starts at schema version 3', () {
-      expect(database.schemaVersion, 3);
+    test('starts at schema version 4', () {
+      expect(database.schemaVersion, 4);
     });
 
     test('seeds the built-in categories on a fresh database', () async {
@@ -225,6 +228,103 @@ void main() {
       expect(accounts.single.id, 'acct-legacy');
     });
 
+    test('migrates a v3 database and creates the budgets table', () async {
+      final dir = await Directory.systemTemp.createTemp('finos_v3_to_v4');
+      final file = File('${dir.path}/migration_v4.db');
+      addTearDown(() async {
+        await file.delete();
+        await dir.delete(recursive: true);
+      });
+
+      // Hand-roll a schema-v3 database — accounts, categories, and transactions
+      // but no budgets — mirroring the pre-FR-04 schema.
+      final legacy = _LegacyDatabase(NativeDatabase(file));
+      await legacy.customStatement('PRAGMA user_version = 3');
+      await legacy.customStatement(_legacyAccountsDdl);
+      await legacy.customStatement(_legacyCategoriesDdl);
+      await legacy.customStatement(_legacyTransactionsDdl);
+      await legacy.customStatement('''
+        INSERT INTO financial_accounts
+          (id, name, type, created_at, updated_at)
+        VALUES
+          ('acct-legacy', 'Legacy Bank', 'BANK', 1700000000, 1700000000)
+        ''');
+      await legacy.customStatement('''
+        INSERT INTO transactions
+          (id, type, amount_minor, currency, account_id, date,
+           description, created_at, updated_at)
+        VALUES
+          ('tx-legacy', 'EXPENSE', 5000, 'BDT', 'acct-legacy', 1755000000,
+           '', 1755000000, 1755000000)
+        ''');
+      await legacy.close();
+
+      // Reopen as the current schema (v4). The migration must add the budgets
+      // table without disturbing existing financial records.
+      final migrated = AppDatabase(NativeDatabase(file));
+      addTearDown(migrated.close);
+
+      // Budgets table now exists and accepts inserts.
+      final dao = BudgetDao(migrated);
+      await dao.insertOne(
+        BudgetsCompanion.insert(
+          id: 'budget-001',
+          categoryId: 'cat-food',
+          amountMinor: 1000000,
+          period: BudgetPeriod.monthly,
+          startDate: DateTime(2026, 8),
+        ),
+      );
+      final budget = await dao.getById('budget-001');
+      expect(budget, isNotNull);
+      expect(budget!.period, BudgetPeriod.monthly);
+      expect(budget.status, BudgetStatus.active);
+      expect(budget.currency, 'BDT');
+
+      // Existing accounts and transactions are preserved.
+      final accounts = await migrated.select(migrated.financialAccounts).get();
+      expect(accounts, hasLength(1));
+      expect(accounts.single.id, 'acct-legacy');
+
+      final transactions = await TransactionDao(migrated).getAll();
+      expect(transactions, hasLength(1));
+      expect(transactions.single.id, 'tx-legacy');
+    });
+
+    test('recovers a v4 database whose budgets table is missing', () async {
+      final dir = await Directory.systemTemp.createTemp('finos_missing_budget');
+      final file = File('${dir.path}/missing_budget.db');
+      addTearDown(() async {
+        await file.delete();
+        await dir.delete(recursive: true);
+      });
+
+      // A database that claims schema v4 but has no budgets table at all — as if
+      // an interrupted migration bumped user_version without creating it.
+      final legacy = _LegacyDatabase(NativeDatabase(file));
+      await legacy.customStatement('PRAGMA user_version = 4');
+      await legacy.customStatement(_legacyAccountsDdl);
+      await legacy.customStatement(_legacyCategoriesDdl);
+      await legacy.customStatement(_legacyTransactionsDdl);
+      await legacy.close();
+
+      // Reopen. The beforeOpen safety net must recreate the missing table.
+      final reopened = AppDatabase(NativeDatabase(file));
+      addTearDown(reopened.close);
+
+      final dao = BudgetDao(reopened);
+      await dao.insertOne(
+        BudgetsCompanion.insert(
+          id: 'budget-safe',
+          categoryId: 'cat-transport',
+          amountMinor: 500000,
+          period: BudgetPeriod.weekly,
+          startDate: DateTime(2026, 8, 10),
+        ),
+      );
+      expect(await dao.getById('budget-safe'), isNotNull);
+    });
+
     test('recovers a v3 database whose transactions table is missing', () async {
       final dir = await Directory.systemTemp.createTemp('finos_missing_tx');
       final file = File('${dir.path}/missing_tx.db');
@@ -390,6 +490,57 @@ void main() {
     });
   });
 }
+
+/// Historical DDL for the tables that existed before schema v4.
+///
+/// Written out by hand rather than derived from the current table definitions so
+/// that a legacy database file mirrors the historical schema exactly, even after
+/// those definitions change.
+const _legacyAccountsDdl = '''
+  CREATE TABLE financial_accounts (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'BDT',
+    opening_balance_minor INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE'
+  )
+''';
+
+const _legacyCategoriesDdl = '''
+  CREATE TABLE categories (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    origin TEXT NOT NULL DEFAULT 'USER',
+    icon TEXT NOT NULL DEFAULT 'label',
+    status TEXT NOT NULL DEFAULT 'ACTIVE',
+    created_at INTEGER NOT NULL DEFAULT
+      (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+    updated_at INTEGER NOT NULL DEFAULT
+      (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+  )
+''';
+
+const _legacyTransactionsDdl = '''
+  CREATE TABLE transactions (
+    id TEXT NOT NULL PRIMARY KEY,
+    type TEXT NOT NULL,
+    amount_minor INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'BDT',
+    account_id TEXT NOT NULL REFERENCES financial_accounts (id),
+    destination_account_id TEXT REFERENCES financial_accounts (id),
+    category_id TEXT REFERENCES categories (id),
+    date INTEGER NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL DEFAULT
+      (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+    updated_at INTEGER NOT NULL DEFAULT
+      (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+  )
+''';
 
 /// A minimal schema-v1 database used to hand-roll a pre-FR-03 database.
 ///
