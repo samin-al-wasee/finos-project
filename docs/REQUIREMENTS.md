@@ -203,6 +203,8 @@ The application should provide visual indicators when spending approaches or exc
 
 ## FR-05 — Recurring Transactions and Basic Automation
 
+Recurring transactions are explicitly deferred to Phase 2 — "Smart Finance" (docs/ROADMAP.md §8.1) and are not part of the current V1 core scope (docs/ROADMAP.md §21, "Current Product Focus"). This section describes the intended shape of the feature so it can be planned ahead of time; it is not an active implementation requirement until the roadmap moves it into the current phase.
+
 Users shall be able to define recurring transactions.
 
 Recurring transactions may include:

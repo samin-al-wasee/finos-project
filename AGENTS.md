@@ -45,7 +45,6 @@ A personal finance application for tracking:
 * Transfers
 * Categories
 * Budgets
-* Recurring transactions
 * Loans
 * Financial summaries
 * Local backups
