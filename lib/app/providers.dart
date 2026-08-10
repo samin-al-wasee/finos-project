@@ -5,6 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/database/app_database.dart';
 import '../features/accounts/application/account_controller.dart';
 import '../features/accounts/data/account_dao.dart';
+import '../features/budgets/application/budget_controller.dart';
+import '../features/budgets/data/budget_dao.dart';
+import '../features/budgets/domain/budget_period.dart';
+import '../features/budgets/domain/budget_progress.dart';
 import '../features/categories/application/category_controller.dart';
 import '../features/categories/data/category_dao.dart';
 import '../features/dashboard/domain/dashboard_data.dart';
@@ -106,6 +110,78 @@ final transactionControllerProvider = Provider<TransactionController>((ref) {
 /// Reactive stream of all transactions (for UI consumers).
 final transactionsStreamProvider = StreamProvider<List<TransactionRow>>((ref) {
   return _guardOpenTimeout(ref.watch(transactionDaoProvider).watchAll());
+});
+
+// ------------------------------------------------------------------
+// Budgets
+// ------------------------------------------------------------------
+
+/// Data-access object for budgets.
+final budgetDaoProvider = Provider<BudgetDao>((ref) {
+  return BudgetDao(ref.watch(appDatabaseProvider));
+});
+
+/// Application service for the budget lifecycle.
+final budgetControllerProvider = Provider<BudgetController>((ref) {
+  return BudgetController(
+    ref.watch(budgetDaoProvider),
+    ref.watch(categoryDaoProvider),
+  );
+});
+
+/// Reactive stream of all budgets (for UI consumers), including archived ones so
+/// management screens can render a restore section.
+final budgetsStreamProvider = StreamProvider<List<BudgetRow>>((ref) {
+  return _guardOpenTimeout(ref.watch(budgetDaoProvider).watchAll());
+});
+
+/// Budgets paired with the spending measured against them (FR-04).
+///
+/// Watching `.future` on the budget, transaction, and category streams makes
+/// this provider re-run whenever any of them changes, so a newly recorded
+/// expense immediately moves the matching progress bar. Spending is derived from
+/// transactions on every read rather than stored on the budget
+/// (docs/DATA_MODEL.md §45), which keeps the two from ever disagreeing.
+///
+/// Budgets whose category is missing are skipped rather than throwing; the
+/// foreign key makes that unreachable in practice, but a budget list is not
+/// worth crashing over.
+final budgetProgressProvider = FutureProvider<List<BudgetProgress>>((
+  ref,
+) async {
+  final budgets = await ref.watch(budgetsStreamProvider.future);
+  final categories = await ref.watch(categoriesStreamProvider.future);
+  await ref.watch(transactionsStreamProvider.future);
+  final dao = ref.watch(transactionDaoProvider);
+
+  final categoriesById = {for (final c in categories) c.id: c};
+  final now = DateTime.now();
+
+  final progress = <BudgetProgress>[];
+  for (final budget in budgets) {
+    final category = categoriesById[budget.categoryId];
+    if (category == null) continue;
+
+    final window = budgetWindow(
+      budget.period,
+      reference: now,
+      startDate: budget.startDate,
+      endDate: budget.endDate,
+    );
+    progress.add(
+      BudgetProgress(
+        budget: budget,
+        category: category,
+        window: window,
+        spentMinor: await dao.expenseTotalForCategory(
+          budget.categoryId,
+          window.from,
+          window.to,
+        ),
+      ),
+    );
+  }
+  return progress;
 });
 
 // ------------------------------------------------------------------

@@ -114,6 +114,34 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
+  /// Sums expenses in [categoryId] dated `from <= date < to` (half-open range).
+  ///
+  /// This is the budget-consumption rule (docs/DATA_MODEL.md §24): only EXPENSE
+  /// transactions count. Income is not spending, and transfers move the user's
+  /// own money between accounts, so neither may consume a budget
+  /// (docs/DATA_MODEL.md §17). Transfers additionally always carry a null
+  /// category, so they cannot match a budget's category in the first place.
+  ///
+  /// Returns 0 when the category has no expenses in the range.
+  Future<int> expenseTotalForCategory(
+    String categoryId,
+    DateTime from,
+    DateTime to,
+  ) async {
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(amount_minor), 0) AS spent
+      FROM transactions
+      WHERE type = '${TransactionType.expense.name.toUpperCase()}'
+        AND category_id = ?
+        AND date >= ? AND date < ?
+      ''',
+      variables: [Variable(categoryId), Variable(from), Variable(to)],
+    ).getSingle();
+
+    return row.read<int>('spent');
+  }
+
   /// Sum of balance impact across all accounts.
   ///
   /// Transfers net to zero globally (source −amount, destination +amount), so
