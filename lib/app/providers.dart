@@ -6,6 +6,7 @@ import '../core/database/app_database.dart';
 import '../features/accounts/application/account_controller.dart';
 import '../features/accounts/data/account_dao.dart';
 import '../features/backup/application/backup_service.dart';
+import '../features/backup/application/csv_export_service.dart';
 import '../features/backup/data/backup_file_store.dart';
 import '../features/budgets/application/budget_controller.dart';
 import '../features/budgets/data/budget_dao.dart';
@@ -69,6 +70,11 @@ final backupFileStoreProvider = Provider<BackupFileStore>((ref) {
 /// Serialises, validates, and restores backups (FR-08).
 final backupServiceProvider = Provider<BackupService>((ref) {
   return BackupService(ref.watch(appDatabaseProvider));
+});
+
+/// Builds a CSV export of every transaction (FR-08).
+final csvExportServiceProvider = Provider<CsvExportService>((ref) {
+  return CsvExportService(ref.watch(appDatabaseProvider));
 });
 
 // ------------------------------------------------------------------

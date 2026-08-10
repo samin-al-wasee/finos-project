@@ -145,6 +145,69 @@ void main() {
     });
   });
 
+  group('csv export', () {
+    testWidgets('shows the row', (tester) async {
+      final database = AppDatabase.inMemory();
+      await pumpSettings(tester, database);
+
+      expect(find.text('Export transactions (CSV)'), findsOneWidget);
+
+      await database.close();
+    });
+
+    testWidgets('hands transaction rows to the file store', (tester) async {
+      final database = AppDatabase.inMemory();
+      await seedData(database);
+      await pumpSettings(tester, database);
+
+      await tester.tap(find.text('Export transactions (CSV)'));
+      await tester.pumpAndSettle();
+
+      expect(store.exportedCsv, isNotNull);
+      final lines = store.exportedCsv!.trim().split('\n');
+      expect(
+        lines.first,
+        'Date,Type,Account,Destination Account,Category,'
+        'Amount,Currency,Description',
+      );
+      expect(lines, hasLength(2));
+      expect(lines[1], contains('Main Bank'));
+      expect(lines[1], contains('Expense'));
+
+      expect(find.text('Transactions exported'), findsOneWidget);
+
+      await database.close();
+    });
+
+    testWidgets('suggests a dated csv file name', (tester) async {
+      final database = AppDatabase.inMemory();
+      await pumpSettings(tester, database);
+
+      await tester.tap(find.text('Export transactions (CSV)'));
+      await tester.pumpAndSettle();
+
+      expect(
+        store.exportedCsvName,
+        matches(r'^finos-transactions-\d{4}-\d{2}-\d{2}\.csv$'),
+      );
+
+      await database.close();
+    });
+
+    testWidgets('reports a share failure readably', (tester) async {
+      final database = AppDatabase.inMemory();
+      store.failExport = true;
+      await pumpSettings(tester, database);
+
+      await tester.tap(find.text('Export transactions (CSV)'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('could not be shared'), findsOneWidget);
+
+      await database.close();
+    });
+  });
+
   group('import', () {
     /// A valid backup containing one account and nothing else.
     String backupWithOneAccount() => jsonEncode({
@@ -365,6 +428,12 @@ class _FakeFileStore implements BackupFileStore {
   /// The file name suggested by the last export.
   String? exportedName;
 
+  /// The contents handed to the last CSV export.
+  String? exportedCsv;
+
+  /// The file name suggested by the last CSV export.
+  String? exportedCsvName;
+
   /// Contents the next import should return; `null` simulates a cancelled
   /// picker.
   String? toImport;
@@ -384,6 +453,18 @@ class _FakeFileStore implements BackupFileStore {
     }
     exported = contents;
     exportedName = fileName;
+    return shareAccepted;
+  }
+
+  @override
+  Future<bool> exportCsv(String contents, String fileName) async {
+    if (failExport) {
+      throw const UnexpectedException(
+        'The transactions could not be shared. Please try again.',
+      );
+    }
+    exportedCsv = contents;
+    exportedCsvName = fileName;
     return shareAccepted;
   }
 

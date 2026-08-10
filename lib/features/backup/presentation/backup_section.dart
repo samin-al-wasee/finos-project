@@ -3,13 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/errors/app_exception.dart';
+import '../application/csv_export_service.dart';
 import '../domain/backup_envelope.dart';
 
-/// The Data rows in Settings: export a backup, restore one (FR-08).
+/// The Data rows in Settings: export a backup, restore one, or export
+/// transactions as CSV (FR-08).
 ///
 /// Restoring replaces every financial record, so it always goes through a
 /// confirmation that states — in records — both what will be written and what
-/// will be lost.
+/// will be lost. The CSV export is read-only and needs no such confirmation.
 class BackupSection extends ConsumerStatefulWidget {
   const BackupSection({super.key});
 
@@ -45,6 +47,13 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
           subtitle: const Text('Replace your data with a saved backup'),
           onTap: _busy ? null : _import,
         ),
+        ListTile(
+          enabled: !_busy,
+          leading: const Icon(Icons.table_chart_outlined),
+          title: const Text('Export transactions (CSV)'),
+          subtitle: const Text('Save your transactions for a spreadsheet'),
+          onTap: _busy ? null : _exportCsv,
+        ),
       ],
     );
   }
@@ -65,6 +74,25 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
       if (!mounted) return;
       // A dismissed share sheet is a deliberate cancellation, not a failure.
       if (shared) _tell('Backup exported');
+    } catch (error) {
+      if (mounted) _tell(userMessageFor(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _exportCsv() async {
+    setState(() => _busy = true);
+    try {
+      final service = ref.read(csvExportServiceProvider);
+      final contents = await service.exportTransactions();
+      final shared = await ref
+          .read(backupFileStoreProvider)
+          .exportCsv(contents, CsvExportService.fileNameFor(DateTime.now()));
+
+      if (!mounted) return;
+      // A dismissed share sheet is a deliberate cancellation, not a failure.
+      if (shared) _tell('Transactions exported');
     } catch (error) {
       if (mounted) _tell(userMessageFor(error));
     } finally {
