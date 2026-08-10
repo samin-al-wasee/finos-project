@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../core/widgets/empty_state.dart';
 import '../features/accounts/presentation/accounts_list_screen.dart';
+import '../features/budgets/presentation/budgets_list_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/transactions/presentation/transactions_list_screen.dart';
 
 /// The root scaffold hosting the bottom navigation shell.
 ///
-/// Hosts the four primary destinations from docs/UI_DESIGN.md §12. The Home,
-/// Transactions, and Accounts tabs render their feature screens; the Budgets
-/// tab is a placeholder until that feature lands in Phase 2.
+/// Hosts the four primary destinations from docs/UI_DESIGN.md §12: Home,
+/// Transactions, Accounts, and Budgets.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -52,11 +51,7 @@ class _AppShellState extends State<AppShell> {
           DashboardScreen(),
           TransactionsListScreen(),
           AccountsListScreen(),
-          _PlaceholderScreen(
-            icon: Icons.pie_chart,
-            title: 'Budgets',
-            message: 'Budgets are coming in Phase 2.',
-          ),
+          BudgetsListScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -65,27 +60,6 @@ class _AppShellState extends State<AppShell> {
             setState(() => _selectedIndex = index),
         destinations: _destinations,
       ),
-    );
-  }
-}
-
-/// A simple placeholder tab until the feature it represents is built.
-class _PlaceholderScreen extends StatelessWidget {
-  const _PlaceholderScreen({
-    required this.icon,
-    required this.title,
-    required this.message,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: EmptyState(icon: icon, title: title, message: message),
     );
   }
 }
