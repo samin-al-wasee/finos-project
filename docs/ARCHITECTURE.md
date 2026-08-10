@@ -1019,6 +1019,7 @@ Features implemented so far:
 - **accounts** — Account management (FR-01)
 - **categories** — Category management with built-in seed data (FR-03)
 - **transactions** — Income/expense/transfer entry, listing, and balance impact (FR-02)
+- **dashboard** — Financial overview with balances and recent activity (FR-07). Budget status and spending-by-category are deferred until the Budgets feature (Phase 2) and a dedicated analytics pass land.
 
 ---
 
