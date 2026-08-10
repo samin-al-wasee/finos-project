@@ -7,6 +7,9 @@ import 'package:finos_app/features/accounts/data/account_dao.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
 import 'package:finos_app/features/accounts/presentation/account_details_screen.dart';
 import 'package:finos_app/features/accounts/presentation/account_form_screen.dart';
+import 'package:finos_app/features/budgets/data/budget_dao.dart';
+import 'package:finos_app/features/budgets/domain/budget_period.dart';
+import 'package:finos_app/features/budgets/domain/budget_status.dart';
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
 import 'package:finos_app/features/dashboard/presentation/dashboard_screen.dart';
@@ -325,5 +328,134 @@ void main() {
     expect(find.text(formatMinorUnits(0)), findsWidgets);
 
     await database.close();
+  });
+
+  group('budget status', () {
+    Future<AppDatabase> pumpWithBudget(
+      WidgetTester tester, {
+      required int limitMinor,
+      required int spentMinor,
+      BudgetStatus status = BudgetStatus.active,
+    }) async {
+      final database = await pumpDashboard(tester);
+      final accounts = AccountDao(database);
+      final budgets = BudgetDao(database);
+      final transactions = TransactionDao(database);
+
+      await accounts.insertOne(
+        FinancialAccountsCompanion.insert(
+          id: 'acct-1',
+          name: 'Main Bank',
+          type: AccountType.bank,
+        ),
+      );
+      final now = DateTime.now();
+      await budgets.insertOne(
+        BudgetsCompanion.insert(
+          id: 'budget-1',
+          // Built in, seeded on every fresh database.
+          categoryId: 'cat-food',
+          amountMinor: limitMinor,
+          period: BudgetPeriod.monthly,
+          startDate: now,
+          status: Value(status),
+        ),
+      );
+      if (spentMinor > 0) {
+        await transactions.insertOne(
+          TransactionsCompanion.insert(
+            id: 'tx-spend',
+            type: TransactionType.expense,
+            amountMinor: spentMinor,
+            accountId: 'acct-1',
+            categoryId: const Value('cat-food'),
+            date: now,
+          ),
+        );
+      }
+      await tester.pumpAndSettle();
+      return database;
+    }
+
+    testWidgets('no budgets hides the section', (tester) async {
+      final database = await pumpDashboard(tester);
+      final accounts = AccountDao(database);
+
+      await accounts.insertOne(
+        FinancialAccountsCompanion.insert(
+          id: 'acct-1',
+          name: 'Main Bank',
+          type: AccountType.bank,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Budgets'), findsNothing);
+
+      await database.close();
+    });
+
+    testWidgets('an under-limit budget shows the amount remaining', (
+      tester,
+    ) async {
+      final database = await pumpWithBudget(
+        tester,
+        limitMinor: 100000,
+        spentMinor: 30000,
+      );
+
+      expect(find.text('Budgets'), findsOneWidget);
+      expect(find.text('${formatMinorUnits(70000)} remaining'), findsOneWidget);
+      expect(find.textContaining('over limit'), findsNothing);
+      expect(find.textContaining('near limit'), findsNothing);
+
+      await database.close();
+    });
+
+    testWidgets('a near-limit budget is called out by count', (tester) async {
+      // 85% of the limit — above the 80% near-limit threshold.
+      final database = await pumpWithBudget(
+        tester,
+        limitMinor: 100000,
+        spentMinor: 85000,
+      );
+
+      expect(find.text('1 near limit'), findsOneWidget);
+
+      await database.close();
+    });
+
+    testWidgets('an exceeded budget shows the amount over and its count', (
+      tester,
+    ) async {
+      final database = await pumpWithBudget(
+        tester,
+        limitMinor: 100000,
+        spentMinor: 150000,
+      );
+
+      expect(
+        find.text('${formatMinorUnits(50000)} over budget'),
+        findsOneWidget,
+      );
+      expect(find.text('1 over limit'), findsOneWidget);
+
+      await database.close();
+    });
+
+    testWidgets('an archived budget is excluded from the summary', (
+      tester,
+    ) async {
+      final database = await pumpWithBudget(
+        tester,
+        limitMinor: 100000,
+        spentMinor: 150000,
+        status: BudgetStatus.archived,
+      );
+
+      expect(find.text('Budgets'), findsNothing);
+
+      await database.close();
+    });
   });
 }

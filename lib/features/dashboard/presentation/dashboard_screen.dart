@@ -21,9 +21,9 @@ import '../domain/dashboard_data.dart';
 /// Home tab content (FR-07).
 ///
 /// Shows the financial overview: total balance, this-month income and expenses,
-/// per-account balances, this-month spending by category, and the five most
-/// recent transactions. Recomputes automatically whenever accounts or
-/// transactions change.
+/// a combined budget-status summary, per-account balances, this-month spending
+/// by category, and the five most recent transactions. Recomputes
+/// automatically whenever accounts, budgets, or transactions change.
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -116,7 +116,11 @@ class _DashboardBody extends StatelessWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
+        if (data.budgetStatus != null) ...[
+          _BudgetStatusCard(status: data.budgetStatus!),
+          const SizedBox(height: AppSpacing.lg),
+        ] else
+          const SizedBox(height: AppSpacing.lg),
         const _SectionHeader(title: 'Accounts'),
         for (final accountBalance in data.accountBalances)
           _AccountBalanceTile(accountBalance: accountBalance),
@@ -227,6 +231,75 @@ class _SummaryCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// A single-card summary of every active budget (FR-07).
+///
+/// Deliberately a summary, not a duplicate of the Budgets tab's per-category
+/// detail: one bar for combined spend against combined limit, plus a line
+/// naming how many budgets are near or over their limit — never color alone
+/// (AGENTS.md §21).
+class _BudgetStatusCard extends StatelessWidget {
+  const _BudgetStatusCard({required this.status});
+
+  final BudgetStatusSummary status;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<FinosColors>()!;
+    final color = status.exceededCount > 0
+        ? colors.error
+        : status.nearLimitCount > 0
+        ? colors.warning
+        : colors.success;
+    final remaining = status.remainingMinor;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Budgets', style: theme.textTheme.labelLarge),
+            const SizedBox(height: AppSpacing.sm),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.full),
+              child: LinearProgressIndicator(
+                value: status.usedFraction.clamp(0.0, 1.0),
+                minHeight: AppSpacing.sm,
+                backgroundColor: colors.border,
+                color: color,
+                semanticsLabel: 'Combined budget used',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              remaining >= 0
+                  ? '${formatMinorUnits(remaining)} remaining'
+                  : '${formatMinorUnits(remaining.abs())} over budget',
+              style: theme.textTheme.bodyMedium,
+            ),
+            if (status.exceededCount > 0 || status.nearLimitCount > 0) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                _statusLine(status),
+                style: theme.textTheme.bodySmall?.copyWith(color: color),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _statusLine(BudgetStatusSummary status) {
+    final parts = <String>[
+      if (status.exceededCount > 0) '${status.exceededCount} over limit',
+      if (status.nearLimitCount > 0) '${status.nearLimitCount} near limit',
+    ];
+    return parts.join(', ');
   }
 }
 

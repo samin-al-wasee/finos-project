@@ -12,6 +12,7 @@ import '../features/budgets/application/budget_controller.dart';
 import '../features/budgets/data/budget_dao.dart';
 import '../features/budgets/domain/budget_period.dart';
 import '../features/budgets/domain/budget_progress.dart';
+import '../features/budgets/domain/budget_status.dart';
 import '../features/categories/application/category_controller.dart';
 import '../features/categories/data/category_dao.dart';
 import '../features/dashboard/domain/dashboard_data.dart';
@@ -354,6 +355,23 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
           .toList()
         ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
 
+  final activeBudgets = (await ref.watch(
+    budgetProgressProvider.future,
+  )).where((p) => p.budget.status == BudgetStatus.active).toList();
+  final budgetStatus = activeBudgets.isEmpty
+      ? null
+      : BudgetStatusSummary(
+          limitMinor: activeBudgets.fold(0, (sum, p) => sum + p.limitMinor),
+          spentMinor: activeBudgets.fold(0, (sum, p) => sum + p.spentMinor),
+          budgetCount: activeBudgets.length,
+          nearLimitCount: activeBudgets
+              .where((p) => p.health == BudgetHealth.nearLimit)
+              .length,
+          exceededCount: activeBudgets
+              .where((p) => p.health == BudgetHealth.exceeded)
+              .length,
+        );
+
   final accountBalances = <AccountBalance>[
     for (final account in accounts)
       AccountBalance(
@@ -373,6 +391,7 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
     expenseMinor: totals.expenseMinor,
     accountBalances: accountBalances,
     categorySpending: categorySpending.take(5).toList(),
+    budgetStatus: budgetStatus,
     recentTransactions: transactions.take(5).toList(),
   );
 });
