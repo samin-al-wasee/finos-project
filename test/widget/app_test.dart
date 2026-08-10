@@ -47,4 +47,47 @@ void main() {
       await database.close();
     },
   );
+
+  testWidgets('navigating away from the shell does not collide hero tags', (
+    tester,
+  ) async {
+    // Regression test: the shell keeps every tab alive in an IndexedStack, so
+    // the Transactions, Accounts, and Budgets FABs all live in one route. While
+    // they shared the default FloatingActionButton hero tag, pushing any route
+    // threw "multiple heroes had the following tag" during the transition.
+    final database = AppDatabase.inMemory();
+
+    await tester.pumpWidget(buildApp(database: database));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await database.close();
+  });
+
+  testWidgets('each tab FAB carries a distinct hero tag', (tester) async {
+    final database = AppDatabase.inMemory();
+
+    await tester.pumpWidget(buildApp(database: database));
+    await tester.pumpAndSettle();
+
+    // The IndexedStack marks unselected tabs offstage, and finders skip those by
+    // default — but they are still in the tree, which is exactly why their hero
+    // tags can collide. So look at every tab, on-stage or not.
+    final tags = tester
+        .widgetList<FloatingActionButton>(
+          find.byType(FloatingActionButton, skipOffstage: false),
+        )
+        .map((fab) => fab.heroTag)
+        .toList();
+
+    expect(tags, hasLength(3)); // Transactions, Accounts, Budgets
+    expect(tags.toSet(), hasLength(tags.length));
+
+    await database.close();
+  });
 }

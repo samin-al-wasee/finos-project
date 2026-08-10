@@ -30,6 +30,9 @@ class BudgetsListScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Budgets')),
       floatingActionButton: FloatingActionButton(
+        // Distinct from the other tab FABs — see the note in
+        // transactions_list_screen.dart.
+        heroTag: 'fab-budgets',
         onPressed: () => openBudgetForm(context),
         tooltip: 'Add budget',
         child: const Icon(Icons.add),

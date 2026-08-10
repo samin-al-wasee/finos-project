@@ -28,6 +28,10 @@ class TransactionsListScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Transactions')),
       floatingActionButton: FloatingActionButton(
+        // The app shell keeps every tab alive in an IndexedStack, so all the tab
+        // FABs share one route. Without distinct hero tags they collide and any
+        // navigation from the shell throws.
+        heroTag: 'fab-transactions',
         onPressed: () => _openForm(context),
         tooltip: 'Add transaction',
         child: const Icon(Icons.add),

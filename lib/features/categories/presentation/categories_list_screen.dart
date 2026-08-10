@@ -27,6 +27,9 @@ class CategoriesListScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Categories')),
       floatingActionButton: FloatingActionButton(
+        // This screen is pushed over the shell, so its FAB must not share a tag
+        // with the tab FABs underneath it either.
+        heroTag: 'fab-categories',
         onPressed: () => _openForm(context),
         tooltip: 'Add category',
         child: const Icon(Icons.add),

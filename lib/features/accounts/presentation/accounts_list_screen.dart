@@ -31,6 +31,9 @@ class AccountsListScreen extends ConsumerWidget {
       // screen no longer carries a shortcut for it.
       appBar: AppBar(title: const Text('Accounts')),
       floatingActionButton: FloatingActionButton(
+        // Distinct from the other tab FABs — see the note in
+        // transactions_list_screen.dart.
+        heroTag: 'fab-accounts',
         onPressed: () => _openForm(context),
         tooltip: 'Add account',
         child: const Icon(Icons.add),
