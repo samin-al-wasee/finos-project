@@ -81,6 +81,17 @@ void main() {
       await database.close();
     });
 
+    testWidgets('warns that exported files carry sensitive data (NFR-04)', (
+      tester,
+    ) async {
+      final database = AppDatabase.inMemory();
+      await pumpSettings(tester, database);
+
+      expect(find.textContaining('sensitive'), findsNWidgets(2));
+
+      await database.close();
+    });
+
     testWidgets('hands a complete backup to the file store', (tester) async {
       final database = AppDatabase.inMemory();
       await seedData(database);

@@ -12,6 +12,11 @@ import '../domain/backup_envelope.dart';
 /// Restoring replaces every financial record, so it always goes through a
 /// confirmation that states — in records — both what will be written and what
 /// will be lost. The CSV export is read-only and needs no such confirmation.
+///
+/// Both export rows carry a visible warning that the file holds sensitive
+/// financial information (NFR-04) — stated up front rather than after the
+/// share sheet opens, since by then the file may already be on its way
+/// somewhere else.
 class BackupSection extends ConsumerStatefulWidget {
   const BackupSection({super.key});
 
@@ -30,7 +35,11 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
           enabled: !_busy,
           leading: const Icon(Icons.upload_outlined),
           title: const Text('Export backup'),
-          subtitle: const Text('Save a copy of all your financial data'),
+          subtitle: const Text(
+            'Save a copy of all your financial data. It contains sensitive '
+            'information — store and share it carefully.',
+          ),
+          isThreeLine: true,
           trailing: _busy
               ? const SizedBox(
                   width: 20,
@@ -51,7 +60,11 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
           enabled: !_busy,
           leading: const Icon(Icons.table_chart_outlined),
           title: const Text('Export transactions (CSV)'),
-          subtitle: const Text('Save your transactions for a spreadsheet'),
+          subtitle: const Text(
+            'Save your transactions for a spreadsheet. It contains sensitive '
+            'financial information — store and share it carefully.',
+          ),
+          isThreeLine: true,
           onTap: _busy ? null : _exportCsv,
         ),
       ],
