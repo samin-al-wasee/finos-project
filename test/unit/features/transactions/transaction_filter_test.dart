@@ -49,6 +49,8 @@ void main() {
       );
       expect(TransactionFilter(from: DateTime(2026)).isActive, isTrue);
       expect(TransactionFilter(to: DateTime(2026)).isActive, isTrue);
+      expect(const TransactionFilter(minAmountMinor: 500).isActive, isTrue);
+      expect(const TransactionFilter(maxAmountMinor: 2000).isActive, isTrue);
     });
 
     test('a blank query does not count as active', () {
@@ -299,6 +301,62 @@ void main() {
     });
   });
 
+  group('matches — amount range', () {
+    test('includes both endpoints', () {
+      const filter = TransactionFilter(
+        minAmountMinor: 500,
+        maxAmountMinor: 2000,
+      );
+      expect(
+        filter.matches(row(amountMinor: 500), accountName: 'Main Bank'),
+        isTrue,
+      );
+      expect(
+        filter.matches(row(amountMinor: 2000), accountName: 'Main Bank'),
+        isTrue,
+      );
+    });
+
+    test('excludes amounts outside the range', () {
+      const filter = TransactionFilter(
+        minAmountMinor: 500,
+        maxAmountMinor: 2000,
+      );
+      expect(
+        filter.matches(row(amountMinor: 499), accountName: 'Main Bank'),
+        isFalse,
+      );
+      expect(
+        filter.matches(row(amountMinor: 2001), accountName: 'Main Bank'),
+        isFalse,
+      );
+    });
+
+    test('an open-ended maximum only excludes smaller amounts', () {
+      const filter = TransactionFilter(minAmountMinor: 500);
+      expect(
+        filter.matches(row(amountMinor: 1000000), accountName: 'Main Bank'),
+        isTrue,
+      );
+      expect(
+        filter.matches(row(amountMinor: 100), accountName: 'Main Bank'),
+        isFalse,
+      );
+    });
+
+    test('an open-ended minimum only excludes larger amounts', () {
+      const filter = TransactionFilter(maxAmountMinor: 2000);
+      expect(
+        filter.matches(row(amountMinor: 100), accountName: 'Main Bank'),
+        isTrue,
+      );
+      expect(
+        filter.matches(row(amountMinor: 1000000), accountName: 'Main Bank'),
+        isFalse,
+      );
+    });
+  });
+
   group('matches — combined criteria', () {
     test('every active criterion must match', () {
       final filter = TransactionFilter(
@@ -342,6 +400,58 @@ void main() {
         isFalse,
       );
     });
+
+    test(
+      'the docs/ROADMAP.md §8.5 example: category + amount range + month',
+      () {
+        final filter = TransactionFilter(
+          categoryId: 'cat-food',
+          minAmountMinor: 50000, // ৳500
+          maxAmountMinor: 200000, // ৳2,000
+          from: DateTime(2026, 7),
+          to: DateTime(2026, 7, 31),
+        );
+
+        expect(
+          filter.matches(
+            row(
+              categoryId: 'cat-food',
+              amountMinor: 80000,
+              date: DateTime(2026, 7, 10),
+            ),
+            accountName: 'Main Bank',
+            categoryName: 'Food',
+          ),
+          isTrue,
+        );
+        // Right category and date, but outside the amount range.
+        expect(
+          filter.matches(
+            row(
+              categoryId: 'cat-food',
+              amountMinor: 300000,
+              date: DateTime(2026, 7, 10),
+            ),
+            accountName: 'Main Bank',
+            categoryName: 'Food',
+          ),
+          isFalse,
+        );
+        // Right category and amount, but outside the month.
+        expect(
+          filter.matches(
+            row(
+              categoryId: 'cat-food',
+              amountMinor: 80000,
+              date: DateTime(2026, 8, 1),
+            ),
+            accountName: 'Main Bank',
+            categoryName: 'Food',
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 
   group('copyWith', () {
@@ -353,6 +463,22 @@ void main() {
 
       final cleared = original.copyWith(clearAccountId: true);
       expect(cleared.accountId, isNull);
+      expect(cleared.categoryId, 'cat-food');
+    });
+
+    test('clears the amount range independently of other fields', () {
+      const original = TransactionFilter(
+        categoryId: 'cat-food',
+        minAmountMinor: 500,
+        maxAmountMinor: 2000,
+      );
+
+      final cleared = original.copyWith(
+        clearMinAmount: true,
+        clearMaxAmount: true,
+      );
+      expect(cleared.minAmountMinor, isNull);
+      expect(cleared.maxAmountMinor, isNull);
       expect(cleared.categoryId, 'cat-food');
     });
 

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/formatting/date.dart';
+import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
@@ -142,7 +143,9 @@ class _TransactionsListScreenState
       _filter.categoryId != null ||
       _filter.types.isNotEmpty ||
       _filter.from != null ||
-      _filter.to != null;
+      _filter.to != null ||
+      _filter.minAmountMinor != null ||
+      _filter.maxAmountMinor != null;
 
   Widget _buildFiltered({
     required List<TransactionRow> rows,
@@ -405,6 +408,8 @@ class _FilterSheetState extends State<_FilterSheet> {
   final Set<TransactionTypeFilter> _types = {};
   DateTime? _from;
   DateTime? _to;
+  late final TextEditingController _minAmountController;
+  late final TextEditingController _maxAmountController;
 
   @override
   void initState() {
@@ -412,6 +417,35 @@ class _FilterSheetState extends State<_FilterSheet> {
     _types.addAll(widget.initial.types);
     _from = widget.initial.from;
     _to = widget.initial.to;
+    _minAmountController = TextEditingController(
+      text: widget.initial.minAmountMinor == null
+          ? ''
+          : minorUnitsToInput(widget.initial.minAmountMinor!),
+    );
+    _maxAmountController = TextEditingController(
+      text: widget.initial.maxAmountMinor == null
+          ? ''
+          : minorUnitsToInput(widget.initial.maxAmountMinor!),
+    );
+  }
+
+  @override
+  void dispose() {
+    _minAmountController.dispose();
+    _maxAmountController.dispose();
+    super.dispose();
+  }
+
+  /// Parses an amount field leniently: blank or unparsable text means "no
+  /// bound" rather than blocking the Apply button — this is a filter, not a
+  /// form that must validate before it can be submitted.
+  int? _parseAmount(String text) {
+    if (text.trim().isEmpty) return null;
+    try {
+      return parseMinorUnits(text);
+    } on FormatException {
+      return null;
+    }
   }
 
   @override
@@ -505,6 +539,38 @@ class _FilterSheetState extends State<_FilterSheet> {
                   ),
                 ],
               ),
+              const SizedBox(height: AppSpacing.lg),
+              Text('Amount range', style: theme.textTheme.labelLarge),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _minAmountController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Min',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: TextField(
+                      controller: _maxAmountController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Max',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: AppSpacing.xl),
               Row(
                 children: [
@@ -519,19 +585,31 @@ class _FilterSheetState extends State<_FilterSheet> {
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: FilledButton(
-                      onPressed: () => Navigator.of(context).pop(
-                        widget.initial.copyWith(
-                          accountId: _accountId,
-                          clearAccountId: _accountId == null,
-                          categoryId: _categoryId,
-                          clearCategoryId: _categoryId == null,
-                          types: _types,
-                          from: _from,
-                          clearFrom: _from == null,
-                          to: _to,
-                          clearTo: _to == null,
-                        ),
-                      ),
+                      onPressed: () {
+                        final minAmount = _parseAmount(
+                          _minAmountController.text,
+                        );
+                        final maxAmount = _parseAmount(
+                          _maxAmountController.text,
+                        );
+                        Navigator.of(context).pop(
+                          widget.initial.copyWith(
+                            accountId: _accountId,
+                            clearAccountId: _accountId == null,
+                            categoryId: _categoryId,
+                            clearCategoryId: _categoryId == null,
+                            types: _types,
+                            from: _from,
+                            clearFrom: _from == null,
+                            to: _to,
+                            clearTo: _to == null,
+                            minAmountMinor: minAmount,
+                            clearMinAmount: minAmount == null,
+                            maxAmountMinor: maxAmount,
+                            clearMaxAmount: maxAmount == null,
+                          ),
+                        );
+                      },
                       child: const Text('Apply'),
                     ),
                   ),

@@ -460,6 +460,26 @@ void main() {
 
       await database.close();
     });
+
+    testWidgets('filtering by amount range shows only matching transactions '
+        '(docs/ROADMAP.md §8.5)', (tester) async {
+      final database = await pumpWithData(tester);
+
+      await tester.tap(find.byTooltip('Filter'));
+      await tester.pumpAndSettle();
+      // Groceries is ৳500, the transfer is ৳2,500, salary is ৳10,000 — a
+      // 1,000–3,000 range should keep only the transfer.
+      await tester.enterText(find.widgetWithText(TextField, 'Min'), '1000');
+      await tester.enterText(find.widgetWithText(TextField, 'Max'), '3000');
+      await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Transfer · Main Bank → Cash'), findsOneWidget);
+      expect(find.text('Groceries'), findsNothing);
+      expect(find.text('Salary'), findsNothing);
+
+      await database.close();
+    });
   });
 
   group('large lists', () {

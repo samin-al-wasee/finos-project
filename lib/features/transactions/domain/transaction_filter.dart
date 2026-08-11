@@ -24,12 +24,13 @@ TransactionTypeFilter typeFilterFor(TransactionType type) {
   }
 }
 
-/// Search and filter criteria for the transaction list (FR-02).
+/// Search and filter criteria for the transaction list (FR-02,
+/// docs/ROADMAP.md §8.5 "advanced" search).
 ///
-/// This is basic, single-dimension filtering — one account, one category, a
-/// set of types, a date range, and a text search. Compound criteria like "food
-/// transactions between ৳500 and ৳2,000 in July" are explicitly a Phase 2
-/// "advanced" feature (docs/ROADMAP.md §8.5), not V1 scope.
+/// Every criterion is independent and combines with AND — "food transactions
+/// between ৳500 and ৳2,000 in July" is `categoryId` + `minAmountMinor` /
+/// `maxAmountMinor` + `from` / `to` together, not a separate compound query
+/// type. A custom saved-query/report builder remains out of scope.
 ///
 /// Immutable: screens hold one as state and replace it wholesale via
 /// [copyWith], the same pattern as the rest of the app's form state.
@@ -41,6 +42,8 @@ class TransactionFilter {
     this.types = const {},
     this.from,
     this.to,
+    this.minAmountMinor,
+    this.maxAmountMinor,
   });
 
   /// Free-text search, matched against the description and the resolved
@@ -62,13 +65,21 @@ class TransactionFilter {
   /// Inclusive upper bound on the transaction's calendar date.
   final DateTime? to;
 
+  /// Inclusive lower bound on the transaction's amount, in minor units.
+  final int? minAmountMinor;
+
+  /// Inclusive upper bound on the transaction's amount, in minor units.
+  final int? maxAmountMinor;
+
   bool get isActive =>
       query.trim().isNotEmpty ||
       accountId != null ||
       categoryId != null ||
       types.isNotEmpty ||
       from != null ||
-      to != null;
+      to != null ||
+      minAmountMinor != null ||
+      maxAmountMinor != null;
 
   TransactionFilter copyWith({
     String? query,
@@ -81,6 +92,10 @@ class TransactionFilter {
     bool clearFrom = false,
     DateTime? to,
     bool clearTo = false,
+    int? minAmountMinor,
+    bool clearMinAmount = false,
+    int? maxAmountMinor,
+    bool clearMaxAmount = false,
   }) {
     return TransactionFilter(
       query: query ?? this.query,
@@ -89,6 +104,12 @@ class TransactionFilter {
       types: types ?? this.types,
       from: clearFrom ? null : (from ?? this.from),
       to: clearTo ? null : (to ?? this.to),
+      minAmountMinor: clearMinAmount
+          ? null
+          : (minAmountMinor ?? this.minAmountMinor),
+      maxAmountMinor: clearMaxAmount
+          ? null
+          : (maxAmountMinor ?? this.maxAmountMinor),
     );
   }
 
@@ -123,6 +144,12 @@ class TransactionFilter {
       // following midnight.
       final exclusiveTo = DateTime(to!.year, to!.month, to!.day + 1);
       if (!row.date.isBefore(exclusiveTo)) return false;
+    }
+    if (minAmountMinor != null && row.amountMinor < minAmountMinor!) {
+      return false;
+    }
+    if (maxAmountMinor != null && row.amountMinor > maxAmountMinor!) {
+      return false;
     }
     final trimmedQuery = query.trim().toLowerCase();
     if (trimmedQuery.isNotEmpty) {

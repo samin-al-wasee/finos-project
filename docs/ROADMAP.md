@@ -486,6 +486,10 @@ Last year
 
 ## 8.5 Search & Filtering
 
+> **Status:** Implemented, ahead of this phase's normal sequence, with
+> explicit authorization (see docs/ARCHITECTURE.md, "transactions"). A
+> saved-query/report builder is the one piece not built.
+
 Advanced transaction discovery:
 
 ```text
