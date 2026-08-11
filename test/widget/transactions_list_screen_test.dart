@@ -76,6 +76,8 @@ void main() {
         type: CategoryType.expense,
       ),
     );
+    final today = DateTime.now();
+    final yesterday = today.subtract(const Duration(days: 1));
     await transactions.insertOne(
       TransactionsCompanion.insert(
         id: 'tx-1',
@@ -83,7 +85,7 @@ void main() {
         amountMinor: 50000,
         accountId: 'acct-1',
         categoryId: Value('cat-1'),
-        date: DateTime(2026, 8, 10),
+        date: today,
         description: Value('Weekly groceries'),
       ),
     );
@@ -93,7 +95,7 @@ void main() {
         type: TransactionType.income,
         amountMinor: 1000000,
         accountId: 'acct-1',
-        date: DateTime(2026, 8, 9),
+        date: yesterday,
         description: Value('Salary'),
       ),
     );
@@ -106,7 +108,6 @@ void main() {
     expect(find.text('Salary'), findsOneWidget);
     expect(find.text('+৳10,000.00'), findsOneWidget);
     expect(find.text('Main Bank'), findsWidgets);
-    // Today (Aug 10) and yesterday (Aug 9).
     expect(find.text('Today'), findsOneWidget);
     expect(find.text('Yesterday'), findsOneWidget);
 
