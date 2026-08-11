@@ -175,17 +175,28 @@ class _IconPicker extends StatelessWidget {
       runSpacing: AppSpacing.sm,
       children: [
         for (final key in categoryIconKeys)
-          InkWell(
-            key: ValueKey('icon-$key'),
-            borderRadius: BorderRadius.circular(AppSpacing.sm),
-            onTap: () => onChanged(key),
-            child: CircleAvatar(
-              backgroundColor: key == selected
-                  ? colors.primary
-                  : colors.surfaceContainerHighest,
-              child: Icon(
-                categoryIcon(key),
-                color: key == selected ? colors.onPrimary : null,
+          Semantics(
+            label: categoryIconLabel(key),
+            button: true,
+            selected: key == selected,
+            child: InkWell(
+              key: ValueKey('icon-$key'),
+              borderRadius: BorderRadius.circular(AppSpacing.sm),
+              onTap: () => onChanged(key),
+              child: Padding(
+                // Brings the tap target up to the ~48x48 minimum
+                // (docs/UI_DESIGN.md §44) — a bare 40dp CircleAvatar falls
+                // short on its own.
+                padding: const EdgeInsets.all(AppSpacing.xs),
+                child: CircleAvatar(
+                  backgroundColor: key == selected
+                      ? colors.primary
+                      : colors.surfaceContainerHighest,
+                  child: Icon(
+                    categoryIcon(key),
+                    color: key == selected ? colors.onPrimary : null,
+                  ),
+                ),
               ),
             ),
           ),

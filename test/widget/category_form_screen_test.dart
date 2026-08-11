@@ -185,4 +185,16 @@ void main() {
 
     await database.close();
   });
+
+  testWidgets('the icon picker has accessible, adequately sized tap targets '
+      '(docs/UI_DESIGN.md §43-44)', (tester) async {
+    final handle = tester.ensureSemantics();
+    final database = await pumpForm(tester);
+
+    await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+
+    handle.dispose();
+    await database.close();
+  });
 }

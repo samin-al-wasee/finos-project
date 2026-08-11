@@ -165,6 +165,57 @@ class _BudgetCard extends ConsumerWidget {
         : '${formatMinorUnits(progress.remainingMinor, symbol: symbol)} '
               'remaining';
 
+    // Everything except the menu button, merged into one screen-reader
+    // announcement ("Groceries, this month, ৳500 / ৳800, near limit, ৳300
+    // remaining") instead of five disjoint stops (docs/UI_DESIGN.md §43).
+    // The menu stays outside the merge so it remains an independently
+    // focusable control rather than being absorbed into the label.
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            CircleAvatar(child: Icon(categoryIcon(progress.category.icon))),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    progress.category.name,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  Text(
+                    archived ? 'Archived' : budgetWindowLabel(progress.window),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.mutedText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text('$spent / $limit', style: theme.textTheme.titleLarge),
+        const SizedBox(height: AppSpacing.sm),
+        _BudgetBar(progress: progress),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              budgetHealthLabel(progress.health),
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: _healthColor(colors, progress.health),
+              ),
+            ),
+            Text(remaining, style: theme.textTheme.bodyMedium),
+          ],
+        ),
+      ],
+    );
+
     final card = Card(
       margin: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
@@ -172,67 +223,20 @@ class _BudgetCard extends ConsumerWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                CircleAvatar(child: Icon(categoryIcon(progress.category.icon))),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        progress.category.name,
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      Text(
-                        archived
-                            ? 'Archived'
-                            : budgetWindowLabel(progress.window),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colors.mutedText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                PopupMenuButton<String>(
-                  onSelected: (value) => _handleMenu(context, ref, value),
-                  itemBuilder: (context) => [
-                    if (!archived)
-                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    if (archived)
-                      const PopupMenuItem(
-                        value: 'restore',
-                        child: Text('Restore'),
-                      )
-                    else
-                      const PopupMenuItem(
-                        value: 'archive',
-                        child: Text('Archive'),
-                      ),
-                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text('$spent / $limit', style: theme.textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.sm),
-            _BudgetBar(progress: progress),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  budgetHealthLabel(progress.health),
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: _healthColor(colors, progress.health),
-                  ),
-                ),
-                Text(remaining, style: theme.textTheme.bodyMedium),
+            Expanded(child: MergeSemantics(child: info)),
+            PopupMenuButton<String>(
+              onSelected: (value) => _handleMenu(context, ref, value),
+              itemBuilder: (context) => [
+                if (!archived)
+                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                if (archived)
+                  const PopupMenuItem(value: 'restore', child: Text('Restore'))
+                else
+                  const PopupMenuItem(value: 'archive', child: Text('Archive')),
+                const PopupMenuItem(value: 'delete', child: Text('Delete')),
               ],
             ),
           ],

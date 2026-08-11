@@ -393,46 +393,51 @@ class _CategorySpendingTile extends StatelessWidget {
         horizontal: AppSpacing.lg,
         vertical: AppSpacing.xs,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                categoryIcon(category?.icon ?? 'label'),
-                size: 18,
-                color: colors.mutedText,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  category?.name ?? 'Uncategorized',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium,
+      // A screen reader announces this row as one statement — "Groceries,
+      // ৳500, Groceries spending" — rather than three disjoint stops for the
+      // icon-adjacent name, the amount, and the bar (docs/UI_DESIGN.md §43).
+      child: MergeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  categoryIcon(category?.icon ?? 'label'),
+                  size: 18,
+                  color: colors.mutedText,
                 ),
-              ),
-              Text(
-                formatMinorUnits(spending.amountMinor),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colors.expense,
-                  fontWeight: FontWeight.w600,
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    category?.name ?? 'Uncategorized',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.full),
-            child: LinearProgressIndicator(
-              value: share,
-              minHeight: AppSpacing.sm,
-              backgroundColor: colors.border,
-              color: colors.expense,
-              semanticsLabel: '${category?.name ?? 'Uncategorized'} spending',
+                Text(
+                  formatMinorUnits(spending.amountMinor),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.expense,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: AppSpacing.xs),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.full),
+              child: LinearProgressIndicator(
+                value: share,
+                minHeight: AppSpacing.sm,
+                backgroundColor: colors.border,
+                color: colors.expense,
+                semanticsLabel: '${category?.name ?? 'Uncategorized'} spending',
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

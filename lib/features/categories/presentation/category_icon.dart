@@ -50,6 +50,54 @@ IconData categoryIcon(String key) {
   }
 }
 
+/// A human-readable name for an icon key, for the icon picker's accessible
+/// labels (docs/UI_DESIGN.md §43) — without this, a screen reader has no way
+/// to distinguish one icon choice from another.
+String categoryIconLabel(String key) {
+  switch (key) {
+    case 'restaurant':
+      return 'Restaurant';
+    case 'directions_car':
+      return 'Car';
+    case 'home':
+      return 'Home';
+    case 'shopping_bag':
+      return 'Shopping';
+    case 'movie':
+      return 'Movie';
+    case 'bolt':
+      return 'Utilities';
+    case 'favorite':
+      return 'Health';
+    case 'school':
+      return 'Education';
+    case 'payments':
+      return 'Payments';
+    case 'design_services':
+      return 'Services';
+    case 'card_giftcard':
+      return 'Gift';
+    case 'trending_up':
+      return 'Investment';
+    case 'flight':
+      return 'Travel';
+    case 'local_cafe':
+      return 'Cafe';
+    case 'pets':
+      return 'Pets';
+    case 'fitness_center':
+      return 'Fitness';
+    case 'phone_android':
+      return 'Phone';
+    case 'savings':
+      return 'Savings';
+    case 'label':
+      return 'Label';
+    default:
+      return 'Label';
+  }
+}
+
 /// Curated icon keys offered when creating a category.
 ///
 /// Kept small and expressive so the picker stays usable on small screens;

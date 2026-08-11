@@ -221,6 +221,54 @@ void main() {
     await database.close();
   });
 
+  testWidgets('a category-spending row narrates as one statement '
+      '(docs/UI_DESIGN.md §43)', (tester) async {
+    final handle = tester.ensureSemantics();
+    final database = await pumpDashboard(tester);
+    final accounts = AccountDao(database);
+    final categories = CategoryDao(database);
+    final transactions = TransactionDao(database);
+
+    await accounts.insertOne(
+      FinancialAccountsCompanion.insert(
+        id: 'acct-1',
+        name: 'Main Bank',
+        type: AccountType.bank,
+      ),
+    );
+    await categories.insertOne(
+      CategoriesCompanion.insert(
+        id: 'cat-1',
+        name: 'Food',
+        type: CategoryType.expense,
+      ),
+    );
+    await transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: 'tx-1',
+        type: TransactionType.expense,
+        amountMinor: 50000,
+        accountId: 'acct-1',
+        categoryId: Value('cat-1'),
+        date: DateTime.now(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final row = tester.getSemantics(
+      find.ancestor(
+        of: find.text('Food'),
+        matching: find.byType(MergeSemantics),
+      ),
+    );
+    final label = row.getSemanticsData().label;
+    expect(label, contains('Food'));
+    expect(label, contains(formatMinorUnits(50000)));
+
+    handle.dispose();
+    await database.close();
+  });
+
   testWidgets('tapping a recent transaction opens the edit form', (
     tester,
   ) async {

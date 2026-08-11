@@ -354,4 +354,35 @@ void main() {
 
     await database.close();
   });
+
+  testWidgets('the card narrates as one statement, with the menu independently '
+      'reachable (docs/UI_DESIGN.md §43)', (tester) async {
+    final handle = tester.ensureSemantics();
+    final database = await seedDatabase();
+    await addBudget(database);
+    await addExpense(database, 'tx-1', 250000);
+    await pumpScreen(tester, database);
+
+    // FloatingActionButton and PopupMenuButton also use MergeSemantics
+    // internally, so the card's own wrapper is found via a descendant that
+    // only it contains — which also proves the menu (a sibling, not a
+    // descendant of this subtree) was never swept into the merge.
+    final info = tester.getSemantics(
+      find.ancestor(
+        of: find.text('Food'),
+        matching: find.byType(MergeSemantics),
+      ),
+    );
+    final label = info.getSemanticsData().label;
+    // Name, spend-of-limit, and remaining all land in one merged label
+    // rather than requiring separate swipes to piece together.
+    expect(label, contains('Food'));
+    expect(label, contains('৳2,500.00 / ৳10,000.00'));
+    expect(label, contains('remaining'));
+    // The menu remains its own reachable control.
+    expect(find.byTooltip('Show menu'), findsOneWidget);
+
+    handle.dispose();
+    await database.close();
+  });
 }
