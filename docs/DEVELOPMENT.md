@@ -1019,6 +1019,27 @@ before merging.
 
 Merge commits are avoided to keep `main` history linear.
 
+## Release Branches
+
+Two additional long-lived branches sit downstream of `main`:
+
+```text
+main       — active development
+  ↓
+preview    — fast-forwarded/merged from main when a batch is ready for testers
+  ↓
+release    — fast-forwarded/merged from preview once validated
+```
+
+Promotion is one-way and manual: merge `main` into `preview` when there is
+something worth testing, and `preview` into `release` once it has held up.
+Tag `release` commits with the version they carry (e.g. `v1.2.0`).
+
+Each branch corresponds to a version suffix used by the Android APK workflow
+(§59) — `-debug` for `main` and any other branch, `-preview` for `preview`,
+`-release` for `release` — so an APK's origin is always visible from its
+version name alone.
+
 ## Commits
 
 Use small, focused commits.
@@ -1408,23 +1429,34 @@ The release checklist should eventually be automated through CI/CD.
 
 # 59. CI/CD
 
-CI/CD is not required to be fully implemented immediately.
+## Android APK builds
 
-Future CI should at minimum perform:
+`.github/workflows/android-apk.yml` builds a debug-signed Android APK on
+demand. It is manual only (`workflow_dispatch`) and runnable from any branch —
+pick the branch under "Use workflow from" in the Actions UI, or:
 
-```text
-Dependency resolution
-Formatting check
-Static analysis
-Tests
-Build validation
+```bash
+gh workflow run android-apk.yml --ref <branch>
 ```
 
-Potential future deployment targets:
+The version name reflects the branch it ran from (§40, "Release Branches"):
+`X.Y.Z-debug` from `main` or any other branch, `X.Y.Z-preview` from `preview`,
+`X.Y.Z-release` from `release`. The base `X.Y.Z` comes from `pubspec.yaml`;
+the build number defaults to the workflow run number and can be overridden
+per run. The finished APK is attached to the run as a downloadable artifact.
+
+`preview` and `release` builds compile in Flutter release mode; everything
+else builds in debug mode. All of them are still signed with the debug key —
+see the `TODO` in `android/app/build.gradle.kts`. That must be replaced with a
+real release keystore (stored as a GitHub Actions secret, never committed)
+before any Play Store or public distribution.
+
+## Not yet implemented
 
 ```text
-Google Play
-Apple App Store
+Formatting check, static analysis, and tests running automatically on push/PR
+iOS builds (need a macOS runner)
+Automatic deployment to Google Play / the App Store
 ```
 
 ---

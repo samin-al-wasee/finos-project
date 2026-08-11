@@ -1,0 +1,108 @@
+name: Android APK
+
+# Manual only, for now (docs/DEVELOPMENT.md §59). Runnable from any branch —
+# in the Actions UI, pick the branch under "Use workflow from" before running.
+#
+# The version name is derived from the triggering branch so an APK's origin
+# is always visible from its version alone:
+#   release  -> X.Y.Z-release  (release Flutter build)
+#   preview  -> X.Y.Z-preview  (release Flutter build, for external testers)
+#   anything else -> X.Y.Z-debug (debug Flutter build)
+#
+# Release/preview APKs are still signed with the debug key (see the TODO in
+# android/app/build.gradle.kts) — fine for manual sharing, not for Play Store
+# or any public distribution.
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: >-
+          Override the build number (Android versionCode). Defaults to this
+          workflow run's number.
+        required: false
+        type: string
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.6"
+          channel: stable
+
+      - name: Determine version and build mode
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_version=$(grep '^version:' pubspec.yaml | sed -E 's/version:\s*//' | cut -d'+' -f1)
+
+          case "${GITHUB_REF_NAME}" in
+            release)
+              suffix=release
+              build_mode=release
+              ;;
+            preview)
+              suffix=preview
+              build_mode=release
+              ;;
+            *)
+              suffix=debug
+              build_mode=debug
+              ;;
+          esac
+
+          version_name="${base_version}-${suffix}"
+          build_number="${{ inputs.build_number }}"
+          build_number="${build_number:-${{ github.run_number }}}"
+
+          echo "Building ${version_name} (build ${build_number}, ${build_mode} mode) from ${GITHUB_REF_NAME}"
+          echo "version_name=${version_name}" >> "$GITHUB_OUTPUT"
+          echo "build_number=${build_number}" >> "$GITHUB_OUTPUT"
+          echo "build_mode=${build_mode}" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: |
+          flutter build apk \
+            --${{ steps.version.outputs.build_mode }} \
+            --build-name=${{ steps.version.outputs.version_name }} \
+            --build-number=${{ steps.version.outputs.build_number }}
+
+      - name: Locate APK
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          path="build/app/outputs/flutter-apk/app-${{ steps.version.outputs.build_mode }}.apk"
+          if [ ! -f "$path" ]; then
+            echo "Expected APK not found at $path" >&2
+            exit 1
+          fi
+          echo "path=${path}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: finos-${{ steps.version.outputs.version_name }}-${{ steps.version.outputs.build_number }}
+          path: ${{ steps.apk.outputs.path }}
+          retention-days: 30
