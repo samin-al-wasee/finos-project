@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../backup/presentation/backup_section.dart';
 import '../../categories/presentation/categories_list_screen.dart';
+import '../../reports/presentation/reports_screen.dart';
 import '../domain/app_settings.dart';
 import '../domain/theme_preference.dart';
 
@@ -58,6 +59,17 @@ class SettingsScreen extends ConsumerWidget {
               MaterialPageRoute<void>(
                 builder: (_) => const CategoriesListScreen(),
               ),
+            ),
+          ),
+
+          const _SectionHeader(title: 'Insights'),
+          ListTile(
+            leading: const Icon(Icons.bar_chart_outlined),
+            title: const Text('Reports'),
+            subtitle: const Text('Income, expenses, and spending by category'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const ReportsScreen()),
             ),
           ),
 

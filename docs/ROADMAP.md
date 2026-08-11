@@ -451,6 +451,11 @@ Potential additions:
 
 ## 8.4 Financial Reports
 
+> **Status:** Income vs expense and category spending are implemented, ahead
+> of this phase's normal sequence, with explicit authorization (see
+> docs/ARCHITECTURE.md, "reports"). Account cash flow, budget performance,
+> and a custom date-range picker remain unimplemented.
+
 Introduce reports such as:
 
 ```text

@@ -19,6 +19,8 @@ import '../features/dashboard/domain/dashboard_data.dart';
 import '../features/loans/application/loan_controller.dart';
 import '../features/loans/data/loan_dao.dart';
 import '../features/loans/domain/loan_progress.dart';
+import '../features/reports/domain/report_data.dart';
+import '../features/reports/domain/report_period.dart';
 import '../features/settings/application/settings_controller.dart';
 import '../features/settings/data/settings_dao.dart';
 import '../features/settings/domain/app_settings.dart';
@@ -300,6 +302,48 @@ final loanMovementsProvider =
       await ref.watch(transactionsStreamProvider.future);
       return ref.watch(transactionDaoProvider).forLoan(loanId);
     });
+
+// ------------------------------------------------------------------
+// Reports
+// ------------------------------------------------------------------
+
+/// Aggregated data for one report period (docs/ROADMAP.md §8.4).
+///
+/// Watching `.future` on the transaction stream re-runs this on every change,
+/// the same pattern as [dashboardDataProvider].
+final reportDataProvider = FutureProvider.family<ReportData, ReportPeriod>((
+  ref,
+  period,
+) async {
+  await ref.watch(transactionsStreamProvider.future);
+  final dao = ref.watch(transactionDaoProvider);
+
+  final now = DateTime.now();
+  final window = reportWindow(period, reference: now);
+  final previousWindow = previousReportWindow(period, reference: now);
+
+  final totals = await dao.totalsForPeriod(window.from, window.to);
+  final previousTotals = await dao.totalsForPeriod(
+    previousWindow.from,
+    previousWindow.to,
+  );
+  final expenseByCategory = await dao.expenseTotalsByCategory(
+    window.from,
+    window.to,
+  );
+
+  final categorySpending =
+      expenseByCategory.entries
+          .map((e) => CategoryAmount(categoryId: e.key, amountMinor: e.value))
+          .toList()
+        ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
+
+  return ReportData(
+    totals: totals,
+    previousTotals: previousTotals,
+    categorySpending: categorySpending,
+  );
+});
 
 // ------------------------------------------------------------------
 // Balances
