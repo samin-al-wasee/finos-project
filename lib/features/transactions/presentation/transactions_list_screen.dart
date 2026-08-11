@@ -361,9 +361,14 @@ class _TransactionList extends StatelessWidget {
       }
     }
 
-    return ListView(
+    // ListView.builder rather than ListView(children:): both lazily mount
+    // elements via the same Sliver machinery, so this doesn't change what
+    // gets rendered — it only defers constructing the off-screen tiles'
+    // Widget objects, a minor saving as the list grows into the thousands.
+    return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      children: children,
+      itemCount: children.length,
+      itemBuilder: (context, index) => children[index],
     );
   }
 

@@ -9,6 +9,7 @@ import 'package:finos_app/features/categories/domain/category_type.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
 import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:finos_app/features/transactions/presentation/transaction_form_screen.dart';
+import 'package:finos_app/features/transactions/presentation/transaction_tile.dart';
 import 'package:finos_app/features/transactions/presentation/transactions_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -456,6 +457,68 @@ void main() {
       expect(find.text('Salary'), findsOneWidget);
       final searchField = tester.widget<TextField>(find.byType(TextField));
       expect(searchField.controller!.text, 'a');
+
+      await database.close();
+    });
+  });
+
+  group('large lists', () {
+    testWidgets('renders correctly and stays scrollable with hundreds of '
+        'transactions', (tester) async {
+      final database = await pumpList(tester);
+      await AccountDao(database).insertOne(
+        FinancialAccountsCompanion.insert(
+          id: 'acct-1',
+          name: 'Main Bank',
+          type: AccountType.bank,
+        ),
+      );
+
+      // One transaction per day for the last 300 days (docs/ROADMAP.md §7,
+      // "test large datasets").
+      const total = 300;
+      final today = DateTime.now();
+      await database.batch(
+        (batch) => batch.insertAll(database.transactions, [
+          for (var i = 0; i < total; i++)
+            TransactionRow(
+              id: 'tx-$i',
+              type: TransactionType.expense,
+              amountMinor: 1000 + i,
+              currency: 'BDT',
+              accountId: 'acct-1',
+              destinationAccountId: null,
+              categoryId: null,
+              date: today.subtract(Duration(days: i)),
+              description: 'Transaction $i',
+              createdAt: today,
+              updatedAt: today,
+            ),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      // The list itself lazily mounts elements via Flutter's Sliver
+      // machinery (true of both ListView(children:) and ListView.builder,
+      // verified independently of this test) — so only a window of tiles
+      // near the top of the unscrolled list is actually mounted. This is a
+      // regression guard against something that *would* break that, such as
+      // swapping the scrolling list for a non-lazy Column.
+      final builtTiles = find.byType(TransactionTile).evaluate().length;
+      expect(builtTiles, greaterThan(0));
+      expect(builtTiles, lessThan(total));
+
+      // The first (most recent) transaction is visible without scrolling.
+      expect(find.text('Transaction 0'), findsOneWidget);
+
+      // Scrolling reaches transactions further down the list.
+      final last = find.text('Transaction ${total - 1}');
+      for (var i = 0; i < 200 && last.evaluate().isEmpty; i++) {
+        await tester.drag(find.byType(ListView), const Offset(0, -400));
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+      expect(last, findsOneWidget);
 
       await database.close();
     });
