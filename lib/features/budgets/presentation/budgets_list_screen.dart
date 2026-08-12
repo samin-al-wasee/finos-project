@@ -4,13 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../categories/presentation/category_icon.dart';
 import '../domain/budget_period.dart';
 import '../domain/budget_progress.dart';
 import '../domain/budget_status.dart';
+import 'budget_bar.dart';
+import 'budget_details_screen.dart';
 import 'budget_form_screen.dart';
 import 'budget_labels.dart';
 
@@ -142,7 +143,9 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// One budget: category, window, spent-of-limit, progress bar, and what's left.
+/// One budget: category, window, spent-of-limit, progress bar, and what's
+/// left. Tapping the card opens its history (docs/ROADMAP.md §8.3); the menu
+/// stays a separate control for edit/archive/delete.
 class _BudgetCard extends ConsumerWidget {
   const _BudgetCard({required this.progress, this.archived = false});
 
@@ -199,7 +202,7 @@ class _BudgetCard extends ConsumerWidget {
         const SizedBox(height: AppSpacing.md),
         Text('$spent / $limit', style: theme.textTheme.titleLarge),
         const SizedBox(height: AppSpacing.sm),
-        _BudgetBar(progress: progress),
+        BudgetBar(progress: progress),
         const SizedBox(height: AppSpacing.sm),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -207,7 +210,7 @@ class _BudgetCard extends ConsumerWidget {
             Text(
               budgetHealthLabel(progress.health),
               style: theme.textTheme.labelLarge?.copyWith(
-                color: _healthColor(colors, progress.health),
+                color: healthColor(colors, progress.health),
               ),
             ),
             Text(remaining, style: theme.textTheme.bodyMedium),
@@ -226,7 +229,17 @@ class _BudgetCard extends ConsumerWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: MergeSemantics(child: info)),
+            Expanded(
+              child: InkWell(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        BudgetDetailsScreen(budgetId: progress.budget.id),
+                  ),
+                ),
+                child: MergeSemantics(child: info),
+              ),
+            ),
             PopupMenuButton<String>(
               onSelected: (value) => _handleMenu(context, ref, value),
               itemBuilder: (context) => [
@@ -315,64 +328,5 @@ class _BudgetCard extends ConsumerWidget {
         ).showSnackBar(SnackBar(content: Text('Could not delete: $e')));
       }
     }
-  }
-}
-
-/// Horizontal usage bar for a budget.
-///
-/// The fill is clamped at 100% so an exceeded budget stays inside its track; the
-/// overflow is communicated by the health colour, an overflow marker, and the
-/// "over budget" text beside it — never by colour alone (docs/UI_DESIGN.md §20).
-class _BudgetBar extends StatelessWidget {
-  const _BudgetBar({required this.progress});
-
-  final BudgetProgress progress;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<FinosColors>()!;
-    final color = _healthColor(colors, progress.health);
-
-    return Row(
-      children: [
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.full),
-            child: LinearProgressIndicator(
-              value: progress.usedFraction.clamp(0.0, 1.0),
-              minHeight: AppSpacing.sm,
-              backgroundColor: colors.border,
-              color: color,
-              // The percentage announced to screen readers is derived from the
-              // clamped value, so it caps at 100; the amount and health text
-              // beside the bar carry the overspend.
-              semanticsLabel: '${progress.category.name} budget used',
-            ),
-          ),
-        ),
-        if (progress.isExceeded) ...[
-          const SizedBox(width: AppSpacing.xs),
-          // Mirrors the "██████████+" treatment in docs/UI_DESIGN.md §20.
-          Text(
-            '+',
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: color),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// Maps derived budget health onto the semantic colour tokens.
-Color _healthColor(FinosColors colors, BudgetHealth health) {
-  switch (health) {
-    case BudgetHealth.underLimit:
-      return colors.success;
-    case BudgetHealth.nearLimit:
-      return colors.warning;
-    case BudgetHealth.exceeded:
-      return colors.error;
   }
 }

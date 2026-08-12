@@ -439,6 +439,14 @@ The system can use the template to speed up transaction entry.
 
 ## 8.3 Advanced Budgets
 
+> **Status:** Budget history is implemented, ahead of this phase's normal
+> sequence, with explicit authorization (see docs/ARCHITECTURE.md,
+> "budgets"). Multiple budget periods were already supported before this
+> phase. Rollover and budget recommendations are not built — rollover would
+> change budget accounting itself and needs a deliberate design decision
+> first, and recommendations overlaps with the Phase 4 "AI & Automation"
+> framing (§10.3).
+
 Potential additions:
 
 * Multiple budget periods

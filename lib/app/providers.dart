@@ -242,6 +242,75 @@ final budgetProgressProvider = FutureProvider<List<BudgetProgress>>((
   return progress;
 });
 
+/// How many past periods [budgetHistoryProvider] looks back.
+const budgetHistoryLength = 6;
+
+/// Past periods' spend vs limit for one budget, newest first
+/// (docs/ROADMAP.md §8.3, budget history).
+///
+/// Reuses [BudgetProgress] rather than a dedicated history type: a window in
+/// the past and the current window are the same shape — a budget, a window,
+/// and what was spent in it — so the same derived health/remaining/fraction
+/// getters apply unchanged.
+///
+/// Returns an empty list for a custom-period budget (no repeating window to
+/// look back over) or once a window predates the budget's own start date.
+final budgetHistoryProvider =
+    FutureProvider.family<List<BudgetProgress>, String>((ref, budgetId) async {
+      final budgets = await ref.watch(budgetsStreamProvider.future);
+      final categories = await ref.watch(categoriesStreamProvider.future);
+      await ref.watch(transactionsStreamProvider.future);
+      final dao = ref.watch(transactionDaoProvider);
+
+      BudgetRow? budget;
+      for (final b in budgets) {
+        if (b.id == budgetId) {
+          budget = b;
+          break;
+        }
+      }
+      if (budget == null || budget.period == BudgetPeriod.custom) {
+        return const [];
+      }
+
+      CategoryRow? category;
+      for (final c in categories) {
+        if (c.id == budget.categoryId) {
+          category = c;
+          break;
+        }
+      }
+      if (category == null) return const [];
+
+      final startDay = dayStart(budget.startDate);
+      final now = DateTime.now();
+      final history = <BudgetProgress>[];
+      for (var offset = -1; offset >= -budgetHistoryLength; offset--) {
+        final window = shiftedBudgetWindow(
+          budget.period,
+          reference: now,
+          offset: offset,
+        )!;
+        // The whole window predates the budget's existence — stop, since every
+        // earlier offset will too.
+        if (!window.to.isAfter(startDay)) break;
+
+        history.add(
+          BudgetProgress(
+            budget: budget,
+            category: category,
+            window: window,
+            spentMinor: await dao.expenseTotalForCategory(
+              budget.categoryId,
+              window.from,
+              window.to,
+            ),
+          ),
+        );
+      }
+      return history;
+    });
+
 // ------------------------------------------------------------------
 // Loans
 // ------------------------------------------------------------------

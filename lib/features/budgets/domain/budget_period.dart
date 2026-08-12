@@ -84,24 +84,11 @@ DateRange budgetWindow(
   required DateTime startDate,
   DateTime? endDate,
 }) {
-  final day = dayStart(reference);
-
   switch (period) {
     case BudgetPeriod.weekly:
-      // DateTime.weekday is 1 (Monday) through 7 (Sunday).
-      final start = DateTime(day.year, day.month, day.day - (day.weekday - 1));
-      return DateRange(
-        from: start,
-        to: DateTime(start.year, start.month, start.day + 7),
-      );
     case BudgetPeriod.monthly:
-      return DateRange(
-        from: DateTime(day.year, day.month),
-        // Month 13 normalises to January of the next year.
-        to: DateTime(day.year, day.month + 1),
-      );
     case BudgetPeriod.yearly:
-      return DateRange(from: DateTime(day.year), to: DateTime(day.year + 1));
+      return shiftedBudgetWindow(period, reference: reference, offset: 0)!;
     case BudgetPeriod.custom:
       if (endDate == null) {
         throw ArgumentError('A custom budget period needs an end date');
@@ -114,6 +101,50 @@ DateRange budgetWindow(
         from: start,
         to: DateTime(end.year, end.month, end.day + 1),
       );
+  }
+}
+
+/// The [period] window [offset] periods away from the one containing
+/// [reference] — `0` is the current window, `-1` the immediately preceding
+/// one, `-2` the one before that, and so on (docs/ROADMAP.md §8.3, budget
+/// history).
+///
+/// Returns `null` for [BudgetPeriod.custom]: a custom window is a single
+/// fixed range tied to the budget's own start/end dates, not a recurring
+/// shape, so it has no "previous period" to compute.
+DateRange? shiftedBudgetWindow(
+  BudgetPeriod period, {
+  required DateTime reference,
+  required int offset,
+}) {
+  final day = dayStart(reference);
+
+  switch (period) {
+    case BudgetPeriod.weekly:
+      // DateTime.weekday is 1 (Monday) through 7 (Sunday).
+      final start = DateTime(
+        day.year,
+        day.month,
+        day.day - (day.weekday - 1) + offset * 7,
+      );
+      return DateRange(
+        from: start,
+        to: DateTime(start.year, start.month, start.day + 7),
+      );
+    case BudgetPeriod.monthly:
+      return DateRange(
+        from: DateTime(day.year, day.month + offset),
+        // Month 13 normalises to January of the next year (and negative
+        // months normalise backwards the same way).
+        to: DateTime(day.year, day.month + offset + 1),
+      );
+    case BudgetPeriod.yearly:
+      return DateRange(
+        from: DateTime(day.year + offset),
+        to: DateTime(day.year + offset + 1),
+      );
+    case BudgetPeriod.custom:
+      return null;
   }
 }
 

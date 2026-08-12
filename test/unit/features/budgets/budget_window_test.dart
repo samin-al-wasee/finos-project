@@ -217,4 +217,99 @@ void main() {
       expect(dayStart(DateTime(2026, 8, 10, 17, 4, 3)), DateTime(2026, 8, 10));
     });
   });
+
+  group('shiftedBudgetWindow', () {
+    test('offset 0 matches budgetWindow for every recurring period', () {
+      final reference = DateTime(2026, 8, 10);
+      for (final period in [
+        BudgetPeriod.weekly,
+        BudgetPeriod.monthly,
+        BudgetPeriod.yearly,
+      ]) {
+        final direct = budgetWindow(
+          period,
+          reference: reference,
+          startDate: reference,
+        );
+        final shifted = shiftedBudgetWindow(
+          period,
+          reference: reference,
+          offset: 0,
+        );
+        expect(shifted, direct, reason: '$period should agree at offset 0');
+      }
+    });
+
+    test('monthly offset -1 is the previous calendar month', () {
+      final window = shiftedBudgetWindow(
+        BudgetPeriod.monthly,
+        reference: DateTime(2026, 8, 10),
+        offset: -1,
+      );
+      expect(window, DateRange(from: DateTime(2026, 7), to: DateTime(2026, 8)));
+    });
+
+    test('monthly offset rolls under the year boundary from January', () {
+      final window = shiftedBudgetWindow(
+        BudgetPeriod.monthly,
+        reference: DateTime(2026, 1, 15),
+        offset: -1,
+      );
+      expect(
+        window,
+        DateRange(from: DateTime(2025, 12), to: DateTime(2026, 1)),
+      );
+    });
+
+    test('monthly offset -6 walks back across a year boundary', () {
+      final window = shiftedBudgetWindow(
+        BudgetPeriod.monthly,
+        reference: DateTime(2026, 2, 15),
+        offset: -6,
+      );
+      expect(window, DateRange(from: DateTime(2025, 8), to: DateTime(2025, 9)));
+    });
+
+    test('weekly offset -1 is the previous Monday-Sunday week', () {
+      final window = shiftedBudgetWindow(
+        BudgetPeriod.weekly,
+        reference: DateTime(2026, 8, 10), // a Monday
+        offset: -1,
+      );
+      expect(
+        window,
+        DateRange(from: DateTime(2026, 8, 3), to: DateTime(2026, 8, 10)),
+      );
+    });
+
+    test('yearly offset -1 is the previous calendar year', () {
+      final window = shiftedBudgetWindow(
+        BudgetPeriod.yearly,
+        reference: DateTime(2026, 8, 10),
+        offset: -1,
+      );
+      expect(window, DateRange(from: DateTime(2025), to: DateTime(2026)));
+    });
+
+    test('a positive offset looks forward instead of back', () {
+      final window = shiftedBudgetWindow(
+        BudgetPeriod.monthly,
+        reference: DateTime(2026, 8, 10),
+        offset: 1,
+      );
+      expect(
+        window,
+        DateRange(from: DateTime(2026, 9), to: DateTime(2026, 10)),
+      );
+    });
+
+    test('custom has no repeating window, so it returns null', () {
+      final window = shiftedBudgetWindow(
+        BudgetPeriod.custom,
+        reference: DateTime(2026, 8, 10),
+        offset: -1,
+      );
+      expect(window, isNull);
+    });
+  });
 }
