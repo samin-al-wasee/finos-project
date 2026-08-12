@@ -14,6 +14,8 @@ import 'package:finos_app/features/loans/domain/loan_direction.dart';
 import 'package:finos_app/features/categories/domain/category_origin.dart';
 import 'package:finos_app/features/categories/domain/category_status.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
+import 'package:finos_app/features/recurring/data/recurring_transaction_dao.dart';
+import 'package:finos_app/features/recurring/domain/recurrence_frequency.dart';
 import 'package:finos_app/features/settings/data/settings_dao.dart';
 import 'package:finos_app/features/templates/data/template_dao.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
@@ -34,8 +36,8 @@ void main() {
       await database.close();
     });
 
-    test('starts at schema version 7', () {
-      expect(database.schemaVersion, 7);
+    test('starts at schema version 8', () {
+      expect(database.schemaVersion, 8);
     });
 
     test('seeds the built-in categories on a fresh database', () async {
@@ -570,6 +572,107 @@ void main() {
           ),
         );
         expect(await dao.getById('template-safe'), isNotNull);
+      },
+    );
+
+    test(
+      'migrates a v7 database and creates the recurring transactions table',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('finos_v7_to_v8');
+        final file = File('${dir.path}/migration_v8.db');
+        addTearDown(() async {
+          await file.delete();
+          await dir.delete(recursive: true);
+        });
+
+        // Hand-roll a schema-v7 database — everything except recurring
+        // transactions.
+        final legacy = _LegacyDatabase(NativeDatabase(file));
+        await legacy.customStatement('PRAGMA user_version = 7');
+        await legacy.customStatement(_legacyAccountsDdl);
+        await legacy.customStatement(_legacyCategoriesDdl);
+        await legacy.customStatement(_legacyTransactionsDdl);
+        await legacy.customStatement(_legacyBudgetsDdl);
+        await legacy.customStatement(_legacyPreferencesDdl);
+        await legacy.customStatement('''
+        INSERT INTO financial_accounts
+          (id, name, type, created_at, updated_at)
+        VALUES
+          ('acct-legacy', 'Legacy Bank', 'BANK', 1700000000, 1700000000)
+        ''');
+        await legacy.close();
+
+        final migrated = AppDatabase(NativeDatabase(file));
+        addTearDown(migrated.close);
+
+        // The recurring transactions table exists and accepts inserts.
+        final dao = RecurringTransactionDao(migrated);
+        await dao.insertOne(
+          RecurringTransactionsCompanion.insert(
+            id: 'recurring-001',
+            name: 'Netflix',
+            type: TransactionType.expense,
+            amountMinor: 150000,
+            accountId: 'acct-legacy',
+            frequency: RecurrenceFrequency.monthly,
+            startDate: DateTime(2026, 8, 1),
+            nextOccurrence: DateTime(2026, 8, 1),
+          ),
+        );
+        expect(await dao.getById('recurring-001'), isNotNull);
+
+        // Existing financial data survives untouched.
+        final accounts = await migrated
+            .select(migrated.financialAccounts)
+            .get();
+        expect(accounts, hasLength(1));
+        expect(accounts.single.id, 'acct-legacy');
+      },
+    );
+
+    test(
+      'recovers a v8 database whose recurring transactions table is missing',
+      () async {
+        final dir = await Directory.systemTemp.createTemp(
+          'finos_missing_recurring',
+        );
+        final file = File('${dir.path}/missing_recurring.db');
+        addTearDown(() async {
+          await file.delete();
+          await dir.delete(recursive: true);
+        });
+
+        // Build a genuinely correct v8 database, then simulate an
+        // interrupted migration by dropping just the recurring transactions
+        // table while user_version still claims v8.
+        final complete = AppDatabase(NativeDatabase(file));
+        await complete.customStatement('DROP TABLE recurring_transactions');
+        await complete.close();
+
+        final reopened = AppDatabase(NativeDatabase(file));
+        addTearDown(reopened.close);
+
+        await AccountDao(reopened).insertOne(
+          FinancialAccountsCompanion.insert(
+            id: 'acct-safe',
+            name: 'Main Bank',
+            type: AccountType.bank,
+          ),
+        );
+        final dao = RecurringTransactionDao(reopened);
+        await dao.insertOne(
+          RecurringTransactionsCompanion.insert(
+            id: 'recurring-safe',
+            name: 'Gym membership',
+            type: TransactionType.expense,
+            amountMinor: 100000,
+            accountId: 'acct-safe',
+            frequency: RecurrenceFrequency.monthly,
+            startDate: DateTime(2026, 8, 1),
+            nextOccurrence: DateTime(2026, 8, 1),
+          ),
+        );
+        expect(await dao.getById('recurring-safe'), isNotNull);
       },
     );
 

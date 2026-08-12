@@ -19,6 +19,11 @@ import '../features/dashboard/domain/dashboard_data.dart';
 import '../features/loans/application/loan_controller.dart';
 import '../features/loans/data/loan_dao.dart';
 import '../features/loans/domain/loan_progress.dart';
+import '../features/recurring/application/recurring_transaction_controller.dart';
+import '../features/recurring/data/recurring_transaction_dao.dart';
+import '../features/recurring/domain/due_occurrences.dart';
+import '../features/recurring/domain/due_recurring_group.dart';
+import '../features/recurring/domain/recurring_status.dart';
 import '../features/reports/domain/report_data.dart';
 import '../features/reports/domain/report_period.dart';
 import '../features/settings/application/settings_controller.dart';
@@ -530,4 +535,62 @@ final templatesStreamProvider = StreamProvider<List<TransactionTemplateRow>>((
   ref,
 ) {
   return _guardOpenTimeout(ref.watch(templateDaoProvider).watchAll());
+});
+
+// ------------------------------------------------------------------
+// Recurring transactions
+// ------------------------------------------------------------------
+
+/// Data-access object for recurring transaction rules.
+final recurringTransactionDaoProvider = Provider<RecurringTransactionDao>((
+  ref,
+) {
+  return RecurringTransactionDao(ref.watch(appDatabaseProvider));
+});
+
+/// Application service for the recurring transaction lifecycle.
+final recurringTransactionControllerProvider =
+    Provider<RecurringTransactionController>((ref) {
+      return RecurringTransactionController(
+        ref.watch(appDatabaseProvider),
+        ref.watch(recurringTransactionDaoProvider),
+        ref.watch(transactionDaoProvider),
+      );
+    });
+
+/// Reactive stream of all rules (for UI consumers), including archived ones.
+final recurringTransactionsStreamProvider =
+    StreamProvider<List<RecurringTransactionRow>>((ref) {
+      return _guardOpenTimeout(
+        ref.watch(recurringTransactionDaoProvider).watchAll(),
+      );
+    });
+
+/// Every active rule with at least one occurrence due right now, for the
+/// "confirm before creating" flow (docs/ROADMAP.md §8.1).
+///
+/// Watches the rules stream so confirming, skipping, or editing one refreshes
+/// this immediately; re-evaluated against `DateTime.now()` on every rebuild,
+/// which is what makes generation "check on app open" without any background
+/// scheduling (docs/ARCHITECTURE.md §20).
+final dueRecurringGroupsProvider = FutureProvider<List<DueRecurringGroup>>((
+  ref,
+) async {
+  final rules = await ref.watch(recurringTransactionsStreamProvider.future);
+  final now = DateTime.now();
+
+  final groups = <DueRecurringGroup>[];
+  for (final rule in rules) {
+    if (rule.status != RecurringStatus.active) continue;
+    final due = dueOccurrences(
+      from: rule.nextOccurrence,
+      frequency: rule.frequency,
+      asOf: now,
+      endDate: rule.endDate,
+    );
+    if (due.dates.isNotEmpty) {
+      groups.add(DueRecurringGroup(rule: rule, due: due));
+    }
+  }
+  return groups;
 });

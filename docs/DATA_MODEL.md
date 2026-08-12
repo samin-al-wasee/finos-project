@@ -756,6 +756,9 @@ far over budget the user is instead of clamping to zero.
 
 # 26. Recurring Transaction
 
+**Implemented** (docs/ROADMAP.md §8.1, built ahead of its Phase 2 slot with
+explicit authorization; see docs/ARCHITECTURE.md, "recurring").
+
 A `RecurringTransaction` represents a rule for repeated financial activity.
 
 It is not itself necessarily an actual transaction.
@@ -777,9 +780,18 @@ RecurringTransaction
 └── status
 ```
 
+The V1 schema (`RecurringTransactions`, schema v8) matches this closely, with
+one deliberate difference from a `TransactionTemplate` (§56): `amount` and
+`account_id` are required, not nullable. A rule computes what is due
+unattended, so — unlike a template, which exists precisely to leave gaps for
+the user to fill in — it cannot itself be incomplete. `destination_account_id`
+is also present, mirroring `Transaction`'s own transfer support.
+
 ---
 
 # 27. Recurrence Frequency
+
+**Implemented** (docs/ROADMAP.md §8.1).
 
 Initial frequencies:
 
@@ -791,11 +803,20 @@ YEARLY
 CUSTOM
 ```
 
-The recurrence engine should calculate the next occurrence deterministically.
+`CUSTOM` (an arbitrary N-day/week/month interval) is deliberately not built —
+it needs its own "every N ___" field and is a refinement on top of the four
+fixed frequencies, not required for the feature to be useful.
+
+The recurrence engine calculates the next occurrence deterministically via
+`nextOccurrence()`, which clamps day-of-month rather than overflowing (e.g. a
+rule dated the 31st advances to February 28th in a non-leap year, not March
+2nd or 3rd).
 
 ---
 
 # 28. Recurring Transaction vs Actual Transaction
+
+**Implemented** (docs/ROADMAP.md §8.1).
 
 These are separate concepts.
 
@@ -822,6 +843,14 @@ Netflix
 September 5
 Expense
 ```
+
+V1 resolves this with explicit confirmation, not automatic generation: the
+user reviews what is due (`dueOccurrences()`) and taps to confirm or skip
+before any `Transaction` row is written — `confirmNext`/`confirmAll` create
+one, `skipAll` advances `next_occurrence` without creating anything. Nothing
+links a created `Transaction` back to the `RecurringTransaction` that
+produced it, the same as a `TransactionTemplate` (§56) and unlike a `Loan`
+(§32) — deleting the rule never touches transactions it already generated.
 
 The application must not confuse the two.
 
@@ -1123,6 +1152,10 @@ RecurringTransaction
           ▼
      Transaction
 ```
+
+**Implemented** (§26, §28) as a conceptual link only — there is no foreign
+key from `Transaction` back to `RecurringTransaction`, the same choice made
+for `TransactionTemplate` (§56).
 
 Transfers connect two financial accounts:
 
@@ -1522,7 +1555,9 @@ movement references its loan.
   importer can migrate older payloads.
 * Tables absent from the file are treated as empty, so a backup taken before a
   feature existed still restores — a pre-loans backup restores cleanly today.
-  `recurring_transactions` will simply appear once that feature does.
+  `transaction_templates` and `recurring_transactions` exist in the schema but
+  are not yet part of the backup envelope — extending backup/restore to cover
+  them remains open work, tracked the same way for both.
 * The reverse is not promised: a build that predates loans cannot restore a backup
   containing `LOAN_RECEIPT` rows, and rejects it with an "unrecognised type"
   message. The envelope version is not bumped for this, because loan-free backups

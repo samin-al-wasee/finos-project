@@ -17,6 +17,9 @@ import '../../features/categories/domain/category_type.dart';
 import '../../features/loans/data/loan_table.dart';
 import '../../features/loans/domain/loan_direction.dart';
 import '../../features/loans/domain/loan_status.dart';
+import '../../features/recurring/data/recurring_transaction_table.dart';
+import '../../features/recurring/domain/recurrence_frequency.dart';
+import '../../features/recurring/domain/recurring_status.dart';
 import '../../features/settings/data/settings_table.dart';
 import '../../features/templates/data/template_table.dart';
 import '../../features/transactions/data/transaction_table.dart';
@@ -37,6 +40,7 @@ part 'app_database.g.dart';
     Preferences,
     Loans,
     TransactionTemplates,
+    RecurringTransactions,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -53,7 +57,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -101,6 +105,10 @@ class AppDatabase extends _$AppDatabase {
         // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
         await m.createTable(transactionTemplates);
       }
+      if (from < 8) {
+        // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
+        await m.createTable(recurringTransactions);
+      }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
     beforeOpen: (details) async {
@@ -144,6 +152,11 @@ class AppDatabase extends _$AppDatabase {
       // Same safety net for the v7 transaction templates table.
       if (details.versionNow >= 7 && !details.wasCreated) {
         await _ensureTemplatesTable();
+      }
+
+      // Same safety net for the v8 recurring transactions table.
+      if (details.versionNow >= 8 && !details.wasCreated) {
+        await _ensureRecurringTransactionsTable();
       }
     },
   );
@@ -275,5 +288,14 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _ensureTemplatesTable() async {
     final migrator = Migrator(this);
     await migrator.createTable(transactionTemplates);
+  }
+
+  /// Safety net for a v8 database whose recurring transactions table is
+  /// missing.
+  ///
+  /// Same rationale as [_ensureTransactionsTable].
+  Future<void> _ensureRecurringTransactionsTable() async {
+    final migrator = Migrator(this);
+    await migrator.createTable(recurringTransactions);
   }
 }

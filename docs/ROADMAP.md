@@ -395,6 +395,13 @@ The application should start helping users understand their finances rather than
 
 ## 8.1 Recurring Transactions
 
+> **Status:** Implemented, ahead of this phase's normal sequence, with
+> explicit authorization (see docs/ARCHITECTURE.md, "recurring"). A rule never
+> creates a transaction automatically — the user explicitly confirms or skips
+> each due occurrence, a deliberate design decision made when this was
+> authorized. Custom (arbitrary N-day/week/month) recurrence is not built;
+> only the four fixed patterns below are.
+
 Support recurring financial events:
 
 ```text
@@ -425,7 +432,8 @@ Custom
 > section title, a template never creates a transaction automatically — it
 > only pre-fills the entry form, which is what "speed up transaction entry"
 > below actually describes. Automatic generation is recurring transactions
-> (§8.1), a distinct, still-deferred feature.
+> (§8.1) — also implemented, but likewise requiring confirmation rather than
+> generating unattended.
 
 Users should be able to create templates.
 
