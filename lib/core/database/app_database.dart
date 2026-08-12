@@ -18,6 +18,7 @@ import '../../features/loans/data/loan_table.dart';
 import '../../features/loans/domain/loan_direction.dart';
 import '../../features/loans/domain/loan_status.dart';
 import '../../features/settings/data/settings_table.dart';
+import '../../features/templates/data/template_table.dart';
 import '../../features/transactions/data/transaction_table.dart';
 import '../../features/transactions/domain/transaction_type.dart';
 
@@ -35,6 +36,7 @@ part 'app_database.g.dart';
     Budgets,
     Preferences,
     Loans,
+    TransactionTemplates,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -51,7 +53,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -95,6 +97,10 @@ class AppDatabase extends _$AppDatabase {
         // "duplicate column name".
         await _addLoanIdColumnIfMissing();
       }
+      if (from < 7) {
+        // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
+        await m.createTable(transactionTemplates);
+      }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
     beforeOpen: (details) async {
@@ -133,6 +139,11 @@ class AppDatabase extends _$AppDatabase {
       // Safety net for v6, which both added a table and altered an existing one.
       if (details.versionNow >= 6 && !details.wasCreated) {
         await _ensureLoansSchema();
+      }
+
+      // Same safety net for the v7 transaction templates table.
+      if (details.versionNow >= 7 && !details.wasCreated) {
+        await _ensureTemplatesTable();
       }
     },
   );
@@ -255,5 +266,14 @@ class AppDatabase extends _$AppDatabase {
 
     debugPrint('[AppDatabase] transactions.loan_id missing — adding');
     await Migrator(this).addColumn(transactions, transactions.loanId);
+  }
+
+  /// Safety net for a v7 database whose transaction templates table is
+  /// missing.
+  ///
+  /// Same rationale as [_ensureTransactionsTable].
+  Future<void> _ensureTemplatesTable() async {
+    final migrator = Migrator(this);
+    await migrator.createTable(transactionTemplates);
   }
 }

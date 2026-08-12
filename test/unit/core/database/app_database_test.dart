@@ -15,6 +15,7 @@ import 'package:finos_app/features/categories/domain/category_origin.dart';
 import 'package:finos_app/features/categories/domain/category_status.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
 import 'package:finos_app/features/settings/data/settings_dao.dart';
+import 'package:finos_app/features/templates/data/template_dao.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
 import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,8 +34,8 @@ void main() {
       await database.close();
     });
 
-    test('starts at schema version 6', () {
-      expect(database.schemaVersion, 6);
+    test('starts at schema version 7', () {
+      expect(database.schemaVersion, 7);
     });
 
     test('seeds the built-in categories on a fresh database', () async {
@@ -488,6 +489,89 @@ void main() {
       final accounts = await migrated.select(migrated.financialAccounts).get();
       expect(accounts.single.id, 'acct-legacy');
     });
+
+    test(
+      'migrates a v6 database and creates the transaction templates table',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('finos_v6_to_v7');
+        final file = File('${dir.path}/migration_v7.db');
+        addTearDown(() async {
+          await file.delete();
+          await dir.delete(recursive: true);
+        });
+
+        // Hand-roll a schema-v6 database — everything except templates.
+        final legacy = _LegacyDatabase(NativeDatabase(file));
+        await legacy.customStatement('PRAGMA user_version = 6');
+        await legacy.customStatement(_legacyAccountsDdl);
+        await legacy.customStatement(_legacyCategoriesDdl);
+        await legacy.customStatement(_legacyTransactionsDdl);
+        await legacy.customStatement(_legacyBudgetsDdl);
+        await legacy.customStatement(_legacyPreferencesDdl);
+        await legacy.customStatement('''
+        INSERT INTO financial_accounts
+          (id, name, type, created_at, updated_at)
+        VALUES
+          ('acct-legacy', 'Legacy Bank', 'BANK', 1700000000, 1700000000)
+        ''');
+        await legacy.close();
+
+        final migrated = AppDatabase(NativeDatabase(file));
+        addTearDown(migrated.close);
+
+        // The templates table exists and accepts inserts.
+        final dao = TemplateDao(migrated);
+        await dao.insertOne(
+          TransactionTemplatesCompanion.insert(
+            id: 'template-001',
+            name: 'Netflix',
+            type: TransactionType.expense,
+          ),
+        );
+        expect(await dao.getById('template-001'), isNotNull);
+
+        // Existing financial data survives untouched.
+        final accounts = await migrated
+            .select(migrated.financialAccounts)
+            .get();
+        expect(accounts, hasLength(1));
+        expect(accounts.single.id, 'acct-legacy');
+      },
+    );
+
+    test(
+      'recovers a v7 database whose transaction templates table is missing',
+      () async {
+        final dir = await Directory.systemTemp.createTemp(
+          'finos_missing_templates',
+        );
+        final file = File('${dir.path}/missing_templates.db');
+        addTearDown(() async {
+          await file.delete();
+          await dir.delete(recursive: true);
+        });
+
+        // Build a genuinely correct v7 database, then simulate an
+        // interrupted migration by dropping just the templates table while
+        // user_version still claims v7.
+        final complete = AppDatabase(NativeDatabase(file));
+        await complete.customStatement('DROP TABLE transaction_templates');
+        await complete.close();
+
+        final reopened = AppDatabase(NativeDatabase(file));
+        addTearDown(reopened.close);
+
+        final dao = TemplateDao(reopened);
+        await dao.insertOne(
+          TransactionTemplatesCompanion.insert(
+            id: 'template-safe',
+            name: 'Gym membership',
+            type: TransactionType.expense,
+          ),
+        );
+        expect(await dao.getById('template-safe'), isNotNull);
+      },
+    );
 
     test('recovers a v6 database whose loans table is missing', () async {
       final dir = await Directory.systemTemp.createTemp('finos_missing_loans');

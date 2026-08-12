@@ -6,6 +6,7 @@ import 'package:finos_app/features/categories/presentation/categories_list_scree
 import 'package:finos_app/features/settings/data/settings_dao.dart';
 import 'package:finos_app/features/settings/domain/app_settings.dart';
 import 'package:finos_app/features/settings/presentation/settings_screen.dart';
+import 'package:finos_app/features/templates/presentation/templates_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -137,6 +138,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CategoriesListScreen), findsOneWidget);
+
+    await database.close();
+  });
+
+  testWidgets('Templates opens the templates screen', (tester) async {
+    final database = AppDatabase.inMemory();
+    await pumpSettings(tester, database);
+
+    await tester.tap(find.text('Templates'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TemplatesListScreen), findsOneWidget);
 
     await database.close();
   });

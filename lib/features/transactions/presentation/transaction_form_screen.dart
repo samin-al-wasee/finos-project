@@ -17,14 +17,24 @@ import '../domain/transaction_type.dart';
 /// When [initial] is provided the form pre-fills and saves via update;
 /// otherwise it creates a new transaction. The same widget powers both flows.
 ///
+/// [template] pre-fills a *new* transaction from a saved preset
+/// (docs/ROADMAP.md §8.2) — [initial] and [template] are mutually exclusive;
+/// editing always takes precedence if somehow both are given. Using a
+/// template never saves anything by itself: the user still reviews and taps
+/// Save like any other new transaction, and today's date is always used
+/// rather than whatever date the template might imply.
+///
 /// The amount field is visually dominant; account and category are chosen from
 /// dropdowns populated by the reactive stream providers. For transfers the
 /// category field is hidden and a destination account selector appears instead.
 class TransactionFormScreen extends ConsumerStatefulWidget {
-  const TransactionFormScreen({super.key, this.initial});
+  const TransactionFormScreen({super.key, this.initial, this.template});
 
   /// The transaction being edited, or `null` when creating a new one.
   final TransactionRow? initial;
+
+  /// A saved preset to pre-fill a new transaction from, or `null`.
+  final TransactionTemplateRow? template;
 
   @override
   ConsumerState<TransactionFormScreen> createState() =>
@@ -52,14 +62,24 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   void initState() {
     super.initState();
     final initial = widget.initial;
+    final template = initial == null ? widget.template : null;
+
+    final presetAmountMinor = initial?.amountMinor ?? template?.amountMinor;
     _amountController = TextEditingController(
-      text: initial == null ? '' : minorUnitsToInput(initial.amountMinor),
+      text: presetAmountMinor == null
+          ? ''
+          : minorUnitsToInput(presetAmountMinor),
     );
-    _notesController = TextEditingController(text: initial?.description ?? '');
-    _type = initial?.type ?? TransactionType.expense;
-    _accountId = initial?.accountId ?? '';
-    _destinationAccountId = initial?.destinationAccountId;
-    _categoryId = initial?.categoryId;
+    _notesController = TextEditingController(
+      text: initial?.description ?? template?.description ?? '',
+    );
+    _type = initial?.type ?? template?.type ?? TransactionType.expense;
+    _accountId = initial?.accountId ?? template?.accountId ?? '';
+    _destinationAccountId =
+        initial?.destinationAccountId ?? template?.destinationAccountId;
+    _categoryId = initial?.categoryId ?? template?.categoryId;
+    // A template never pre-fills the date — it presets what the transaction
+    // is, not when it happened.
     _date = initial?.date ?? DateTime.now();
   }
 

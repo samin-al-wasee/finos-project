@@ -420,6 +420,13 @@ Custom
 
 ## 8.2 Automatic Transaction Templates
 
+> **Status:** Implemented, ahead of this phase's normal sequence, with
+> explicit authorization (see docs/ARCHITECTURE.md, "templates"). Despite the
+> section title, a template never creates a transaction automatically — it
+> only pre-fills the entry form, which is what "speed up transaction entry"
+> below actually describes. Automatic generation is recurring transactions
+> (§8.1), a distinct, still-deferred feature.
+
 Users should be able to create templates.
 
 Example:

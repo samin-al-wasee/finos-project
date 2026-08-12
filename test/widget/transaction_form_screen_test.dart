@@ -3,6 +3,8 @@ import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/core/theme/app_theme.dart';
 import 'package:finos_app/features/accounts/data/account_dao.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
+import 'package:finos_app/features/transactions/data/transaction_dao.dart';
+import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:finos_app/features/transactions/presentation/transaction_form_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,7 +14,9 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// Popping the form returns to this scaffold, so pumpAndSettle finishes cleanly.
 class _FormHost extends StatefulWidget {
-  const _FormHost();
+  const _FormHost({this.template});
+
+  final TransactionTemplateRow? template;
 
   @override
   State<_FormHost> createState() => _FormHostState();
@@ -25,7 +29,9 @@ class _FormHostState extends State<_FormHost> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const TransactionFormScreen()),
+        MaterialPageRoute<void>(
+          builder: (_) => TransactionFormScreen(template: widget.template),
+        ),
       );
     });
   }
@@ -35,7 +41,10 @@ class _FormHostState extends State<_FormHost> {
 }
 
 void main() {
-  Future<AppDatabase> pumpForm(WidgetTester tester) async {
+  Future<AppDatabase> pumpForm(
+    WidgetTester tester, {
+    TransactionTemplateRow? template,
+  }) async {
     final database = AppDatabase.inMemory();
 
     // Seed one active account so the form has something to select.
@@ -51,7 +60,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appDatabaseProvider.overrideWithValue(database)],
-        child: MaterialApp(theme: AppTheme.light(), home: const _FormHost()),
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: _FormHost(template: template),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -128,4 +140,42 @@ void main() {
 
     await database.close();
   });
+
+  testWidgets(
+    'a template pre-fills type, amount, and account, but not the date',
+    (tester) async {
+      final template = TransactionTemplateRow(
+        id: 'tpl-1',
+        name: 'Netflix',
+        type: TransactionType.expense,
+        amountMinor: 50000,
+        accountId: 'acct-1',
+        description: 'Streaming',
+        createdAt: DateTime(2020),
+        updatedAt: DateTime(2020),
+      );
+      final database = await pumpForm(tester, template: template);
+
+      expect(find.widgetWithText(AppBar, 'Add transaction'), findsOneWidget);
+      expect(find.text('500'), findsOneWidget);
+      expect(find.text('Streaming'), findsOneWidget);
+
+      // Using a template never saves anything by itself — the user still
+      // reviews and taps Save, and it lands as a brand-new transaction dated
+      // today rather than any date implied by the template.
+      await tester.tap(find.widgetWithText(FilledButton, 'Add transaction'));
+      await tester.pumpAndSettle();
+
+      final rows = await TransactionDao(database).getAll();
+      expect(rows, hasLength(1));
+      expect(rows.single.amountMinor, 50000);
+      expect(rows.single.accountId, 'acct-1');
+      final today = DateTime.now();
+      expect(rows.single.date.year, today.year);
+      expect(rows.single.date.month, today.month);
+      expect(rows.single.date.day, today.day);
+
+      await database.close();
+    },
+  );
 }

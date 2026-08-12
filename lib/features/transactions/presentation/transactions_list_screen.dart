@@ -8,6 +8,7 @@ import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../templates/presentation/templates_list_screen.dart';
 import '../domain/transaction_filter.dart';
 import '../domain/transaction_type.dart';
 import 'transaction_form_screen.dart';
@@ -18,7 +19,8 @@ import 'transaction_tile.dart';
 /// Watches the transactions stream and groups rows into date sections
 /// ("Today" / "Yesterday" / calendar date). A floating action button opens the
 /// create form; per-tile popup menus offer edit and delete (with confirmation
-/// — docs/UI_DESIGN.md §35).
+/// — docs/UI_DESIGN.md §35). The AppBar's templates icon opens saved presets
+/// for quick entry (docs/ROADMAP.md §8.2).
 ///
 /// Search and filter (FR-02) run over the already-loaded list rather than a
 /// database query: this is a local, single-user dataset, not a scale problem,
@@ -87,6 +89,15 @@ class _TransactionsListScreenState
               context,
               accounts.valueOrNull ?? const [],
               categories.valueOrNull ?? const [],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.bolt_outlined),
+            tooltip: 'Templates',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const TemplatesListScreen(),
+              ),
             ),
           ),
         ],

@@ -6,6 +6,7 @@ import 'package:finos_app/features/accounts/data/account_dao.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
+import 'package:finos_app/features/templates/presentation/templates_list_screen.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
 import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:finos_app/features/transactions/presentation/transaction_form_screen.dart';
@@ -542,5 +543,16 @@ void main() {
 
       await database.close();
     });
+  });
+
+  testWidgets('the templates icon opens saved templates', (tester) async {
+    final database = await pumpList(tester);
+
+    await tester.tap(find.byTooltip('Templates'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TemplatesListScreen), findsOneWidget);
+
+    await database.close();
   });
 }

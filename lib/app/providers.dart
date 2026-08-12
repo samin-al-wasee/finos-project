@@ -24,6 +24,8 @@ import '../features/reports/domain/report_period.dart';
 import '../features/settings/application/settings_controller.dart';
 import '../features/settings/data/settings_dao.dart';
 import '../features/settings/domain/app_settings.dart';
+import '../features/templates/application/template_controller.dart';
+import '../features/templates/data/template_dao.dart';
 import '../features/transactions/application/transaction_controller.dart';
 import '../features/transactions/data/transaction_dao.dart';
 
@@ -507,4 +509,25 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
     budgetStatus: budgetStatus,
     recentTransactions: transactions.take(5).toList(),
   );
+});
+
+// ------------------------------------------------------------------
+// Templates
+// ------------------------------------------------------------------
+
+/// Data-access object for transaction templates.
+final templateDaoProvider = Provider<TemplateDao>((ref) {
+  return TemplateDao(ref.watch(appDatabaseProvider));
+});
+
+/// Application service for the template lifecycle.
+final templateControllerProvider = Provider<TemplateController>((ref) {
+  return TemplateController(ref.watch(templateDaoProvider));
+});
+
+/// Reactive stream of all templates (for UI consumers).
+final templatesStreamProvider = StreamProvider<List<TransactionTemplateRow>>((
+  ref,
+) {
+  return _guardOpenTimeout(ref.watch(templateDaoProvider).watchAll());
 });

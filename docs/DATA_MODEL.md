@@ -1759,7 +1759,43 @@ This data should remain local in V1 unless the user explicitly initiates a futur
 
 ---
 
-# 56. Data Model Evolution Rules
+# 56. Transaction Template
+
+A `TransactionTemplate` is a preset for *manual* entry (docs/ROADMAP.md §8.2,
+built ahead of its Phase 2 slot with explicit authorization). It is not a
+financial record — creating, editing, or deleting one never touches a
+transaction, an account balance, or a budget.
+
+It is also not a `RecurringTransaction` (§26): a template never generates a
+transaction on its own. Using one only pre-fills the transaction form for the
+user to review and save, the same way any other transaction is created.
+
+```text
+TransactionTemplate
+  id
+  name
+  type              (income | expense | transfer)
+  amount_minor      (nullable)
+  account_id        (nullable)
+  destination_account_id  (nullable, transfers only)
+  category_id       (nullable, income/expense only)
+  description
+  created_at
+  updated_at
+```
+
+Every field but `name` and `type` is nullable. A template is a partial preset,
+not a complete transaction — leaving the amount blank is the correct way to
+model "the price varies each time" (e.g. a variable utility bill), and leaving
+the account or category blank is correct when the template's only purpose is
+to save the description or category typing.
+
+Deleting a template has no effect on transactions previously created from it:
+nothing links a transaction back to the template that pre-filled its form.
+
+---
+
+# 57. Data Model Evolution Rules
 
 Any future change to the data model should answer:
 
@@ -1775,7 +1811,7 @@ Any future change to the data model should answer:
 
 ---
 
-# 57. Final Data Model Principle
+# 58. Final Data Model Principle
 
 The FinOS data model should follow one central principle:
 
