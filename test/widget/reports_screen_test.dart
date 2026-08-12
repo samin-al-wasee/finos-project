@@ -4,6 +4,9 @@ import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/core/theme/app_theme.dart';
 import 'package:finos_app/features/accounts/data/account_dao.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
+import 'package:finos_app/features/budgets/data/budget_dao.dart';
+import 'package:finos_app/features/budgets/domain/budget_period.dart';
+import 'package:finos_app/features/budgets/domain/budget_status.dart';
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
 import 'package:finos_app/features/reports/presentation/reports_screen.dart';
@@ -44,6 +47,7 @@ void main() {
     final database = await pumpReports(tester);
 
     expect(find.text('Nothing to report yet'), findsOneWidget);
+    expect(find.text('Budget Performance'), findsNothing);
 
     await database.close();
   });
@@ -194,6 +198,81 @@ void main() {
     final groceriesTop = tester.getTopLeft(find.text('Groceries')).dy;
     final transportTop = tester.getTopLeft(find.text('Transport')).dy;
     expect(groceriesTop, lessThan(transportTop));
+
+    await database.close();
+  });
+
+  testWidgets('shows an active budget in Budget Performance', (tester) async {
+    final database = await pumpReports(tester);
+    final categories = CategoryDao(database);
+    final budgets = BudgetDao(database);
+    final transactions = TransactionDao(database);
+
+    await categories.insertOne(
+      CategoriesCompanion.insert(
+        id: 'cat-groceries',
+        name: 'Groceries',
+        type: CategoryType.expense,
+      ),
+    );
+    await budgets.insertOne(
+      BudgetsCompanion.insert(
+        id: 'budget-groceries',
+        categoryId: 'cat-groceries',
+        amountMinor: 100000, // ৳1,000
+        period: BudgetPeriod.monthly,
+        startDate: thisMonth,
+      ),
+    );
+    await transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: 'tx-groceries',
+        type: TransactionType.expense,
+        amountMinor: 40000, // ৳400
+        accountId: 'acct-1',
+        categoryId: const Value('cat-groceries'),
+        date: thisMonth,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Budget Performance'), findsOneWidget);
+    // Also appears in "Spending by category" above, since the same category
+    // has a matching expense this period.
+    expect(find.text('Groceries'), findsNWidgets(2));
+    expect(find.text('৳400.00 / ৳1,000.00'), findsOneWidget);
+    expect(find.text('On track'), findsOneWidget);
+
+    await database.close();
+  });
+
+  testWidgets('excludes an archived budget from Budget Performance', (
+    tester,
+  ) async {
+    final database = await pumpReports(tester);
+    final categories = CategoryDao(database);
+    final budgets = BudgetDao(database);
+
+    await categories.insertOne(
+      CategoriesCompanion.insert(
+        id: 'cat-groceries',
+        name: 'Groceries',
+        type: CategoryType.expense,
+      ),
+    );
+    await budgets.insertOne(
+      BudgetsCompanion.insert(
+        id: 'budget-groceries',
+        categoryId: 'cat-groceries',
+        amountMinor: 100000,
+        period: BudgetPeriod.monthly,
+        startDate: thisMonth,
+      ),
+    );
+    await budgets.updateStatus('budget-groceries', BudgetStatus.archived);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Budget Performance'), findsNothing);
 
     await database.close();
   });

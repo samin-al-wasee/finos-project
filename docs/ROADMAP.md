@@ -498,10 +498,13 @@ own single-category budget in the same period.
 
 ## 8.4 Financial Reports
 
-> **Status:** Income vs expense and category spending are implemented, ahead
-> of this phase's normal sequence, with explicit authorization (see
-> docs/ARCHITECTURE.md, "reports"). Account cash flow, budget performance,
-> and a custom date-range picker remain unimplemented.
+> **Status:** Income vs expense, category spending, and budget performance
+> are implemented, ahead of this phase's normal sequence, with explicit
+> authorization (see docs/ARCHITECTURE.md, "reports"). Budget performance
+> shows each budget in its own current window rather than the report's
+> selected period, since a budget's own period (weekly/monthly/yearly/custom)
+> is independent of it. Account cash flow and a custom date-range picker
+> remain unimplemented.
 
 Introduce reports such as:
 

@@ -8,7 +8,12 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../budgets/domain/budget_progress.dart';
+import '../../budgets/presentation/budget_bar.dart';
+import '../../budgets/presentation/budget_details_screen.dart';
+import '../../budgets/presentation/budget_labels.dart';
 import '../../categories/presentation/category_icon.dart';
+import '../domain/budget_performance.dart';
 import '../domain/report_data.dart';
 import '../domain/report_period.dart';
 
@@ -36,6 +41,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final categoriesById = {
       for (final c in categories.valueOrNull ?? const <CategoryRow>[]) c.id: c,
     };
+    final budgets = ref.watch(budgetProgressProvider);
+    final budgetPerformance = budgetsForPerformanceReport(
+      budgets.valueOrNull ?? const <BudgetProgress>[],
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Reports')),
@@ -63,6 +72,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 data: data,
                 period: _period,
                 categoriesById: categoriesById,
+                budgetPerformance: budgetPerformance,
               ),
               error: (e, _) => EmptyState(
                 icon: Icons.error_outline,
@@ -88,17 +98,20 @@ class _ReportBody extends StatelessWidget {
     required this.data,
     required this.period,
     required this.categoriesById,
+    required this.budgetPerformance,
   });
 
   final ReportData data;
   final ReportPeriod period;
   final Map<String, CategoryRow> categoriesById;
+  final List<BudgetProgress> budgetPerformance;
 
   @override
   Widget build(BuildContext context) {
     if (data.totals.incomeMinor == 0 &&
         data.totals.expenseMinor == 0 &&
-        data.categorySpending.isEmpty) {
+        data.categorySpending.isEmpty &&
+        budgetPerformance.isEmpty) {
       return const EmptyState(
         icon: Icons.bar_chart_outlined,
         title: 'Nothing to report yet',
@@ -149,6 +162,16 @@ class _ReportBody extends StatelessWidget {
               category: categoriesById[spending.categoryId],
               totalExpenseMinor: data.totals.expenseMinor,
             ),
+        ],
+        if (budgetPerformance.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Budget Performance',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final progress in budgetPerformance)
+            _BudgetPerformanceRow(progress: progress),
         ],
         const SizedBox(height: AppSpacing.lg),
       ],
@@ -349,6 +372,98 @@ class _CategoryRow extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One row in the Budget Performance section — each budget shown for its own
+/// current window rather than the report's selected period (see
+/// `budgetsForPerformanceReport`). Reuses [BudgetBar] and the health label so
+/// a budget's standing reads identically here and on the Budgets tab.
+class _BudgetPerformanceRow extends StatelessWidget {
+  const _BudgetPerformanceRow({required this.progress});
+
+  final BudgetProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<FinosColors>()!;
+    final symbol = currencySymbol(progress.budget.currency);
+    final spent = formatMinorUnits(progress.spentMinor, symbol: symbol);
+    final limit = formatMinorUnits(progress.limitMinor, symbol: symbol);
+    final remaining = progress.isExceeded
+        ? '${formatMinorUnits(-progress.remainingMinor, symbol: symbol)} '
+              'over budget'
+        : '${formatMinorUnits(progress.remainingMinor, symbol: symbol)} '
+              'remaining';
+
+    return InkWell(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => BudgetDetailsScreen(budgetId: progress.budget.id),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: MergeSemantics(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    categoryIcon(progress.category.icon),
+                    size: 18,
+                    color: colors.mutedText,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          progress.category.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        Text(
+                          budgetWindowLabel(progress.window),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.mutedText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    '$spent / $limit',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              BudgetBar(progress: progress),
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    budgetHealthLabel(progress.health),
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: healthColor(colors, progress.health),
+                    ),
+                  ),
+                  Text(remaining, style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
