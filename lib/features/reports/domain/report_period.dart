@@ -1,12 +1,95 @@
 import '../../budgets/domain/budget_period.dart';
 
-/// The selectable windows for a financial report (FR-07, docs/ROADMAP.md §8.4).
-///
-/// Deliberately a small fixed set rather than an arbitrary date-range picker —
-/// "This month vs last month" and "this year vs last year" are the comparisons
-/// named in the roadmap; a custom range is a later refinement, not V1-of-this-
-/// feature scope.
+/// The fixed calendar windows for a financial report (FR-07,
+/// docs/ROADMAP.md §8.4): "This month vs last month" and "this year vs last
+/// year" are the comparisons named in the roadmap. [CustomReportRange] covers
+/// an arbitrary user-picked range alongside these.
 enum ReportPeriod { thisMonth, lastMonth, thisYear, lastYear }
+
+/// A report's selected window: either one of the fixed [ReportPeriod]s or an
+/// arbitrary [CustomReportRange].
+///
+/// Each variant knows how to derive its own comparison window and labels, so
+/// callers (the provider, the screen) work in terms of this type rather than
+/// branching on which kind of selection is active.
+sealed class ReportWindowSelection {
+  const ReportWindowSelection();
+
+  /// The calendar window this selection covers, relative to [reference].
+  DateRange window({required DateTime reference});
+
+  /// The window to compare against — the immediately preceding window of
+  /// equal length.
+  DateRange previousWindow({required DateTime reference});
+
+  /// User-facing label for the selected window, e.g. "This month".
+  String get label;
+
+  /// Label for the comparison window, e.g. "vs previous month".
+  String get comparisonLabel;
+}
+
+/// One of the fixed calendar periods.
+class FixedReportPeriod extends ReportWindowSelection {
+  const FixedReportPeriod(this.period);
+
+  final ReportPeriod period;
+
+  @override
+  DateRange window({required DateTime reference}) =>
+      reportWindow(period, reference: reference);
+
+  @override
+  DateRange previousWindow({required DateTime reference}) =>
+      previousReportWindow(period, reference: reference);
+
+  @override
+  String get label => reportPeriodLabel(period);
+
+  @override
+  String get comparisonLabel => reportComparisonLabel(period);
+
+  @override
+  bool operator ==(Object other) =>
+      other is FixedReportPeriod && other.period == period;
+
+  @override
+  int get hashCode => period.hashCode;
+}
+
+/// An arbitrary user-picked date range.
+///
+/// The comparison window is the immediately preceding range of the same
+/// length — e.g. a 10-day custom range compares against the 10 days before
+/// it — mirroring how the fixed periods compare against the equivalent prior
+/// month/year.
+class CustomReportRange extends ReportWindowSelection {
+  const CustomReportRange(this.range);
+
+  final DateRange range;
+
+  @override
+  DateRange window({required DateTime reference}) => range;
+
+  @override
+  DateRange previousWindow({required DateTime reference}) {
+    final length = range.to.difference(range.from);
+    return DateRange(from: range.from.subtract(length), to: range.from);
+  }
+
+  @override
+  String get label => 'Custom range';
+
+  @override
+  String get comparisonLabel => 'vs previous period';
+
+  @override
+  bool operator ==(Object other) =>
+      other is CustomReportRange && other.range == range;
+
+  @override
+  int get hashCode => range.hashCode;
+}
 
 /// The calendar window a [ReportPeriod] covers, relative to [reference].
 ///

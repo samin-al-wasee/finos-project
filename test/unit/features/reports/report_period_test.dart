@@ -124,4 +124,66 @@ void main() {
       );
     });
   });
+
+  group('FixedReportPeriod', () {
+    test('delegates window/previousWindow/labels to the wrapped period', () {
+      const selection = FixedReportPeriod(ReportPeriod.thisMonth);
+      final reference = DateTime(2026, 8, 15);
+
+      expect(
+        selection.window(reference: reference),
+        reportWindow(ReportPeriod.thisMonth, reference: reference),
+      );
+      expect(
+        selection.previousWindow(reference: reference),
+        previousReportWindow(ReportPeriod.thisMonth, reference: reference),
+      );
+      expect(selection.label, reportPeriodLabel(ReportPeriod.thisMonth));
+      expect(
+        selection.comparisonLabel,
+        reportComparisonLabel(ReportPeriod.thisMonth),
+      );
+    });
+
+    test('two instances wrapping the same period are equal', () {
+      expect(
+        const FixedReportPeriod(ReportPeriod.thisYear),
+        const FixedReportPeriod(ReportPeriod.thisYear),
+      );
+    });
+  });
+
+  group('CustomReportRange', () {
+    test('window returns the range unchanged', () {
+      final range = DateRange(
+        from: DateTime(2026, 8, 1),
+        to: DateTime(2026, 8, 11),
+      );
+      final selection = CustomReportRange(range);
+
+      expect(selection.window(reference: DateTime(2026, 8, 15)), range);
+    });
+
+    test('previousWindow is the immediately preceding range of equal '
+        'length', () {
+      final range = DateRange(
+        from: DateTime(2026, 8, 1),
+        to: DateTime(2026, 8, 11),
+      ); // 10 days
+      final selection = CustomReportRange(range);
+
+      expect(
+        selection.previousWindow(reference: DateTime(2026, 8, 15)),
+        DateRange(from: DateTime(2026, 7, 22), to: DateTime(2026, 8, 1)),
+      );
+    });
+
+    test('two instances wrapping equal ranges are equal', () {
+      final range = DateRange(
+        from: DateTime(2026, 1, 1),
+        to: DateTime(2026, 2, 1),
+      );
+      expect(CustomReportRange(range), CustomReportRange(range));
+    });
+  });
 }

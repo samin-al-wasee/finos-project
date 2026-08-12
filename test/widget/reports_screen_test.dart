@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:finos_app/app/providers.dart';
 import 'package:finos_app/core/database/app_database.dart';
+import 'package:finos_app/core/formatting/date.dart';
 import 'package:finos_app/core/theme/app_theme.dart';
 import 'package:finos_app/features/accounts/data/account_dao.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
@@ -18,6 +19,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   Future<AppDatabase> pumpReports(WidgetTester tester) async {
+    // Tall enough that every report section (including the six-month
+    // Monthly Spending chart) builds within the viewport + cache extent —
+    // ListView only builds offscreen widgets, so a short surface would make
+    // find.text miss lower sections without asserting anything is wrong.
+    await tester.binding.setSurfaceSize(const Size(800, 3000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final database = AppDatabase.inMemory();
     await AccountDao(database).insertOne(
       FinancialAccountsCompanion.insert(
@@ -81,9 +89,10 @@ void main() {
     expect(find.text('Income'), findsOneWidget);
     expect(find.text('৳1,000.00'), findsOneWidget);
     expect(find.text('Expenses'), findsOneWidget);
-    // Appears on both the Expenses card and the uncategorized row in
-    // "Spending by category", since this expense has no category.
-    expect(find.text('৳300.00'), findsNWidgets(2));
+    // The Expenses card, the uncategorized row in "Spending by category"
+    // (since this expense has no category), and this month's bar in
+    // "Monthly Spending".
+    expect(find.text('৳300.00'), findsNWidgets(3));
     expect(find.text('Net'), findsOneWidget);
     // The Net card and the account's own row in "Cash Flow by Account".
     expect(find.text('৳700.00'), findsNWidgets(2));
@@ -308,6 +317,81 @@ void main() {
     // The Net card and the account's own row show the same net amount,
     // since this is the only account with activity.
     expect(find.text('-৳400.00'), findsNWidgets(2));
+
+    await database.close();
+  });
+
+  testWidgets('shows this month\'s total in the Monthly Spending trend', (
+    tester,
+  ) async {
+    final database = await pumpReports(tester);
+    final transactions = TransactionDao(database);
+
+    await transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: 'tx-expense',
+        type: TransactionType.expense,
+        amountMinor: 50000, // ৳500
+        accountId: 'acct-1',
+        date: thisMonth,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Monthly Spending'), findsOneWidget);
+    expect(find.text(monthLabel(thisMonth)), findsOneWidget);
+    // The Expenses card, the uncategorized row in "Spending by category",
+    // and this month's bar in "Monthly Spending".
+    expect(find.text('৳500.00'), findsNWidgets(3));
+
+    await database.close();
+  });
+
+  testWidgets('picking a custom range scopes the report to it', (tester) async {
+    final database = await pumpReports(tester);
+    final transactions = TransactionDao(database);
+
+    final rangeStart = DateTime(now.year, now.month, 1);
+    final rangeEnd = DateTime(now.year, now.month, 10);
+    await transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: 'tx-in-range',
+        type: TransactionType.expense,
+        amountMinor: 20000, // ৳200
+        accountId: 'acct-1',
+        date: DateTime(now.year, now.month, 5),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Custom'));
+    await tester.pumpAndSettle();
+
+    // Switch the date-range dialog from the calendar grid to typed input,
+    // which is far less brittle to drive than tapping specific day cells.
+    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.pumpAndSettle();
+
+    String typed(DateTime date) =>
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.day.toString().padLeft(2, '0')}/'
+        '${date.year}';
+
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), typed(rangeStart));
+    await tester.enterText(fields.at(1), typed(rangeEnd));
+    await tester.pumpAndSettle();
+
+    // Confirm button label differs by entry mode: "Save" in calendar mode,
+    // "OK" in the typed-input mode used here.
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('${formatDate(rangeStart)} – ${formatDate(rangeEnd)}'),
+      findsOneWidget,
+    );
+    expect(find.text('৳200.00'), findsWidgets);
 
     await database.close();
   });

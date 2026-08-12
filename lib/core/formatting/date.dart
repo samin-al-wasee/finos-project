@@ -47,6 +47,12 @@ String dateLabel(DateTime date, {DateTime? now}) {
   return formatDate(date);
 }
 
+/// Formats [date] as a calendar month and year, e.g. `Aug 2026`.
+String monthLabel(DateTime date) {
+  final local = date.toLocal();
+  return '${_monthNames[local.month - 1]} ${local.year}';
+}
+
 /// Returns the start (midnight) of [date]'s calendar day in the local timezone.
 DateTime _dayStart(DateTime date) {
   final local = date.toLocal();

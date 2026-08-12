@@ -498,18 +498,26 @@ own single-category budget in the same period.
 
 ## 8.4 Financial Reports
 
-> **Status:** Income vs expense, category spending, budget performance, and
-> account cash flow are implemented, ahead of this phase's normal sequence,
-> with explicit authorization (see docs/ARCHITECTURE.md, "reports"). Budget
-> performance shows each budget in its own current window rather than the
-> report's selected period, since a budget's own period
+> **Status:** All five listed reports — Monthly Spending, income vs expense,
+> category spending, account cash flow, and budget performance — plus a
+> custom date-range picker are implemented, ahead of this phase's normal
+> sequence, with explicit authorization (see docs/ARCHITECTURE.md, "reports").
+> Budget performance shows each budget in its own current window rather than
+> the report's selected period, since a budget's own period
 > (weekly/monthly/yearly/custom) is independent of it. Account cash flow
-> reuses the same fixed-period selector as the rest of the screen — one net
+> reuses the report's selected window like the rest of the screen — one net
 > figure per active account with activity that period, compared against its
 > own net for the immediately preceding period, with no percentage (a
 > period-over-period percent change on a signed net figure is undefined once
-> the sign flips between periods). A custom date-range picker remains
-> unimplemented.
+> the sign flips between periods). Monthly Spending is a fixed trailing
+> six-month trend, independent of the period selector — a multi-month trend
+> doesn't fit the "this period vs previous period" shape the other sections
+> share. The date-range picker uses Flutter's built-in
+> `showDateRangePicker` — a new UI idiom for this app (elsewhere, two
+> `showDatePicker` calls are used for from/to filtering), deliberate here
+> because it is the standard widget for exactly this interaction. A
+> custom range's "previous period" comparison is the immediately preceding
+> range of equal length. Year-over-year comparison remains unimplemented.
 
 Introduce reports such as:
 

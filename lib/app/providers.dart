@@ -25,6 +25,7 @@ import '../features/recurring/domain/due_occurrences.dart';
 import '../features/recurring/domain/due_recurring_group.dart';
 import '../features/recurring/domain/recurring_status.dart';
 import '../features/reports/domain/account_cash_flow.dart';
+import '../features/reports/domain/monthly_spending.dart';
 import '../features/reports/domain/report_data.dart';
 import '../features/reports/domain/report_period.dart';
 import '../features/settings/application/settings_controller.dart';
@@ -388,59 +389,85 @@ final loanMovementsProvider =
 ///
 /// Watching `.future` on the transaction stream re-runs this on every change,
 /// the same pattern as [dashboardDataProvider].
-final reportDataProvider = FutureProvider.family<ReportData, ReportPeriod>((
+final reportDataProvider =
+    FutureProvider.family<ReportData, ReportWindowSelection>((
+      ref,
+      selection,
+    ) async {
+      await ref.watch(transactionsStreamProvider.future);
+      final dao = ref.watch(transactionDaoProvider);
+
+      final now = DateTime.now();
+      final window = selection.window(reference: now);
+      final previousWindow = selection.previousWindow(reference: now);
+
+      final totals = await dao.totalsForPeriod(window.from, window.to);
+      final previousTotals = await dao.totalsForPeriod(
+        previousWindow.from,
+        previousWindow.to,
+      );
+      final expenseByCategory = await dao.expenseTotalsByCategory(
+        window.from,
+        window.to,
+      );
+
+      final categorySpending =
+          expenseByCategory.entries
+              .map(
+                (e) => CategoryAmount(categoryId: e.key, amountMinor: e.value),
+              )
+              .toList()
+            ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
+
+      final accounts = await ref.watch(accountsStreamProvider.future);
+      final accountCashFlows = <AccountCashFlow>[];
+      for (final account in accounts) {
+        accountCashFlows.add(
+          AccountCashFlow(
+            account: account,
+            totals: await dao.totalsForAccountAndPeriod(
+              account.id,
+              window.from,
+              window.to,
+            ),
+            previousTotals: await dao.totalsForAccountAndPeriod(
+              account.id,
+              previousWindow.from,
+              previousWindow.to,
+            ),
+          ),
+        );
+      }
+
+      return ReportData(
+        totals: totals,
+        previousTotals: previousTotals,
+        categorySpending: categorySpending,
+        accountCashFlows: accountCashFlowsForReport(accountCashFlows),
+      );
+    });
+
+/// Total expense for each of the trailing [monthlySpendingMonthCount]
+/// calendar months, oldest first, for the Monthly Spending report
+/// (docs/ROADMAP.md §8.4).
+///
+/// Independent of [reportDataProvider]/the screen's period selector — see
+/// `monthlySpendingWindows`.
+final monthlySpendingProvider = FutureProvider<List<MonthlyExpense>>((
   ref,
-  period,
 ) async {
   await ref.watch(transactionsStreamProvider.future);
   final dao = ref.watch(transactionDaoProvider);
 
-  final now = DateTime.now();
-  final window = reportWindow(period, reference: now);
-  final previousWindow = previousReportWindow(period, reference: now);
-
-  final totals = await dao.totalsForPeriod(window.from, window.to);
-  final previousTotals = await dao.totalsForPeriod(
-    previousWindow.from,
-    previousWindow.to,
-  );
-  final expenseByCategory = await dao.expenseTotalsByCategory(
-    window.from,
-    window.to,
-  );
-
-  final categorySpending =
-      expenseByCategory.entries
-          .map((e) => CategoryAmount(categoryId: e.key, amountMinor: e.value))
-          .toList()
-        ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
-
-  final accounts = await ref.watch(accountsStreamProvider.future);
-  final accountCashFlows = <AccountCashFlow>[];
-  for (final account in accounts) {
-    accountCashFlows.add(
-      AccountCashFlow(
-        account: account,
-        totals: await dao.totalsForAccountAndPeriod(
-          account.id,
-          window.from,
-          window.to,
-        ),
-        previousTotals: await dao.totalsForAccountAndPeriod(
-          account.id,
-          previousWindow.from,
-          previousWindow.to,
-        ),
-      ),
+  final windows = monthlySpendingWindows(reference: DateTime.now());
+  final result = <MonthlyExpense>[];
+  for (final window in windows) {
+    final totals = await dao.totalsForPeriod(window.from, window.to);
+    result.add(
+      MonthlyExpense(month: window.from, expenseMinor: totals.expenseMinor),
     );
   }
-
-  return ReportData(
-    totals: totals,
-    previousTotals: previousTotals,
-    categorySpending: categorySpending,
-    accountCashFlows: accountCashFlowsForReport(accountCashFlows),
-  );
+  return result;
 });
 
 // ------------------------------------------------------------------
