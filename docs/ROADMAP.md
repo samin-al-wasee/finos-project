@@ -643,6 +643,39 @@ changes what a "loan" identifies:
 
 ---
 
+## 8.8 Quick Entry (Global Shortcut Bar)
+
+> **Status:** Implemented, built directly at user request rather than from
+> anything sketched elsewhere in this document (see docs/ARCHITECTURE.md,
+> "quick entry") — the roadmap didn't anticipate this one, so there is no
+> earlier phase it's "ahead of." It cuts across every write operation the app
+> has, not one feature area, which is why it lives here rather than folded
+> into §8.5's search grammar.
+
+A terminal-style single line, pinned to the bottom of the Transactions tab,
+for recording any write operation without leaving that screen:
+
+```text
+income 500 today "Main Bank" Salary
+expense 500 today "Main Bank" Groceries lunch
+transfer 1000 today "Main Bank" Cash
+lent 20000 today Alice
+repay John
+account Savings
+budget Groceries 10000 Weekly
+```
+
+The first word picks the operation; typing `@` opens a filterable suggestion
+list for whichever slot the cursor is in — every operation the bar supports
+when none is chosen yet, live account/category/loan names once one is, a
+date picker for a date field, or the fixed values a field like "period"
+accepts. Submitting never saves anything by itself: it opens the exact
+screen (or, for a loan repayment, dialog) that operation already uses,
+pre-filled, for the user to review and save — the same shape as choosing a
+template or applying a saved filter (§8.2, §8.5).
+
+---
+
 # 9. Phase 3 — Personal Finance Hub
 
 ## Goal

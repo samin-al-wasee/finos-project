@@ -8,6 +8,7 @@ import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../quick_entry/presentation/quick_entry_bar.dart';
 import '../../templates/presentation/templates_list_screen.dart';
 import '../domain/transaction_filter.dart';
 import '../domain/transaction_type.dart';
@@ -111,38 +112,47 @@ class _TransactionsListScreenState
         tooltip: 'Add transaction',
         child: const Icon(Icons.add),
       ),
-      body: transactions.when(
-        data: (rows) => rows.isEmpty
-            ? const EmptyState(
-                icon: Icons.swap_horiz,
-                title: 'No transactions yet',
-                message: 'Add your first transaction to start tracking money.',
-                action: _AddTransactionButton(),
-              )
-            : accounts.when(
-                data: (accountRows) => categories.when(
-                  data: (categoryRows) => _buildFiltered(
-                    rows: rows,
-                    accounts: accountRows,
-                    categories: categoryRows,
-                  ),
-                  error: (e, _) => _ErrorState(
-                    message: e.toString(),
-                    onRetry: () => ref.invalidate(categoriesStreamProvider),
-                  ),
-                  loading: () => const _LoadingState(),
-                ),
-                error: (e, _) => _ErrorState(
-                  message: e.toString(),
-                  onRetry: () => ref.invalidate(accountsStreamProvider),
-                ),
-                loading: () => const _LoadingState(),
+      body: Column(
+        children: [
+          Expanded(
+            child: transactions.when(
+              data: (rows) => rows.isEmpty
+                  ? const EmptyState(
+                      icon: Icons.swap_horiz,
+                      title: 'No transactions yet',
+                      message:
+                          'Add your first transaction to start tracking money.',
+                      action: _AddTransactionButton(),
+                    )
+                  : accounts.when(
+                      data: (accountRows) => categories.when(
+                        data: (categoryRows) => _buildFiltered(
+                          rows: rows,
+                          accounts: accountRows,
+                          categories: categoryRows,
+                        ),
+                        error: (e, _) => _ErrorState(
+                          message: e.toString(),
+                          onRetry: () =>
+                              ref.invalidate(categoriesStreamProvider),
+                        ),
+                        loading: () => const _LoadingState(),
+                      ),
+                      error: (e, _) => _ErrorState(
+                        message: e.toString(),
+                        onRetry: () => ref.invalidate(accountsStreamProvider),
+                      ),
+                      loading: () => const _LoadingState(),
+                    ),
+              error: (e, _) => _ErrorState(
+                message: e.toString(),
+                onRetry: () => ref.invalidate(transactionsStreamProvider),
               ),
-        error: (e, _) => _ErrorState(
-          message: e.toString(),
-          onRetry: () => ref.invalidate(transactionsStreamProvider),
-        ),
-        loading: () => const _LoadingState(),
+              loading: () => const _LoadingState(),
+            ),
+          ),
+          const QuickEntryBar(),
+        ],
       ),
     );
   }

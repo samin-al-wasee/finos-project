@@ -8,6 +8,7 @@ import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../settings/domain/app_settings.dart';
 import '../application/account_controller.dart';
+import '../domain/account_draft.dart';
 import '../domain/account_type.dart';
 import 'account_type_label.dart';
 
@@ -15,12 +16,17 @@ import 'account_type_label.dart';
 ///
 /// When [initial] is provided the form pre-fills and saves via update;
 /// otherwise it creates a new account. The same widget powers both flows
-/// (docs/UI_DESIGN.md §40).
+/// (docs/UI_DESIGN.md §40). [draft] does the same for quick entry
+/// (docs/ARCHITECTURE.md, "quick entry") — a one-off, unsaved seed, ignored
+/// when [initial] is set.
 class AccountFormScreen extends ConsumerStatefulWidget {
-  const AccountFormScreen({super.key, this.initial});
+  const AccountFormScreen({super.key, this.initial, this.draft});
 
   /// The account being edited, or `null` when creating a new one.
   final FinancialAccountRow? initial;
+
+  /// A quick-entry seed to pre-fill a new account from, or `null`.
+  final AccountDraft? draft;
 
   @override
   ConsumerState<AccountFormScreen> createState() => _AccountFormScreenState();
@@ -40,13 +46,19 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
   void initState() {
     super.initState();
     final initial = widget.initial;
-    _nameController = TextEditingController(text: initial?.name ?? '');
-    _balanceController = TextEditingController(
-      text: initial == null
-          ? ''
-          : minorUnitsToInput(initial.openingBalanceMinor),
+    final draft = initial == null ? widget.draft : null;
+
+    final presetBalanceMinor =
+        initial?.openingBalanceMinor ?? draft?.openingBalanceMinor;
+    _nameController = TextEditingController(
+      text: initial?.name ?? draft?.name ?? '',
     );
-    _type = initial?.type ?? AccountType.bank;
+    _balanceController = TextEditingController(
+      text: presetBalanceMinor == null
+          ? ''
+          : minorUnitsToInput(presetBalanceMinor),
+    );
+    _type = initial?.type ?? draft?.type ?? AccountType.bank;
     // A new account starts on the currency chosen in Settings; an existing one
     // keeps its own, since changing it would reinterpret its stored balance.
     // The preference has always emitted by this point because the root widget

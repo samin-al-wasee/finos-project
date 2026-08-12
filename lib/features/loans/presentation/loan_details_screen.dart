@@ -12,6 +12,7 @@ import '../../accounts/domain/account_status.dart';
 import '../domain/loan_progress.dart';
 import 'loan_form_screen.dart';
 import 'loan_labels.dart';
+import 'repayment_dialog.dart';
 
 /// Loan detail screen (docs/UI_DESIGN.md §22).
 ///
@@ -249,10 +250,10 @@ class _Details extends ConsumerWidget {
       return;
     }
 
-    final result = await showDialog<_RepaymentInput>(
-      context: context,
-      builder: (context) =>
-          _RepaymentDialog(progress: progress, accounts: accounts),
+    final result = await RepaymentDialog.show(
+      context,
+      progress: progress,
+      accounts: accounts,
     );
     if (result == null || !context.mounted) return;
 
@@ -313,156 +314,6 @@ class _AmountRow extends StatelessWidget {
                 : theme.textTheme.bodyLarge,
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// What the repayment dialog collects.
-class _RepaymentInput {
-  const _RepaymentInput({
-    required this.amountMinor,
-    required this.accountId,
-    required this.date,
-  });
-
-  final int amountMinor;
-  final String accountId;
-  final DateTime date;
-}
-
-/// Collects a repayment amount, the account it moves through, and its date.
-class _RepaymentDialog extends StatefulWidget {
-  const _RepaymentDialog({required this.progress, required this.accounts});
-
-  final LoanProgress progress;
-  final List<FinancialAccountRow> accounts;
-
-  @override
-  State<_RepaymentDialog> createState() => _RepaymentDialogState();
-}
-
-class _RepaymentDialogState extends State<_RepaymentDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _amountController;
-  late String _accountId;
-  DateTime _date = DateTime.now();
-
-  @override
-  void initState() {
-    super.initState();
-    // Pre-filled with the full outstanding amount: settling a loan completely is
-    // the most common repayment, and it is also the maximum allowed.
-    _amountController = TextEditingController(
-      text: minorUnitsToInput(widget.progress.outstandingMinor),
-    );
-    _accountId = widget.accounts.first.id;
-  }
-
-  @override
-  void dispose() {
-    _amountController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final symbol = currencySymbol(widget.progress.loan.currency);
-
-    return AlertDialog(
-      title: Text(repaymentActionLabel(widget.progress.direction)),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _amountController,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: 'Amount',
-                prefixText: '$symbol ',
-                helperText:
-                    '${formatMinorUnits(widget.progress.outstandingMinor, symbol: symbol)} outstanding',
-                border: const OutlineInputBorder(),
-              ),
-              validator: _validateAmount,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            DropdownButtonFormField<String>(
-              initialValue: _accountId,
-              decoration: const InputDecoration(
-                labelText: 'Account',
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                for (final account in widget.accounts)
-                  DropdownMenuItem(
-                    value: account.id,
-                    child: Text(account.name),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) setState(() => _accountId = value);
-              },
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Date'),
-              trailing: Text(formatDate(_date)),
-              onTap: _pickDate,
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('Record')),
-      ],
-    );
-  }
-
-  String? _validateAmount(String? value) {
-    final input = value?.trim() ?? '';
-    if (input.isEmpty) return 'Enter an amount';
-    final int minor;
-    try {
-      minor = parseMinorUnits(input);
-    } on FormatException {
-      return 'Enter a valid amount';
-    }
-    if (minor <= 0) return 'Amount must be greater than zero';
-    // Caught here as well as in the controller, so the user sees it before the
-    // dialog closes (docs/DATA_MODEL.md §36).
-    if (minor > widget.progress.outstandingMinor) {
-      return 'That is more than the outstanding amount';
-    }
-    return null;
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: widget.progress.loan.startDate,
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) setState(() => _date = picked);
-  }
-
-  void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    Navigator.of(context).pop(
-      _RepaymentInput(
-        amountMinor: parseMinorUnits(_amountController.text.trim()),
-        accountId: _accountId,
-        date: _date,
       ),
     );
   }

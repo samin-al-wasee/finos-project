@@ -10,6 +10,7 @@ import '../../categories/domain/category_status.dart';
 import '../../categories/domain/category_type.dart';
 import '../../categories/presentation/categories_list_screen.dart';
 import '../application/transaction_controller.dart';
+import '../domain/transaction_draft.dart';
 import '../domain/transaction_type.dart';
 
 /// Add/edit form for a single transaction (docs/UI_DESIGN.md §10–§13).
@@ -24,17 +25,29 @@ import '../domain/transaction_type.dart';
 /// Save like any other new transaction, and today's date is always used
 /// rather than whatever date the template might imply.
 ///
+/// [draft] does the same for quick entry (docs/ARCHITECTURE.md, "quick
+/// entry") — a one-off, unsaved seed rather than a persisted preset, which is
+/// also why, unlike a template, it can pre-fill the date.
+///
 /// The amount field is visually dominant; account and category are chosen from
 /// dropdowns populated by the reactive stream providers. For transfers the
 /// category field is hidden and a destination account selector appears instead.
 class TransactionFormScreen extends ConsumerStatefulWidget {
-  const TransactionFormScreen({super.key, this.initial, this.template});
+  const TransactionFormScreen({
+    super.key,
+    this.initial,
+    this.template,
+    this.draft,
+  });
 
   /// The transaction being edited, or `null` when creating a new one.
   final TransactionRow? initial;
 
   /// A saved preset to pre-fill a new transaction from, or `null`.
   final TransactionTemplateRow? template;
+
+  /// A quick-entry seed to pre-fill a new transaction from, or `null`.
+  final TransactionDraft? draft;
 
   @override
   ConsumerState<TransactionFormScreen> createState() =>
@@ -63,24 +76,39 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
     super.initState();
     final initial = widget.initial;
     final template = initial == null ? widget.template : null;
+    final draft = initial == null ? widget.draft : null;
 
-    final presetAmountMinor = initial?.amountMinor ?? template?.amountMinor;
+    final presetAmountMinor =
+        initial?.amountMinor ?? template?.amountMinor ?? draft?.amountMinor;
     _amountController = TextEditingController(
       text: presetAmountMinor == null
           ? ''
           : minorUnitsToInput(presetAmountMinor),
     );
     _notesController = TextEditingController(
-      text: initial?.description ?? template?.description ?? '',
+      text:
+          initial?.description ??
+          template?.description ??
+          draft?.description ??
+          '',
     );
-    _type = initial?.type ?? template?.type ?? TransactionType.expense;
-    _accountId = initial?.accountId ?? template?.accountId ?? '';
+    _type =
+        initial?.type ??
+        template?.type ??
+        draft?.type ??
+        TransactionType.expense;
+    _accountId =
+        initial?.accountId ?? template?.accountId ?? draft?.accountId ?? '';
     _destinationAccountId =
-        initial?.destinationAccountId ?? template?.destinationAccountId;
-    _categoryId = initial?.categoryId ?? template?.categoryId;
+        initial?.destinationAccountId ??
+        template?.destinationAccountId ??
+        draft?.destinationAccountId;
+    _categoryId =
+        initial?.categoryId ?? template?.categoryId ?? draft?.categoryId;
     // A template never pre-fills the date — it presets what the transaction
-    // is, not when it happened.
-    _date = initial?.date ?? DateTime.now();
+    // is, not when it happened. A quick-entry draft can, since the user may
+    // have typed one.
+    _date = initial?.date ?? draft?.date ?? DateTime.now();
   }
 
   @override

@@ -11,16 +11,22 @@ import '../../categories/domain/category_status.dart';
 import '../../categories/domain/category_type.dart';
 import '../../transactions/domain/transaction_type.dart';
 import '../domain/recurrence_frequency.dart';
+import '../domain/recurring_draft.dart';
 
 /// Add/edit form for a recurring transaction rule (docs/ROADMAP.md §8.1).
 ///
 /// Unlike a template, a rule generates transactions unattended, so its amount
 /// and account are required rather than optional (docs/DATA_MODEL.md §27).
+/// [draft] pre-fills a *new* rule from quick entry (docs/ARCHITECTURE.md,
+/// "quick entry") — a one-off, unsaved seed, ignored when [initial] is set.
 class RecurringTransactionFormScreen extends ConsumerStatefulWidget {
-  const RecurringTransactionFormScreen({super.key, this.initial});
+  const RecurringTransactionFormScreen({super.key, this.initial, this.draft});
 
   /// The rule being edited, or `null` when creating a new one.
   final RecurringTransactionRow? initial;
+
+  /// A quick-entry seed to pre-fill a new rule from, or `null`.
+  final RecurringDraft? draft;
 
   @override
   ConsumerState<RecurringTransactionFormScreen> createState() =>
@@ -51,17 +57,28 @@ class _RecurringTransactionFormScreenState
   void initState() {
     super.initState();
     final initial = widget.initial;
-    _nameController = TextEditingController(text: initial?.name ?? '');
-    _amountController = TextEditingController(
-      text: initial == null ? '' : minorUnitsToInput(initial.amountMinor),
+    final draft = initial == null ? widget.draft : null;
+
+    final presetAmountMinor = initial?.amountMinor ?? draft?.amountMinor;
+    _nameController = TextEditingController(
+      text: initial?.name ?? draft?.name ?? '',
     );
-    _notesController = TextEditingController(text: initial?.description ?? '');
-    _type = initial?.type ?? TransactionType.expense;
-    _accountId = initial?.accountId;
-    _destinationAccountId = initial?.destinationAccountId;
-    _categoryId = initial?.categoryId;
-    _frequency = initial?.frequency ?? RecurrenceFrequency.monthly;
-    _startDate = initial?.startDate ?? DateTime.now();
+    _amountController = TextEditingController(
+      text: presetAmountMinor == null
+          ? ''
+          : minorUnitsToInput(presetAmountMinor),
+    );
+    _notesController = TextEditingController(
+      text: initial?.description ?? draft?.description ?? '',
+    );
+    _type = initial?.type ?? draft?.type ?? TransactionType.expense;
+    _accountId = initial?.accountId ?? draft?.accountId;
+    _destinationAccountId =
+        initial?.destinationAccountId ?? draft?.destinationAccountId;
+    _categoryId = initial?.categoryId ?? draft?.categoryId;
+    _frequency =
+        initial?.frequency ?? draft?.frequency ?? RecurrenceFrequency.monthly;
+    _startDate = initial?.startDate ?? draft?.startDate ?? DateTime.now();
     _endDate = initial?.endDate;
   }
 

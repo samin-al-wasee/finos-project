@@ -10,6 +10,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../accounts/domain/account_status.dart';
 import '../application/loan_controller.dart';
 import '../domain/loan_direction.dart';
+import '../domain/loan_draft.dart';
 import 'loan_labels.dart';
 
 /// Add/edit form for a loan (FR-06).
@@ -18,11 +19,17 @@ import 'loan_labels.dart';
 /// principal, and disbursement account are fixed at creation: altering them would
 /// leave the origination transaction and every derived figure describing a loan
 /// that no longer exists (ADR-004).
+///
+/// [draft] pre-fills a *new* loan from quick entry (docs/ARCHITECTURE.md,
+/// "quick entry") — a one-off, unsaved seed, ignored when [initial] is set.
 class LoanFormScreen extends ConsumerStatefulWidget {
-  const LoanFormScreen({super.key, this.initial});
+  const LoanFormScreen({super.key, this.initial, this.draft});
 
   /// The loan being edited, or `null` when creating a new one.
   final LoanRow? initial;
+
+  /// A quick-entry seed to pre-fill a new loan from, or `null`.
+  final LoanDraft? draft;
 
   @override
   ConsumerState<LoanFormScreen> createState() => _LoanFormScreenState();
@@ -45,15 +52,26 @@ class _LoanFormScreenState extends ConsumerState<LoanFormScreen> {
   void initState() {
     super.initState();
     final initial = widget.initial;
-    _nameController = TextEditingController(text: initial?.name ?? '');
-    _amountController = TextEditingController(
-      text: initial == null ? '' : minorUnitsToInput(initial.principalMinor),
+    final draft = initial == null ? widget.draft : null;
+
+    final presetPrincipalMinor =
+        initial?.principalMinor ?? draft?.principalMinor;
+    _nameController = TextEditingController(
+      text: initial?.name ?? draft?.name ?? '',
     );
-    _noteController = TextEditingController(text: initial?.description ?? '');
-    _direction = initial?.type ?? LoanDirection.borrowed;
-    _startDate = initial?.startDate ?? DateTime.now();
+    _amountController = TextEditingController(
+      text: presetPrincipalMinor == null
+          ? ''
+          : minorUnitsToInput(presetPrincipalMinor),
+    );
+    _noteController = TextEditingController(
+      text: initial?.description ?? draft?.description ?? '',
+    );
+    _direction = initial?.type ?? draft?.direction ?? LoanDirection.borrowed;
+    _startDate = initial?.startDate ?? draft?.startDate ?? DateTime.now();
     _dueDate = initial?.dueDate;
-    _disbursementAccountId = initial?.disbursementAccountId;
+    _disbursementAccountId =
+        initial?.disbursementAccountId ?? draft?.disbursementAccountId;
   }
 
   @override

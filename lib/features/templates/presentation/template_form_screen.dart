@@ -9,17 +9,23 @@ import '../../accounts/domain/account_status.dart';
 import '../../categories/domain/category_status.dart';
 import '../../categories/domain/category_type.dart';
 import '../../transactions/domain/transaction_type.dart';
+import '../domain/template_draft.dart';
 
 /// Add/edit form for a transaction template (docs/ROADMAP.md §8.2).
 ///
 /// Every field except the name is optional: a template is a preset, not a
 /// transaction, so it is free to leave the amount (or account, or category)
-/// blank for the user to fill in at the moment they use it.
+/// blank for the user to fill in at the moment they use it. [draft] pre-fills
+/// a *new* template from quick entry (docs/ARCHITECTURE.md, "quick entry") —
+/// a one-off, unsaved seed, ignored when [initial] is set.
 class TemplateFormScreen extends ConsumerStatefulWidget {
-  const TemplateFormScreen({super.key, this.initial});
+  const TemplateFormScreen({super.key, this.initial, this.draft});
 
   /// The template being edited, or `null` when creating a new one.
   final TransactionTemplateRow? initial;
+
+  /// A quick-entry seed to pre-fill a new template from, or `null`.
+  final TemplateDraft? draft;
 
   @override
   ConsumerState<TemplateFormScreen> createState() => _TemplateFormScreenState();
@@ -45,17 +51,25 @@ class _TemplateFormScreenState extends ConsumerState<TemplateFormScreen> {
   void initState() {
     super.initState();
     final initial = widget.initial;
-    _nameController = TextEditingController(text: initial?.name ?? '');
-    _amountController = TextEditingController(
-      text: initial?.amountMinor == null
-          ? ''
-          : minorUnitsToInput(initial!.amountMinor!),
+    final draft = initial == null ? widget.draft : null;
+
+    final presetAmountMinor = initial?.amountMinor ?? draft?.amountMinor;
+    _nameController = TextEditingController(
+      text: initial?.name ?? draft?.name ?? '',
     );
-    _notesController = TextEditingController(text: initial?.description ?? '');
-    _type = initial?.type ?? TransactionType.expense;
-    _accountId = initial?.accountId;
-    _destinationAccountId = initial?.destinationAccountId;
-    _categoryId = initial?.categoryId;
+    _amountController = TextEditingController(
+      text: presetAmountMinor == null
+          ? ''
+          : minorUnitsToInput(presetAmountMinor),
+    );
+    _notesController = TextEditingController(
+      text: initial?.description ?? draft?.description ?? '',
+    );
+    _type = initial?.type ?? draft?.type ?? TransactionType.expense;
+    _accountId = initial?.accountId ?? draft?.accountId;
+    _destinationAccountId =
+        initial?.destinationAccountId ?? draft?.destinationAccountId;
+    _categoryId = initial?.categoryId ?? draft?.categoryId;
   }
 
   @override

@@ -10,6 +10,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../categories/domain/category_status.dart';
 import '../../categories/domain/category_type.dart';
 import '../application/budget_controller.dart';
+import '../domain/budget_draft.dart';
 import '../domain/budget_period.dart';
 import 'budget_labels.dart';
 
@@ -18,12 +19,17 @@ import 'budget_labels.dart';
 /// When [initial] is provided the form pre-fills and saves via update; otherwise
 /// it creates a new budget. The category picker is hidden when editing because a
 /// budget's category is fixed at creation — changing it would silently
-/// reinterpret every past reading of the budget.
+/// reinterpret every past reading of the budget. [draft] does the same for
+/// quick entry (docs/ARCHITECTURE.md, "quick entry") — a one-off, unsaved
+/// seed, ignored when [initial] is set.
 class BudgetFormScreen extends ConsumerStatefulWidget {
-  const BudgetFormScreen({super.key, this.initial});
+  const BudgetFormScreen({super.key, this.initial, this.draft});
 
   /// The budget being edited, or `null` when creating a new one.
   final BudgetRow? initial;
+
+  /// A quick-entry seed to pre-fill a new budget from, or `null`.
+  final BudgetDraft? draft;
 
   @override
   ConsumerState<BudgetFormScreen> createState() => _BudgetFormScreenState();
@@ -45,11 +51,16 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
   void initState() {
     super.initState();
     final initial = widget.initial;
+    final draft = initial == null ? widget.draft : null;
+
+    final presetAmountMinor = initial?.amountMinor ?? draft?.amountMinor;
     _amountController = TextEditingController(
-      text: initial == null ? '' : minorUnitsToInput(initial.amountMinor),
+      text: presetAmountMinor == null
+          ? ''
+          : minorUnitsToInput(presetAmountMinor),
     );
-    _categoryId = initial?.categoryId;
-    _period = initial?.period ?? BudgetPeriod.monthly;
+    _categoryId = initial?.categoryId ?? draft?.categoryId;
+    _period = initial?.period ?? draft?.period ?? BudgetPeriod.monthly;
     _startDate = initial?.startDate ?? DateTime.now();
     _endDate = initial?.endDate;
   }

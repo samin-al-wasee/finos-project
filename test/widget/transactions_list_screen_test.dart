@@ -20,6 +20,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  // The app bar's search field, disambiguated from the QuickEntryBar's own
+  // TextField pinned below the list (docs/ARCHITECTURE.md, "quick entry").
+  Finder searchTextField() => find.descendant(
+    of: find.byType(AppBar),
+    matching: find.byType(TextField),
+  );
+
   Future<AppDatabase> pumpList(WidgetTester tester) async {
     final database = AppDatabase.inMemory();
     await tester.pumpWidget(
@@ -316,7 +323,7 @@ void main() {
 
       await tester.tap(find.byTooltip('Search'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'salary');
+      await tester.enterText(searchTextField(), 'salary');
       await tester.pumpAndSettle();
 
       expect(find.text('Salary'), findsOneWidget);
@@ -332,7 +339,7 @@ void main() {
 
       await tester.tap(find.byTooltip('Search'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'nonexistent merchant');
+      await tester.enterText(searchTextField(), 'nonexistent merchant');
       await tester.pumpAndSettle();
 
       expect(find.text('No matching transactions'), findsOneWidget);
@@ -353,7 +360,7 @@ void main() {
 
       await tester.tap(find.byTooltip('Search'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'salary');
+      await tester.enterText(searchTextField(), 'salary');
       await tester.pumpAndSettle();
       expect(find.text('Groceries'), findsNothing);
 
@@ -441,7 +448,7 @@ void main() {
       // so the interaction between search and structured filters is visible.
       await tester.tap(find.byTooltip('Search'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'a');
+      await tester.enterText(searchTextField(), 'a');
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Filter'));
@@ -459,8 +466,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Salary'), findsOneWidget);
-      final searchField = tester.widget<TextField>(find.byType(TextField));
-      expect(searchField.controller!.text, 'a');
+      final field = tester.widget<TextField>(searchTextField());
+      expect(field.controller!.text, 'a');
 
       await database.close();
     });

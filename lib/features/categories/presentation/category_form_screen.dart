@@ -5,6 +5,7 @@ import '../../../app/providers.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../application/category_controller.dart';
+import '../domain/category_draft.dart';
 import '../domain/category_type.dart';
 import 'category_icon.dart';
 
@@ -13,11 +14,16 @@ import 'category_icon.dart';
 /// When [initial] is provided the form pre-fills and saves via update;
 /// otherwise it creates a new category. The type picker is hidden when editing
 /// because a category's type is fixed at creation (docs/DATA_MODEL.md §18).
+/// [draft] does the same for quick entry (docs/ARCHITECTURE.md, "quick
+/// entry") — a one-off, unsaved seed, ignored when [initial] is set.
 class CategoryFormScreen extends ConsumerStatefulWidget {
-  const CategoryFormScreen({super.key, this.initial});
+  const CategoryFormScreen({super.key, this.initial, this.draft});
 
   /// The category being edited, or `null` when creating a new one.
   final CategoryRow? initial;
+
+  /// A quick-entry seed to pre-fill a new category from, or `null`.
+  final CategoryDraft? draft;
 
   @override
   ConsumerState<CategoryFormScreen> createState() => _CategoryFormScreenState();
@@ -36,8 +42,11 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
   void initState() {
     super.initState();
     final initial = widget.initial;
-    _nameController = TextEditingController(text: initial?.name ?? '');
-    _type = initial?.type ?? CategoryType.expense;
+    final draft = initial == null ? widget.draft : null;
+    _nameController = TextEditingController(
+      text: initial?.name ?? draft?.name ?? '',
+    );
+    _type = initial?.type ?? draft?.type ?? CategoryType.expense;
     _icon = initial?.icon ?? 'label';
   }
 
