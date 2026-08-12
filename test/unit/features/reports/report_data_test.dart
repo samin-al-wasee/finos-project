@@ -20,6 +20,7 @@ void main() {
         expenseMinor: previousExpenseMinor,
       ),
       categorySpending: const [],
+      accountCashFlows: const [],
     );
   }
 

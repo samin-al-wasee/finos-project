@@ -24,6 +24,7 @@ import '../features/recurring/data/recurring_transaction_dao.dart';
 import '../features/recurring/domain/due_occurrences.dart';
 import '../features/recurring/domain/due_recurring_group.dart';
 import '../features/recurring/domain/recurring_status.dart';
+import '../features/reports/domain/account_cash_flow.dart';
 import '../features/reports/domain/report_data.dart';
 import '../features/reports/domain/report_period.dart';
 import '../features/settings/application/settings_controller.dart';
@@ -414,10 +415,31 @@ final reportDataProvider = FutureProvider.family<ReportData, ReportPeriod>((
           .toList()
         ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
 
+  final accounts = await ref.watch(accountsStreamProvider.future);
+  final accountCashFlows = <AccountCashFlow>[];
+  for (final account in accounts) {
+    accountCashFlows.add(
+      AccountCashFlow(
+        account: account,
+        totals: await dao.totalsForAccountAndPeriod(
+          account.id,
+          window.from,
+          window.to,
+        ),
+        previousTotals: await dao.totalsForAccountAndPeriod(
+          account.id,
+          previousWindow.from,
+          previousWindow.to,
+        ),
+      ),
+    );
+  }
+
   return ReportData(
     totals: totals,
     previousTotals: previousTotals,
     categorySpending: categorySpending,
+    accountCashFlows: accountCashFlowsForReport(accountCashFlows),
   );
 });
 

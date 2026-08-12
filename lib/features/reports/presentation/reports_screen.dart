@@ -8,11 +8,13 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../accounts/presentation/account_type_label.dart';
 import '../../budgets/domain/budget_progress.dart';
 import '../../budgets/presentation/budget_bar.dart';
 import '../../budgets/presentation/budget_details_screen.dart';
 import '../../budgets/presentation/budget_labels.dart';
 import '../../categories/presentation/category_icon.dart';
+import '../domain/account_cash_flow.dart';
 import '../domain/budget_performance.dart';
 import '../domain/report_data.dart';
 import '../domain/report_period.dart';
@@ -172,6 +174,16 @@ class _ReportBody extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           for (final progress in budgetPerformance)
             _BudgetPerformanceRow(progress: progress),
+        ],
+        if (data.accountCashFlows.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Cash Flow by Account',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final flow in data.accountCashFlows)
+            _AccountCashFlowRow(flow: flow),
         ],
         const SizedBox(height: AppSpacing.lg),
       ],
@@ -464,6 +476,70 @@ class _BudgetPerformanceRow extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One row in the Cash Flow by Account section — each account's net for the
+/// selected period, plus its net for the previous period as plain text
+/// rather than a percentage. Net cash flow is signed, and a period-over-
+/// period percent change is undefined/misleading once the sign flips
+/// between periods, so this deliberately doesn't reuse [_ComparisonLine]
+/// (see docs/ROADMAP.md §8.4 and `accountCashFlowsForReport`).
+class _AccountCashFlowRow extends StatelessWidget {
+  const _AccountCashFlowRow({required this.flow});
+
+  final AccountCashFlow flow;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<FinosColors>()!;
+    final symbol = currencySymbol(flow.account.currency);
+    final netMinor = flow.totals.netCashFlowMinor;
+    final previousNetMinor = flow.previousTotals.netCashFlowMinor;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: MergeSemantics(
+        child: Row(
+          children: [
+            Icon(
+              accountTypeIcon(flow.account.type),
+              size: 18,
+              color: colors.mutedText,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                flow.account.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  formatMinorUnits(netMinor, symbol: symbol),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: netMinor >= 0 ? colors.income : colors.expense,
+                  ),
+                ),
+                Text(
+                  'Last period: '
+                  '${formatMinorUnits(previousNetMinor, symbol: symbol)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.mutedText,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

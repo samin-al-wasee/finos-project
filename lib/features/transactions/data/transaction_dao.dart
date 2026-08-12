@@ -130,6 +130,39 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
+  /// Sums income and expense for [accountId] dated `from <= date < to`
+  /// (half-open range).
+  ///
+  /// Same shape as [totalsForPeriod], scoped to one account — for the
+  /// Account Cash Flow report (docs/ROADMAP.md §8.4). Transfers and loan
+  /// movements are excluded for the same reason as [totalsForPeriod].
+  Future<PeriodTotals> totalsForAccountAndPeriod(
+    String accountId,
+    DateTime from,
+    DateTime to,
+  ) async {
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(
+        CASE WHEN type = '${_storage(TransactionType.income)}'
+             THEN amount_minor ELSE 0 END
+      ), 0) AS income,
+      COALESCE(SUM(
+        CASE WHEN type = '${_storage(TransactionType.expense)}'
+             THEN amount_minor ELSE 0 END
+      ), 0) AS expense
+      FROM transactions
+      WHERE account_id = ? AND date >= ? AND date < ?
+      ''',
+      variables: [Variable(accountId), Variable(from), Variable(to)],
+    ).getSingle();
+
+    return PeriodTotals(
+      incomeMinor: row.read<int>('income'),
+      expenseMinor: row.read<int>('expense'),
+    );
+  }
+
   /// Sums expenses in [categoryId] dated `from <= date < to` (half-open range).
   ///
   /// This is the budget-consumption rule (docs/DATA_MODEL.md §24): only EXPENSE

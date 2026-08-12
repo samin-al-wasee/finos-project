@@ -85,7 +85,8 @@ void main() {
     // "Spending by category", since this expense has no category.
     expect(find.text('৳300.00'), findsNWidgets(2));
     expect(find.text('Net'), findsOneWidget);
-    expect(find.text('৳700.00'), findsOneWidget);
+    // The Net card and the account's own row in "Cash Flow by Account".
+    expect(find.text('৳700.00'), findsNWidgets(2));
 
     // No prior-month data to compare against.
     expect(find.text('No data for the previous period'), findsNWidgets(2));
@@ -273,6 +274,40 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Budget Performance'), findsNothing);
+
+    await database.close();
+  });
+
+  testWidgets('shows an account with activity in Cash Flow by Account, '
+      'omits one without', (tester) async {
+    final database = await pumpReports(tester);
+    final accounts = AccountDao(database);
+    final transactions = TransactionDao(database);
+
+    await accounts.insertOne(
+      FinancialAccountsCompanion.insert(
+        id: 'acct-idle',
+        name: 'Savings',
+        type: AccountType.bank,
+      ),
+    );
+    await transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: 'tx-groceries',
+        type: TransactionType.expense,
+        amountMinor: 40000, // ৳400
+        accountId: 'acct-1',
+        date: thisMonth,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cash Flow by Account'), findsOneWidget);
+    expect(find.text('Main Bank'), findsOneWidget);
+    expect(find.text('Savings'), findsNothing);
+    // The Net card and the account's own row show the same net amount,
+    // since this is the only account with activity.
+    expect(find.text('-৳400.00'), findsNWidgets(2));
 
     await database.close();
   });

@@ -498,13 +498,18 @@ own single-category budget in the same period.
 
 ## 8.4 Financial Reports
 
-> **Status:** Income vs expense, category spending, and budget performance
-> are implemented, ahead of this phase's normal sequence, with explicit
-> authorization (see docs/ARCHITECTURE.md, "reports"). Budget performance
-> shows each budget in its own current window rather than the report's
-> selected period, since a budget's own period (weekly/monthly/yearly/custom)
-> is independent of it. Account cash flow and a custom date-range picker
-> remain unimplemented.
+> **Status:** Income vs expense, category spending, budget performance, and
+> account cash flow are implemented, ahead of this phase's normal sequence,
+> with explicit authorization (see docs/ARCHITECTURE.md, "reports"). Budget
+> performance shows each budget in its own current window rather than the
+> report's selected period, since a budget's own period
+> (weekly/monthly/yearly/custom) is independent of it. Account cash flow
+> reuses the same fixed-period selector as the rest of the screen — one net
+> figure per active account with activity that period, compared against its
+> own net for the immediately preceding period, with no percentage (a
+> period-over-period percent change on a signed net figure is undefined once
+> the sign flips between periods). A custom date-range picker remains
+> unimplemented.
 
 Introduce reports such as:
 

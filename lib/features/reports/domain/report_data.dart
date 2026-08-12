@@ -1,4 +1,5 @@
 import '../../transactions/domain/period_totals.dart';
+import 'account_cash_flow.dart';
 
 /// One category's share of a report period's expense.
 class CategoryAmount {
@@ -16,6 +17,7 @@ class ReportData {
     required this.totals,
     required this.previousTotals,
     required this.categorySpending,
+    required this.accountCashFlows,
   });
 
   /// Income/expense for the selected period.
@@ -26,6 +28,11 @@ class ReportData {
 
   /// This-period expense by category, highest first.
   final List<CategoryAmount> categorySpending;
+
+  /// Per-account cash flow for this period and the previous one, already
+  /// filtered to active accounts with activity this period (see
+  /// `accountCashFlowsForReport`).
+  final List<AccountCashFlow> accountCashFlows;
 
   /// Percentage change in expense vs the previous period.
   ///

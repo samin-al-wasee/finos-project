@@ -191,5 +191,102 @@ void main() {
         expect(await dao.balanceImpactFor(destination), 50000);
       });
     });
+
+    group('totalsForAccountAndPeriod', () {
+      test('returns zero totals for an account with no transactions', () async {
+        await seedAccount('One');
+        final totals = await dao.totalsForAccountAndPeriod(
+          'acct-One',
+          DateTime(2026, 8, 1),
+          DateTime(2026, 9, 1),
+        );
+
+        expect(totals.incomeMinor, 0);
+        expect(totals.expenseMinor, 0);
+      });
+
+      test('sums income and expense within the range', () async {
+        final source = await seedAccount('One');
+        await seedTransaction(
+          'salary',
+          accountId: source,
+          type: TransactionType.income,
+          amountMinor: 500000,
+          date: DateTime(2026, 8, 5),
+        );
+        await seedTransaction(
+          'rent',
+          accountId: source,
+          type: TransactionType.expense,
+          amountMinor: 150000,
+          date: DateTime(2026, 8, 10),
+        );
+        await seedTransaction(
+          'outside-range',
+          accountId: source,
+          type: TransactionType.expense,
+          amountMinor: 999999,
+          date: DateTime(2026, 9, 1),
+        );
+
+        final totals = await dao.totalsForAccountAndPeriod(
+          source,
+          DateTime(2026, 8, 1),
+          DateTime(2026, 9, 1),
+        );
+
+        expect(totals.incomeMinor, 500000);
+        expect(totals.expenseMinor, 150000);
+      });
+
+      test('excludes another account\'s transactions', () async {
+        final target = await seedAccount('One');
+        final other = await seedAccount('Two');
+        await seedTransaction(
+          'in-target',
+          accountId: target,
+          type: TransactionType.income,
+          amountMinor: 400000,
+          date: DateTime(2026, 8, 5),
+        );
+        await seedTransaction(
+          'in-other',
+          accountId: other,
+          type: TransactionType.income,
+          amountMinor: 700000,
+          date: DateTime(2026, 8, 5),
+        );
+
+        final totals = await dao.totalsForAccountAndPeriod(
+          target,
+          DateTime(2026, 8, 1),
+          DateTime(2026, 9, 1),
+        );
+
+        expect(totals.incomeMinor, 400000);
+      });
+
+      test('excludes transfers', () async {
+        final source = await seedAccount('One');
+        final destination = await seedAccount('Two');
+        await seedTransaction(
+          'trf',
+          accountId: source,
+          type: TransactionType.transfer,
+          amountMinor: 200000,
+          destinationAccountId: destination,
+          date: DateTime(2026, 8, 5),
+        );
+
+        final totals = await dao.totalsForAccountAndPeriod(
+          source,
+          DateTime(2026, 8, 1),
+          DateTime(2026, 9, 1),
+        );
+
+        expect(totals.incomeMinor, 0);
+        expect(totals.expenseMinor, 0);
+      });
+    });
   });
 }
