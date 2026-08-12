@@ -293,6 +293,13 @@ The exact calculation depends on account type and transaction semantics.
 
 Credit cards and liability accounts may require different presentation semantics.
 
+Credit-card-specific fields (credit limit, billing/statement date, payment due
+date, statement balance) are not part of V1 — a credit card is currently
+balanced exactly like any other account. This is tracked as future work in
+docs/ROADMAP.md §8.6 ("Credit Card Accounts") and is not authorized for
+implementation until the roadmap moves it into the current phase (AGENTS.md
+§34).
+
 ---
 
 # 11. Transaction
@@ -616,7 +623,10 @@ decisions:
 * `category_id` is **required** and must reference an active **expense**
   category. Budgets cap spending, and only expenses are spending (§24), so an
   income category could never consume a limit. Whole-account or category-less
-  budgets are not part of V1.
+  budgets are not part of V1. Multi-category, category-less, and whole-account
+  budgets are tracked as future work in docs/ROADMAP.md §8.3 ("Flexible budget
+  scope") and are not authorized for implementation until the roadmap moves
+  them into the current phase (AGENTS.md §34).
 * `amount_minor` holds the limit in integer minor units (§4).
 * `status` stores only the lifecycle state `ACTIVE` / `ARCHIVED`. Budget
   performance is derived at read time, never stored (§25).
@@ -866,6 +876,13 @@ Two initial loan directions:
 LENT
 BORROWED
 ```
+
+Every loan is currently an independent row: there is no relationship between
+loans made with the same counterparty (no "extend an existing loan" or "merge
+into an existing relationship" concept). This is tracked as future work in
+docs/ROADMAP.md §8.7 ("Loan Relationships") and is not authorized for
+implementation until the roadmap moves it into the current phase (AGENTS.md
+§34).
 
 ---
 

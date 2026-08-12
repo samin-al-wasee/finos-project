@@ -103,6 +103,15 @@ Users shall be able to:
 
 The system shall maintain the current balance of each account based on its opening balance and associated transactions.
 
+Credit-card-specific behavior — a credit limit, billing/statement date,
+payment due date, and a statement balance that closes on the billing date — is
+explicitly deferred to Phase 2 — "Smart Finance" (docs/ROADMAP.md §8.6,
+"Credit Card Accounts") and is not part of the current V1 core scope. In V1, a
+credit card account is balanced the same way as any other account. This
+paragraph describes the intended shape of that future work so it can be
+planned ahead of time; it is not an active implementation requirement until the
+roadmap moves it into the current phase.
+
 ---
 
 ## FR-02 — Transaction Management
@@ -187,6 +196,14 @@ Users shall be able to create budgets.
 
 Budgets may be associated with transaction categories and a defined time period.
 
+V1 requires exactly one category per budget. Multi-category budgets,
+category-less budgets, and whole-account budgets are explicitly deferred to
+Phase 2 — "Smart Finance" (docs/ROADMAP.md §8.3, "Flexible budget scope") and
+are not part of the current V1 core scope. This paragraph describes the
+intended shape of that future work so it can be planned ahead of time; it is
+not an active implementation requirement until the roadmap moves it into the
+current phase.
+
 Users shall be able to:
 
 * Create budgets
@@ -255,6 +272,14 @@ Loan records should support:
 * Status
 
 The system should maintain the outstanding balance based on repayments.
+
+Linking related loans — extending an existing loan with more principal, or
+merging a newly created loan into an existing counterparty relationship — is
+explicitly deferred to Phase 2 — "Smart Finance" (docs/ROADMAP.md §8.7, "Loan
+Relationships") and is not part of the current V1 core scope. This paragraph
+describes the intended shape of that future work so it can be planned ahead of
+time; it is not an active implementation requirement until the roadmap moves it
+into the current phase.
 
 ---
 

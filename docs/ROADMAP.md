@@ -469,6 +469,30 @@ Potential additions:
 * Budget history
 * Spending trends
 * Budget recommendations
+* Flexible budget scope — see below
+
+### Flexible budget scope
+
+> **Status:** Not built. V1 requires exactly one expense category per budget
+> (docs/DATA_MODEL.md §22); this is a deliberate V1 boundary, not an oversight
+> (docs/REQUIREMENTS.md FR-04).
+
+A budget is currently scoped to exactly one category. Users may instead want:
+
+* **Multi-category budgets** — one limit shared across a chosen set of
+  categories (e.g. a single "Going Out" limit covering Dining + Entertainment).
+* **Category-less budgets** — a catch-all limit for uncategorised expenses.
+* **Whole-account or whole-portfolio budgets** — a limit that isn't tied to any
+  category at all, e.g. "spend no more than X this month, period."
+
+This is a bigger change than the other items in this section: it moves
+`category_id` from a required scalar foreign key to something that can mean
+"many," "none," or "everything," and it must preserve the existing invariant
+that spending is never attributed to two competing active budgets at once
+(docs/DATA_MODEL.md §22). It needs a design decision (parallel to
+[ADR-004](adr/004-loan-accounting.md)) before implementation — in particular,
+whether a category can belong to a multi-category budget while also having its
+own single-category budget in the same period.
 
 ---
 
@@ -532,6 +556,70 @@ between
 ৳500 and ৳2,000
 during July
 ```
+
+---
+
+## 8.6 Credit Card Accounts
+
+> **Status:** Not built. `AccountType.creditCard` exists only as a label —
+> credit cards are currently stored and balanced exactly like a bank account
+> (docs/DATA_MODEL.md §10 already flags that "credit cards and liability
+> accounts may require different presentation semantics" as an open question).
+
+A credit card is not a plain cash account: it needs its own cycle.
+
+Potential additions:
+
+* Credit limit
+* Billing/statement date
+* Payment due date
+* Available credit (limit minus current outstanding)
+* A statement balance that closes on the billing date and stays separate from
+  the next cycle's new spending
+
+The statement-closing behavior is conceptually the same shape as a budget's
+period derivation — spend is computed over a window from the transaction
+table rather than stored (docs/DATA_MODEL.md §23–§24) — so that pattern should
+be reused rather than reinvented.
+
+This needs a design decision before implementation: whether credit-card
+specifics live in a separate one-to-one `credit_card_details`-style table (the
+same shape loans took relative to accounts — see
+[ADR-004](adr/004-loan-accounting.md)) or as nullable columns on
+`financial_accounts`, and how the derived statement balance interacts with
+`AGENTS.md` §9's single-source-of-truth rule for account balances.
+
+---
+
+## 8.7 Loan Relationships
+
+> **Status:** Not built. Every loan is currently an independent row with no
+> relationship to other loans with the same counterparty
+> ([ADR-004](adr/004-loan-accounting.md); docs/DATA_MODEL.md §29–§33).
+
+In practice, lending or borrowing with the same person is often a continuing
+relationship, not a series of unrelated events: a partial repayment followed by
+another advance, for example. Two entry points for this:
+
+* **Extend an existing loan** — from a loan's detail screen, add more
+  principal to it (an "extend" action) instead of only recording repayments.
+* **Merge on creation** — when creating a new loan, optionally pick an
+  existing counterparty/loan so the new one is linked as an extension rather
+  than starting a disconnected record.
+
+This needs a design decision (parallel to
+[ADR-004](adr/004-loan-accounting.md)) before implementation, because it
+changes what a "loan" identifies:
+
+* Treating an extension as **more principal on the same row** is simplest, but
+  loses the history of when each top-up happened relative to repayments
+  already made — the same reason repayments are individual transactions
+  rather than direct adjustments to `principalMinor`.
+* Treating it as **multiple linked loan rows** (e.g. a nullable
+  self-referencing `parent_loan_id` or shared group id) preserves that
+  history and lets the UI show one relationship thread, but every
+  outstanding-balance and status derivation (ADR-004 §3–§4) then needs to
+  decide whether it operates per-row or per-group.
 
 ---
 
