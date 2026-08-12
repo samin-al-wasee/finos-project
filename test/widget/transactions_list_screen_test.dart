@@ -7,7 +7,10 @@ import 'package:finos_app/features/accounts/domain/account_type.dart';
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
 import 'package:finos_app/features/templates/presentation/templates_list_screen.dart';
+import 'package:finos_app/features/transactions/application/saved_query_controller.dart';
+import 'package:finos_app/features/transactions/data/saved_query_dao.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
+import 'package:finos_app/features/transactions/domain/transaction_filter.dart';
 import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:finos_app/features/transactions/presentation/transaction_form_screen.dart';
 import 'package:finos_app/features/transactions/presentation/transaction_tile.dart';
@@ -478,6 +481,167 @@ void main() {
       expect(find.text('Transfer · Main Bank → Cash'), findsOneWidget);
       expect(find.text('Groceries'), findsNothing);
       expect(find.text('Salary'), findsNothing);
+
+      await database.close();
+    });
+  });
+
+  group('saved filters (docs/ROADMAP.md §8.5)', () {
+    Future<AppDatabase> pumpWithData(WidgetTester tester) async {
+      final database = await pumpList(tester);
+      final accounts = AccountDao(database);
+      final categories = CategoryDao(database);
+      final transactions = TransactionDao(database);
+
+      await accounts.insertOne(
+        FinancialAccountsCompanion.insert(
+          id: 'acct-bank',
+          name: 'Main Bank',
+          type: AccountType.bank,
+        ),
+      );
+      await categories.insertOne(
+        CategoriesCompanion.insert(
+          id: 'cat-test-food',
+          name: 'Groceries',
+          type: CategoryType.expense,
+        ),
+      );
+      await transactions.insertOne(
+        TransactionsCompanion.insert(
+          id: 'tx-groceries',
+          type: TransactionType.expense,
+          amountMinor: 50000,
+          accountId: 'acct-bank',
+          categoryId: const Value('cat-test-food'),
+          date: DateTime(2026, 8, 10),
+          description: const Value('Weekly groceries'),
+        ),
+      );
+      await transactions.insertOne(
+        TransactionsCompanion.insert(
+          id: 'tx-salary',
+          type: TransactionType.income,
+          amountMinor: 1000000,
+          accountId: 'acct-bank',
+          date: DateTime(2026, 8, 9),
+          description: const Value('Salary'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return database;
+    }
+
+    testWidgets('saving the current filter shows it as a chip', (tester) async {
+      final database = await pumpWithData(tester);
+
+      await tester.tap(find.byTooltip('Filter'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilterChip, 'Income'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Save this filter'));
+      await tester.pumpAndSettle();
+      expect(find.text('Save this filter'), findsOneWidget);
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(TextField),
+        ),
+        'Income only',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Filter saved'), findsOneWidget);
+      expect(find.widgetWithText(InputChip, 'Income only'), findsOneWidget);
+
+      await database.close();
+    });
+
+    testWidgets('saving with no criteria set does not save', (tester) async {
+      final database = await pumpWithData(tester);
+
+      await tester.tap(find.byTooltip('Filter'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Save this filter'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Set at least one filter before saving'),
+        findsOneWidget,
+      );
+      expect(find.text('Save this filter'), findsNothing);
+
+      await database.close();
+    });
+
+    testWidgets('tapping a saved filter loads it, and Apply narrows the list', (
+      tester,
+    ) async {
+      final database = await pumpWithData(tester);
+      await SavedQueryController(SavedQueryDao(database)).save(
+        name: 'Income only',
+        filter: const TransactionFilter(types: {TransactionTypeFilter.income}),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Filter'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(InputChip, 'Income only'), findsOneWidget);
+
+      // Tap the label itself rather than the chip's full bounding box, which
+      // also covers the delete icon.
+      await tester.tap(find.text('Income only'));
+      await tester.pumpAndSettle();
+      // The saved-filters row pushes Apply below the sheet's visible area.
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Apply'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Salary'), findsOneWidget);
+      expect(find.text('Groceries'), findsNothing);
+
+      await database.close();
+    });
+
+    testWidgets('deleting a saved filter requires confirmation and removes '
+        'it', (tester) async {
+      final database = await pumpWithData(tester);
+      await SavedQueryController(SavedQueryDao(database)).save(
+        name: 'Income only',
+        filter: const TransactionFilter(types: {TransactionTypeFilter.income}),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Filter'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.widgetWithText(InputChip, 'Income only'),
+          matching: find.byIcon(Icons.close),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Delete this saved filter?'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(InputChip, 'Income only'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.widgetWithText(InputChip, 'Income only'),
+          matching: find.byIcon(Icons.close),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(InputChip, 'Income only'), findsNothing);
 
       await database.close();
     });

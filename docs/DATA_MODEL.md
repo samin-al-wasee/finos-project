@@ -1847,7 +1847,33 @@ nothing links a transaction back to the template that pre-filled its form.
 
 ---
 
-# 57. Data Model Evolution Rules
+# 57. Saved Query
+
+A `SavedQuery` is a named, reusable set of structured transaction-filter
+criteria (docs/ROADMAP.md §8.5, "saved query/report builder", built ahead of
+its Phase 2 slot with explicit authorization). Like a template (§56), it is
+not a financial record — creating or deleting one never touches a
+transaction, an account balance, or a budget.
+
+```text
+SavedQuery
+  id
+  name
+  filter_json
+  created_at
+  updated_at
+```
+
+`filter_json` is the JSON-encoded structured criteria of a `TransactionFilter`
+(account, category, type, date range, amount range) — never the free-text
+search box, which is typed continuously in the transaction list's app bar and
+is not something a saved query reapplies. `TransactionFilter` remains a plain
+Dart value with no database access of its own; `SavedQuery` only persists its
+serialized form.
+
+---
+
+# 58. Data Model Evolution Rules
 
 Any future change to the data model should answer:
 
@@ -1863,7 +1889,7 @@ Any future change to the data model should answer:
 
 ---
 
-# 58. Final Data Model Principle
+# 59. Final Data Model Principle
 
 The FinOS data model should follow one central principle:
 

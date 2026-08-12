@@ -488,4 +488,51 @@ void main() {
       expect(updated.accountId, 'acct-cash');
     });
   });
+
+  group('toJson / fromJson', () {
+    test('round-trips every structured criterion', () {
+      final original = TransactionFilter(
+        accountId: 'acct-bank',
+        categoryId: 'cat-food',
+        types: {TransactionTypeFilter.expense, TransactionTypeFilter.transfer},
+        from: DateTime(2026, 7, 1),
+        to: DateTime(2026, 7, 31),
+        minAmountMinor: 50000,
+        maxAmountMinor: 200000,
+      );
+
+      final restored = TransactionFilter.fromJson(original.toJson());
+
+      expect(restored.accountId, 'acct-bank');
+      expect(restored.categoryId, 'cat-food');
+      expect(restored.types, original.types);
+      expect(restored.from, DateTime(2026, 7, 1));
+      expect(restored.to, DateTime(2026, 7, 31));
+      expect(restored.minAmountMinor, 50000);
+      expect(restored.maxAmountMinor, 200000);
+    });
+
+    test('omits the free-text query — it is not a saved criterion', () {
+      const original = TransactionFilter(
+        query: 'groceries',
+        accountId: 'acct-bank',
+      );
+      final restored = TransactionFilter.fromJson(original.toJson());
+      expect(restored.query, isEmpty);
+      expect(restored.accountId, 'acct-bank');
+    });
+
+    test('a default filter round-trips to an inactive filter', () {
+      final restored = TransactionFilter.fromJson(
+        const TransactionFilter().toJson(),
+      );
+      expect(restored.isActive, isFalse);
+    });
+
+    test('fromJson tolerates a missing types list', () {
+      final restored = TransactionFilter.fromJson({'accountId': 'acct-bank'});
+      expect(restored.types, isEmpty);
+      expect(restored.accountId, 'acct-bank');
+    });
+  });
 }

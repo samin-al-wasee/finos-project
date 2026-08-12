@@ -36,8 +36,8 @@ void main() {
       await database.close();
     });
 
-    test('starts at schema version 8', () {
-      expect(database.schemaVersion, 8);
+    test('starts at schema version 9', () {
+      expect(database.schemaVersion, 9);
     });
 
     test('seeds the built-in categories on a fresh database', () async {

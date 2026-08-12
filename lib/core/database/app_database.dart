@@ -22,6 +22,7 @@ import '../../features/recurring/domain/recurrence_frequency.dart';
 import '../../features/recurring/domain/recurring_status.dart';
 import '../../features/settings/data/settings_table.dart';
 import '../../features/templates/data/template_table.dart';
+import '../../features/transactions/data/saved_query_table.dart';
 import '../../features/transactions/data/transaction_table.dart';
 import '../../features/transactions/domain/transaction_type.dart';
 
@@ -41,6 +42,7 @@ part 'app_database.g.dart';
     Loans,
     TransactionTemplates,
     RecurringTransactions,
+    SavedQueries,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -57,7 +59,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -109,6 +111,10 @@ class AppDatabase extends _$AppDatabase {
         // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
         await m.createTable(recurringTransactions);
       }
+      if (from < 9) {
+        // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
+        await m.createTable(savedQueries);
+      }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
     beforeOpen: (details) async {
@@ -157,6 +163,11 @@ class AppDatabase extends _$AppDatabase {
       // Same safety net for the v8 recurring transactions table.
       if (details.versionNow >= 8 && !details.wasCreated) {
         await _ensureRecurringTransactionsTable();
+      }
+
+      // Same safety net for the v9 saved queries table.
+      if (details.versionNow >= 9 && !details.wasCreated) {
+        await _ensureSavedQueriesTable();
       }
     },
   );
@@ -297,5 +308,13 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _ensureRecurringTransactionsTable() async {
     final migrator = Migrator(this);
     await migrator.createTable(recurringTransactions);
+  }
+
+  /// Safety net for a v9 database whose saved queries table is missing.
+  ///
+  /// Same rationale as [_ensureTransactionsTable].
+  Future<void> _ensureSavedQueriesTable() async {
+    final migrator = Migrator(this);
+    await migrator.createTable(savedQueries);
   }
 }

@@ -550,8 +550,12 @@ Last year
 ## 8.5 Search & Filtering
 
 > **Status:** Implemented, ahead of this phase's normal sequence, with
-> explicit authorization (see docs/ARCHITECTURE.md, "transactions"). A
-> saved-query/report builder is the one piece not built.
+> explicit authorization (see docs/ARCHITECTURE.md, "transactions"),
+> including a saved-query/report builder: a saved query stores the
+> structured filter criteria (account, category, type, date range, amount
+> range) under a name, but never the free-text search box, which is typed
+> continuously rather than configured. Applying one loads its criteria into
+> the filter sheet for review before the user presses Apply.
 
 Advanced transaction discovery:
 

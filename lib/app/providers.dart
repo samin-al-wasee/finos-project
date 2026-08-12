@@ -33,7 +33,9 @@ import '../features/settings/data/settings_dao.dart';
 import '../features/settings/domain/app_settings.dart';
 import '../features/templates/application/template_controller.dart';
 import '../features/templates/data/template_dao.dart';
+import '../features/transactions/application/saved_query_controller.dart';
 import '../features/transactions/application/transaction_controller.dart';
+import '../features/transactions/data/saved_query_dao.dart';
 import '../features/transactions/data/transaction_dao.dart';
 
 /// The application database singleton.
@@ -177,6 +179,21 @@ final transactionControllerProvider = Provider<TransactionController>((ref) {
 /// Reactive stream of all transactions (for UI consumers).
 final transactionsStreamProvider = StreamProvider<List<TransactionRow>>((ref) {
   return _guardOpenTimeout(ref.watch(transactionDaoProvider).watchAll());
+});
+
+/// Data-access object for saved transaction filters (docs/ROADMAP.md §8.5).
+final savedQueryDaoProvider = Provider<SavedQueryDao>((ref) {
+  return SavedQueryDao(ref.watch(appDatabaseProvider));
+});
+
+/// Application service for the saved-query lifecycle.
+final savedQueryControllerProvider = Provider<SavedQueryController>((ref) {
+  return SavedQueryController(ref.watch(savedQueryDaoProvider));
+});
+
+/// Reactive stream of all saved queries (for UI consumers).
+final savedQueriesStreamProvider = StreamProvider<List<SavedQueryRow>>((ref) {
+  return _guardOpenTimeout(ref.watch(savedQueryDaoProvider).watchAll());
 });
 
 // ------------------------------------------------------------------

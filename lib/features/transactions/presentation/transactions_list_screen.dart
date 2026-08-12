@@ -398,7 +398,7 @@ class _TransactionList extends StatelessWidget {
 /// Modal sheet for setting the structured filters (account, category, type,
 /// date range). The free-text search lives in the app bar instead, since it's
 /// meant to be typed continuously rather than "applied".
-class _FilterSheet extends StatefulWidget {
+class _FilterSheet extends ConsumerStatefulWidget {
   const _FilterSheet({
     required this.initial,
     required this.accounts,
@@ -410,10 +410,10 @@ class _FilterSheet extends StatefulWidget {
   final List<CategoryRow> categories;
 
   @override
-  State<_FilterSheet> createState() => _FilterSheetState();
+  ConsumerState<_FilterSheet> createState() => _FilterSheetState();
 }
 
-class _FilterSheetState extends State<_FilterSheet> {
+class _FilterSheetState extends ConsumerState<_FilterSheet> {
   late String? _accountId = widget.initial.accountId;
   late String? _categoryId = widget.initial.categoryId;
   final Set<TransactionTypeFilter> _types = {};
@@ -421,6 +421,13 @@ class _FilterSheetState extends State<_FilterSheet> {
   DateTime? _to;
   late final TextEditingController _minAmountController;
   late final TextEditingController _maxAmountController;
+
+  /// Bumped whenever a saved query is applied, so the account/category
+  /// dropdowns below are given fresh keys — a [DropdownButtonFormField]'s
+  /// underlying [FormField] only reads `initialValue` on its first build (and
+  /// on `reset()`), so changing the local field alone would not move the
+  /// visible selection.
+  int _filterGeneration = 0;
 
   @override
   void initState() {
@@ -462,6 +469,7 @@ class _FilterSheetState extends State<_FilterSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final savedQueries = ref.watch(savedQueriesStreamProvider);
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.fromLTRB(
@@ -475,9 +483,44 @@ class _FilterSheetState extends State<_FilterSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Filter transactions', style: theme.textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.lg),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Filter transactions',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.bookmark_add_outlined),
+                    tooltip: 'Save this filter',
+                    onPressed: _saveCurrentFilter,
+                  ),
+                ],
+              ),
+              savedQueries.when(
+                data: (rows) => rows.isEmpty
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                        child: Wrap(
+                          spacing: AppSpacing.sm,
+                          children: [
+                            for (final row in rows)
+                              InputChip(
+                                label: Text(row.name),
+                                onPressed: () => _applySavedQuery(row),
+                                onDeleted: () => _confirmDeleteSavedQuery(row),
+                                deleteIcon: const Icon(Icons.close, size: 16),
+                              ),
+                          ],
+                        ),
+                      ),
+                error: (_, _) => const SizedBox.shrink(),
+                loading: () => const SizedBox.shrink(),
+              ),
               DropdownButtonFormField<String?>(
+                key: ValueKey('account-$_filterGeneration'),
                 initialValue: _accountId,
                 decoration: const InputDecoration(
                   labelText: 'Account',
@@ -495,6 +538,7 @@ class _FilterSheetState extends State<_FilterSheet> {
               ),
               const SizedBox(height: AppSpacing.lg),
               DropdownButtonFormField<String?>(
+                key: ValueKey('category-$_filterGeneration'),
                 initialValue: _categoryId,
                 decoration: const InputDecoration(
                   labelText: 'Category',
@@ -597,27 +641,22 @@ class _FilterSheetState extends State<_FilterSheet> {
                   Expanded(
                     child: FilledButton(
                       onPressed: () {
-                        final minAmount = _parseAmount(
-                          _minAmountController.text,
-                        );
-                        final maxAmount = _parseAmount(
-                          _maxAmountController.text,
-                        );
+                        final current = _currentStructuredFilter();
                         Navigator.of(context).pop(
                           widget.initial.copyWith(
-                            accountId: _accountId,
-                            clearAccountId: _accountId == null,
-                            categoryId: _categoryId,
-                            clearCategoryId: _categoryId == null,
-                            types: _types,
-                            from: _from,
-                            clearFrom: _from == null,
-                            to: _to,
-                            clearTo: _to == null,
-                            minAmountMinor: minAmount,
-                            clearMinAmount: minAmount == null,
-                            maxAmountMinor: maxAmount,
-                            clearMaxAmount: maxAmount == null,
+                            accountId: current.accountId,
+                            clearAccountId: current.accountId == null,
+                            categoryId: current.categoryId,
+                            clearCategoryId: current.categoryId == null,
+                            types: current.types,
+                            from: current.from,
+                            clearFrom: current.from == null,
+                            to: current.to,
+                            clearTo: current.to == null,
+                            minAmountMinor: current.minAmountMinor,
+                            clearMinAmount: current.minAmountMinor == null,
+                            maxAmountMinor: current.maxAmountMinor,
+                            clearMaxAmount: current.maxAmountMinor == null,
                           ),
                         );
                       },
@@ -631,6 +670,101 @@ class _FilterSheetState extends State<_FilterSheet> {
         ),
       ),
     );
+  }
+
+  /// The structured criteria as currently configured in this sheet — the
+  /// free-text search box lives outside this sheet and is never part of it.
+  TransactionFilter _currentStructuredFilter() {
+    return TransactionFilter(
+      accountId: _accountId,
+      categoryId: _categoryId,
+      types: _types,
+      from: _from,
+      to: _to,
+      minAmountMinor: _parseAmount(_minAmountController.text),
+      maxAmountMinor: _parseAmount(_maxAmountController.text),
+    );
+  }
+
+  /// Loads [row]'s stored criteria into this sheet's fields for the user to
+  /// review (and optionally adjust) before pressing Apply — it does not close
+  /// the sheet by itself.
+  void _applySavedQuery(SavedQueryRow row) {
+    final decoded = ref.read(savedQueryControllerProvider).filterFor(row);
+    setState(() {
+      _filterGeneration++;
+      _accountId = decoded.accountId;
+      _categoryId = decoded.categoryId;
+      _types
+        ..clear()
+        ..addAll(decoded.types);
+      _from = decoded.from;
+      _to = decoded.to;
+      _minAmountController.text = decoded.minAmountMinor == null
+          ? ''
+          : minorUnitsToInput(decoded.minAmountMinor!);
+      _maxAmountController.text = decoded.maxAmountMinor == null
+          ? ''
+          : minorUnitsToInput(decoded.maxAmountMinor!);
+    });
+  }
+
+  Future<void> _confirmDeleteSavedQuery(SavedQueryRow row) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this saved filter?'),
+        content: Text(
+          '"${row.name}" will be removed. This does not affect any '
+          'transactions.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(savedQueryControllerProvider).delete(row.id);
+  }
+
+  Future<void> _saveCurrentFilter() async {
+    final filter = _currentStructuredFilter();
+    if (!filter.isActive) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Set at least one filter before saving')),
+      );
+      return;
+    }
+
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => const _SaveFilterDialog(),
+    );
+    if (name == null) return;
+
+    try {
+      await ref
+          .read(savedQueryControllerProvider)
+          .save(name: name, filter: filter);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Filter saved')));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
+      }
+    }
   }
 
   Future<void> _pickDate({required bool isFrom}) async {
@@ -661,6 +795,56 @@ class _FilterSheetState extends State<_FilterSheet> {
       case TransactionTypeFilter.loan:
         return 'Loan';
     }
+  }
+}
+
+/// Prompts for a name and returns it (trimmed), or `null` if cancelled.
+class _SaveFilterDialog extends StatefulWidget {
+  const _SaveFilterDialog();
+
+  @override
+  State<_SaveFilterDialog> createState() => _SaveFilterDialogState();
+}
+
+class _SaveFilterDialogState extends State<_SaveFilterDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Save this filter'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'Name',
+          hintText: 'e.g. Food over ৳500',
+        ),
+        onSubmitted: (value) => _submit(context),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => _submit(context),
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+
+  void _submit(BuildContext context) {
+    final name = _controller.text.trim();
+    if (name.isEmpty) return;
+    Navigator.of(context).pop(name);
   }
 }
 
