@@ -205,6 +205,13 @@ class _PeriodTile extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               Text('$spent / $limit', style: theme.textTheme.titleLarge),
+              if (budgetCarryInLabel(progress) != null)
+                Text(
+                  budgetCarryInLabel(progress)!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.mutedText,
+                  ),
+                ),
               const SizedBox(height: AppSpacing.sm),
               BudgetBar(progress: progress),
               const SizedBox(height: AppSpacing.sm),

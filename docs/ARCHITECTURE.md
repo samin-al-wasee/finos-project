@@ -623,6 +623,18 @@ same `period` value may have overlapping resolved category sets
 `UncategorizedScope` overlaps only itself; two category-bearing scopes
 overlap exactly when their sets intersect.
 
+The limit a screen renders may itself be a derived figure rather than
+`budget.amountMinor` directly: a budget with rollover enabled
+(docs/adr/008-budget-rollover.md) has a `BudgetProgress.limitMinor` equal to
+its own limit plus a carried-in amount from prior periods. This is still
+computed in exactly one place — `rolloverCarryInMinor`
+(`lib/features/budgets/domain/budget_rollover.dart`), called from
+`budgetProgressProvider`/`budgetHistoryProvider` before a `BudgetProgress` is
+constructed — so the "avoid duplicating budget calculations" rule holds
+unchanged: every consumer (`budget_bar.dart`, the list and details screens,
+the performance report) reads `limitMinor`/`remainingMinor`/`usedFraction`/
+`health` without knowing or caring whether a carry is folded in.
+
 ---
 
 # 19. Loan Architecture

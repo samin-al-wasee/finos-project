@@ -64,7 +64,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -139,20 +139,42 @@ class AppDatabase extends _$AppDatabase {
         // column, so every existing budget becomes SINGLE_CATEGORY with its
         // category_id untouched.
         //
+        // rollover_enabled is listed as "new" here too, even though it is a
+        // separate (v13) feature: TableMigration diffs against the *current*
+        // Dart table definition, which already includes rollover_enabled, so
+        // any column not listed here is assumed to already exist in the
+        // pre-rebuild table and would otherwise fail to copy for a database
+        // migrating from below v12 (which has neither column yet). Listing
+        // both means one rebuild handles both additions; the from < 13 step
+        // below's own idempotency check then finds the column already
+        // present and skips its ALTER TABLE.
+        //
         // TableMigration requires the table it rebuilds to already exist —
         // it copies rows out of it by name. A database that claims v4+ but
         // never actually got its budgets table (the interrupted-migration
         // scenario the v4 beforeOpen safety net exists for) has nothing to
         // copy from yet, so this step is skipped for it; the safety net
         // creates the table from the current schema afterwards, which
-        // already includes scope_type and a nullable category_id.
+        // already includes scope_type, rollover_enabled, and a nullable
+        // category_id.
         if (await _tableExists('budgets')) {
           await m.alterTable(
-            TableMigration(budgets, newColumns: [budgets.scopeType]),
+            TableMigration(
+              budgets,
+              newColumns: [budgets.scopeType, budgets.rolloverEnabled],
+            ),
           );
         }
         // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
         await m.createTable(budgetCategories);
+      }
+      if (from < 13) {
+        // Plain additive column, no table rebuild — unlike v12, which had to
+        // relax an existing NOT NULL constraint. Checked rather than added
+        // blindly for the same reason as every other additive column here:
+        // an upgrade from before v4 just created the budgets table from the
+        // current schema, which already includes this column.
+        await _addRolloverEnabledColumnIfMissing();
       }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
@@ -227,6 +249,11 @@ class AppDatabase extends _$AppDatabase {
       // rather than one this safety net can paper over.
       if (details.versionNow >= 12 && !details.wasCreated) {
         await _ensureBudgetCategoriesTable();
+      }
+
+      // Same safety net for the v13 budgets.rollover_enabled column.
+      if (details.versionNow >= 13 && !details.wasCreated) {
+        await _addRolloverEnabledColumnIfMissing();
       }
     },
   );
@@ -419,6 +446,31 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _ensureBudgetCategoriesTable() async {
     final migrator = Migrator(this);
     await migrator.createTable(budgetCategories);
+  }
+
+  /// Adds `budgets.rollover_enabled` only when it is absent.
+  ///
+  /// Mirrors [_addLoanGroupIdColumnIfMissing] exactly: `ALTER TABLE ADD
+  /// COLUMN` is not idempotent, and the column could already exist either
+  /// because the budgets table was just created from the current schema
+  /// earlier in the same upgrade, or because a previous run added it before
+  /// being interrupted. The DDL still comes from drift's own definition, so
+  /// there is no hand-maintained SQL to drift out of sync.
+  Future<void> _addRolloverEnabledColumnIfMissing() async {
+    final columns = await customSelect('PRAGMA table_info(budgets)').get();
+
+    // An empty result means the budgets table itself is missing — an earlier
+    // safety net handles recreating it (from the current schema, which
+    // already includes this column), so there is nothing to alter yet.
+    if (columns.isEmpty) return;
+
+    final hasRolloverEnabled = columns.any(
+      (row) => row.read<String>('name') == 'rollover_enabled',
+    );
+    if (hasRolloverEnabled) return;
+
+    debugPrint('[AppDatabase] budgets.rollover_enabled missing — adding');
+    await Migrator(this).addColumn(budgets, budgets.rolloverEnabled);
   }
 
   /// Whether a table named [name] currently exists.

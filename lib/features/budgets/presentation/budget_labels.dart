@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/formatting/date.dart';
+import '../../../core/formatting/money.dart';
 import '../../categories/presentation/category_icon.dart';
 import '../domain/budget_period.dart';
 import '../domain/budget_progress.dart';
@@ -77,3 +78,20 @@ IconData budgetScopeIcon(BudgetProgress progress) => switch (progress.scope) {
   UncategorizedScope() => Icons.help_outline,
   WholeAccountScope() => Icons.account_balance_wallet_outlined,
 };
+
+/// Describes [progress]'s carried-in amount, or `null` when there is nothing
+/// to show (docs/adr/008-budget-rollover.md).
+///
+/// The carry is folded into [BudgetProgress.limitMinor] silently, so this
+/// exists to make that fold visible rather than leaving a ৳10,000 budget
+/// showing ৳12,300 with no explanation: a positive carry reads as "included",
+/// a negative one as a deficit.
+String? budgetCarryInLabel(BudgetProgress progress) {
+  final carry = progress.carriedInMinor;
+  if (carry == 0) return null;
+  final symbol = currencySymbol(progress.budget.currency);
+  return carry > 0
+      ? 'Includes ${formatMinorUnits(carry, symbol: symbol)} carried in'
+      : '${formatMinorUnits(-carry, symbol: symbol)} carried over as a '
+            'deficit';
+}

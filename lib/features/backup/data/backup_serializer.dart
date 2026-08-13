@@ -103,6 +103,7 @@ abstract final class BackupSerializer {
     'status': const BudgetStatusConverter().toSql(row.status),
     'created_at': _dateToJson(row.createdAt),
     'updated_at': _dateToJson(row.updatedAt),
+    'rollover_enabled': row.rolloverEnabled,
   };
 
   // ------------------------------------------------------------------
@@ -246,7 +247,9 @@ abstract final class BackupSerializer {
   /// restores unchanged (docs/adr/007-flexible-budget-scope.md).
   /// `category_id` is optional for the same reason `budgetToJson` only
   /// writes it as before: it is `NULL` for every scope type except
-  /// `SINGLE_CATEGORY`.
+  /// `SINGLE_CATEGORY`. `rollover_enabled` defaults to `false` when absent,
+  /// mirroring the column's own default, so a backup written before this
+  /// feature existed restores unchanged (docs/adr/008-budget-rollover.md).
   static BudgetRow budgetFromJson(Map<String, Object?> json) {
     const where = 'budget';
     final amountMinor = _int(json, 'amount_minor', where);
@@ -294,6 +297,12 @@ abstract final class BackupSerializer {
       ),
       createdAt: _date(json, 'created_at', where),
       updatedAt: _date(json, 'updated_at', where),
+      rolloverEnabled: _boolWithDefault(
+        json,
+        'rollover_enabled',
+        where,
+        fallback: false,
+      ),
     );
   }
 
@@ -373,6 +382,23 @@ abstract final class BackupSerializer {
       throw ValidationException(
         _typeMessage(where, field, 'a whole number', value),
       );
+    }
+    return value;
+  }
+
+  /// Reads a boolean field, defaulting to [fallback] when [field] is absent —
+  /// used for a column added after backups already existed, mirroring the
+  /// column's own schema default (docs/adr/008-budget-rollover.md).
+  static bool _boolWithDefault(
+    Map<String, Object?> json,
+    String field,
+    String where, {
+    required bool fallback,
+  }) {
+    final value = json[field];
+    if (value == null) return fallback;
+    if (value is! bool) {
+      throw ValidationException(_typeMessage(where, field, 'true/false', value));
     }
     return value;
   }

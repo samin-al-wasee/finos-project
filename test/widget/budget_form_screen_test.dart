@@ -230,6 +230,88 @@ void main() {
     await database.close();
   });
 
+  group('rollover switch (docs/adr/008-budget-rollover.md)', () {
+    testWidgets('is shown, off by default, for a recurring period', (
+      tester,
+    ) async {
+      final database = await seedDatabase();
+      await pumpForm(tester, database);
+
+      expect(find.text('Carry forward to next period'), findsOneWidget);
+      final switchTile = tester.widget<SwitchListTile>(
+        find.byType(SwitchListTile),
+      );
+      expect(switchTile.value, isFalse);
+
+      await database.close();
+    });
+
+    testWidgets('is hidden once the period is switched to custom', (
+      tester,
+    ) async {
+      final database = await seedDatabase();
+      await pumpForm(tester, database);
+
+      await tester.tap(find.byType(DropdownButtonFormField<BudgetPeriod>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Custom').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Carry forward to next period'), findsNothing);
+      expect(find.byType(SwitchListTile), findsNothing);
+
+      await database.close();
+    });
+
+    testWidgets(
+      'switching to custom after enabling rollover forces it back off',
+      (tester) async {
+        final database = await seedDatabase();
+        await pumpForm(tester, database);
+
+        await tester.tap(find.byType(SwitchListTile));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byType(DropdownButtonFormField<BudgetPeriod>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Custom').last);
+        await tester.pumpAndSettle();
+
+        // Switch back to a recurring period — the switch must have been
+        // reset to off, not merely hidden with its prior "on" value intact.
+        await tester.tap(find.byType(DropdownButtonFormField<BudgetPeriod>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Monthly').last);
+        await tester.pumpAndSettle();
+
+        final switchTile = tester.widget<SwitchListTile>(
+          find.byType(SwitchListTile),
+        );
+        expect(switchTile.value, isFalse);
+
+        await database.close();
+      },
+    );
+
+    testWidgets('creates a budget with rollover enabled', (tester) async {
+      final database = await seedDatabase();
+      await pumpForm(tester, database);
+
+      await chooseFoodCategory(tester);
+      await tester.enterText(find.byType(TextFormField), '10000');
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add budget'));
+      await tester.pumpAndSettle();
+
+      final rows = await BudgetDao(database).getAll();
+      expect(rows, hasLength(1));
+      expect(rows.single.rolloverEnabled, isTrue);
+
+      await database.close();
+    });
+  });
+
   group('scope-type selector (docs/adr/007-flexible-budget-scope.md)', () {
     testWidgets('defaults to single category, showing the category dropdown', (
       tester,
@@ -529,6 +611,51 @@ void main() {
       final row = await BudgetDao(database).getById('budget-food');
       expect(row!.amountMinor, 1500000);
       expect(row.categoryId, 'test-food');
+
+      await database.close();
+    });
+
+    testWidgets(
+      'pre-fills the rollover switch from the budget being edited',
+      (tester) async {
+        final database = await seedDatabase();
+        final dao = BudgetDao(database);
+        await dao.insertOne(
+          BudgetsCompanion.insert(
+            id: 'budget-rollover',
+            categoryId: const Value('test-food'),
+            amountMinor: 1000000,
+            period: BudgetPeriod.monthly,
+            startDate: DateTime(2026, 8, 1),
+            rolloverEnabled: const Value(true),
+          ),
+        );
+        await pumpForm(
+          tester,
+          database,
+          initial: await dao.getById('budget-rollover'),
+        );
+
+        final switchTile = tester.widget<SwitchListTile>(
+          find.byType(SwitchListTile),
+        );
+        expect(switchTile.value, isTrue);
+
+        await database.close();
+      },
+    );
+
+    testWidgets('saves a change to the rollover switch', (tester) async {
+      final database = await seedDatabase();
+      await pumpForm(tester, database, initial: await seedBudget(database));
+
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Save changes'));
+      await tester.pumpAndSettle();
+
+      final row = await BudgetDao(database).getById('budget-food');
+      expect(row!.rolloverEnabled, isTrue);
 
       await database.close();
     });

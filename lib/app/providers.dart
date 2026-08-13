@@ -15,6 +15,7 @@ import '../features/budgets/application/budget_controller.dart';
 import '../features/budgets/data/budget_dao.dart';
 import '../features/budgets/domain/budget_period.dart';
 import '../features/budgets/domain/budget_progress.dart';
+import '../features/budgets/domain/budget_rollover.dart';
 import '../features/budgets/domain/budget_scope.dart';
 import '../features/budgets/domain/budget_status.dart';
 import '../features/categories/application/category_controller.dart';
@@ -327,6 +328,15 @@ final budgetProgressProvider = FutureProvider<List<BudgetProgress>>((
       startDate: budget.startDate,
       endDate: budget.endDate,
     );
+    final carriedInMinor = await rolloverCarryInMinor(
+      budget: budget,
+      reference: now,
+      spentBetween: (from, to) => _spentMinorForScope(
+        transactionDao,
+        scope,
+        DateRange(from: from, to: to),
+      ),
+    );
     progress.add(
       BudgetProgress(
         budget: budget,
@@ -334,6 +344,7 @@ final budgetProgressProvider = FutureProvider<List<BudgetProgress>>((
         categories: resolvedCategories,
         window: window,
         spentMinor: await _spentMinorForScope(transactionDao, scope, window),
+        carriedInMinor: carriedInMinor,
       ),
     );
   }
@@ -396,6 +407,21 @@ final budgetHistoryProvider =
         // earlier offset will too.
         if (!window.to.isAfter(startDay)) break;
 
+        // Each history entry shows its own rollover-adjusted limit, computed
+        // by re-running rolloverCarryInMinor with the reference shifted to
+        // fall inside that historical window, rather than a flat "no
+        // rollover in history" simplification (docs/adr/008-budget-rollover.md
+        // §6).
+        final carriedInMinor = await rolloverCarryInMinor(
+          budget: budget,
+          reference: window.from,
+          spentBetween: (from, to) => _spentMinorForScope(
+            transactionDao,
+            scope,
+            DateRange(from: from, to: to),
+          ),
+        );
+
         history.add(
           BudgetProgress(
             budget: budget,
@@ -407,6 +433,7 @@ final budgetHistoryProvider =
               scope,
               window,
             ),
+            carriedInMinor: carriedInMinor,
           ),
         );
       }

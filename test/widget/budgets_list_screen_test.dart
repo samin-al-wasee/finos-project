@@ -69,6 +69,8 @@ void main() {
     int amountMinor = 1000000,
     BudgetPeriod period = BudgetPeriod.monthly,
     BudgetStatus status = BudgetStatus.active,
+    DateTime? startDate,
+    bool rolloverEnabled = false,
   }) async {
     final now = DateTime.now();
     await BudgetDao(database).insertOne(
@@ -77,19 +79,22 @@ void main() {
         categoryId: Value(categoryId),
         amountMinor: amountMinor,
         period: period,
-        startDate: DateTime(now.year, now.month),
+        startDate: startDate ?? DateTime(now.year, now.month),
         status: Value(status),
+        rolloverEnabled: Value(rolloverEnabled),
       ),
     );
   }
 
-  /// Records a transaction dated today, so it falls inside the current window.
+  /// Records a transaction dated today (or [date], when given), so by default
+  /// it falls inside the current window.
   Future<void> addExpense(
     AppDatabase database,
     String id,
     int amountMinor, {
     String? categoryId = 'test-food',
     TransactionType type = TransactionType.expense,
+    DateTime? date,
   }) async {
     await TransactionDao(database).insertOne(
       TransactionsCompanion.insert(
@@ -98,7 +103,7 @@ void main() {
         amountMinor: amountMinor,
         accountId: 'acct-main',
         categoryId: Value(categoryId),
-        date: DateTime.now(),
+        date: date ?? DateTime.now(),
       ),
     );
   }
@@ -227,6 +232,54 @@ void main() {
     expect(find.text('৳1,000.00 / ৳10,000.00'), findsOneWidget);
 
     await database.close();
+  });
+
+  group('rollover caption (docs/adr/008-budget-rollover.md)', () {
+    testWidgets('a non-rollover budget shows no carry-in caption', (
+      tester,
+    ) async {
+      final database = await seedDatabase();
+      await addBudget(database);
+      await pumpScreen(tester, database);
+
+      expect(find.textContaining('carried in'), findsNothing);
+      expect(find.textContaining('carried over as a deficit'), findsNothing);
+
+      await database.close();
+    });
+
+    testWidgets('a rollover budget with an unspent prior period shows the '
+        'carry-in caption', (tester) async {
+      final database = await seedDatabase();
+      // start_date pinned to last month, so only that one period is
+      // eligible for the walk.
+      final now = DateTime.now();
+      final lastMonth = shiftedBudgetWindow(
+        BudgetPeriod.monthly,
+        reference: now,
+        offset: -1,
+      )!;
+      await addBudget(
+        database,
+        startDate: lastMonth.from,
+        rolloverEnabled: true,
+      );
+      // Last month: 3,000 spent of a 10,000 limit → 7,000 unspent.
+      await addExpense(
+        database,
+        'tx-last-month',
+        300000,
+        date: lastMonth.from.add(const Duration(days: 5)),
+      );
+      await pumpScreen(tester, database);
+
+      expect(
+        find.text('Includes ৳7,000.00 carried in'),
+        findsOneWidget,
+      );
+
+      await database.close();
+    });
   });
 
   testWidgets('groups budgets by period', (tester) async {

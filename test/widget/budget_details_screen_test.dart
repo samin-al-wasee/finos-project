@@ -59,6 +59,7 @@ void main() {
     String id = 'budget-food',
     BudgetPeriod period = BudgetPeriod.monthly,
     DateTime? startDate,
+    bool rolloverEnabled = false,
   }) async {
     await BudgetDao(database).insertOne(
       BudgetsCompanion.insert(
@@ -67,6 +68,7 @@ void main() {
         amountMinor: 1000000,
         period: period,
         startDate: startDate ?? DateTime(2020),
+        rolloverEnabled: Value(rolloverEnabled),
       ),
     );
   }
@@ -150,6 +152,52 @@ void main() {
     expect(find.text('৳1,000.00 / ৳10,000.00'), findsNothing);
 
     await database.close();
+  });
+
+  group('rollover caption (docs/adr/008-budget-rollover.md)', () {
+    testWidgets('a non-rollover budget shows no carry-in caption', (
+      tester,
+    ) async {
+      final database = await seedDatabase();
+      await addBudget(database);
+      await pumpDetails(tester, database, 'budget-food');
+
+      expect(find.textContaining('carried in'), findsNothing);
+      expect(find.textContaining('carried over as a deficit'), findsNothing);
+
+      await database.close();
+    });
+
+    testWidgets(
+      'a rollover budget with an unspent prior period shows the carry-in '
+      'caption on the current period tile',
+      (tester) async {
+        final database = await seedDatabase();
+        final now = DateTime.now();
+        final lastMonth = shiftedBudgetWindow(
+          BudgetPeriod.monthly,
+          reference: now,
+          offset: -1,
+        )!;
+        await addBudget(
+          database,
+          startDate: lastMonth.from,
+          rolloverEnabled: true,
+        );
+        // Last month: 3,000 spent of a 10,000 limit → 7,000 unspent.
+        await addExpense(
+          database,
+          'tx-last-month',
+          300000,
+          lastMonth.from.add(const Duration(days: 5)),
+        );
+        await pumpDetails(tester, database, 'budget-food');
+
+        expect(find.text('Includes ৳7,000.00 carried in'), findsOneWidget);
+
+        await database.close();
+      },
+    );
   });
 
   testWidgets('a custom-period budget has no repeating history', (

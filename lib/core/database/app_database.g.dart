@@ -2736,6 +2736,21 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _rolloverEnabledMeta = const VerificationMeta(
+    'rolloverEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> rolloverEnabled = GeneratedColumn<bool>(
+    'rollover_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("rollover_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2749,6 +2764,7 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
     status,
     createdAt,
     updatedAt,
+    rolloverEnabled,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2816,6 +2832,15 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
         updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
       );
     }
+    if (data.containsKey('rollover_enabled')) {
+      context.handle(
+        _rolloverEnabledMeta,
+        rolloverEnabled.isAcceptableOrUnknown(
+          data['rollover_enabled']!,
+          _rolloverEnabledMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -2874,6 +2899,10 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
+      )!,
+      rolloverEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}rollover_enabled'],
       )!,
     );
   }
@@ -2941,6 +2970,15 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
   final BudgetStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Whether unused/overspent amounts carry into the next period
+  /// (docs/ROADMAP.md §8.3, "Budget rollover", docs/adr/008-budget-rollover.md).
+  /// Only meaningful for a recurring period; CUSTOM periods have no next
+  /// period to carry into. Editable without archive+recreate — unlike
+  /// categoryId/period/scopeType, toggling it doesn't reinterpret any past
+  /// reading of the budget, only whether today's effective limit includes a
+  /// derived carry.
+  final bool rolloverEnabled;
   const BudgetRow({
     required this.id,
     this.categoryId,
@@ -2953,6 +2991,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    required this.rolloverEnabled,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2984,6 +3023,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['rollover_enabled'] = Variable<bool>(rolloverEnabled);
     return map;
   }
 
@@ -3004,6 +3044,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
       status: Value(status),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      rolloverEnabled: Value(rolloverEnabled),
     );
   }
 
@@ -3024,6 +3065,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
       status: serializer.fromJson<BudgetStatus>(json['status']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      rolloverEnabled: serializer.fromJson<bool>(json['rolloverEnabled']),
     );
   }
   @override
@@ -3041,6 +3083,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
       'status': serializer.toJson<BudgetStatus>(status),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'rolloverEnabled': serializer.toJson<bool>(rolloverEnabled),
     };
   }
 
@@ -3056,6 +3099,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
     BudgetStatus? status,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? rolloverEnabled,
   }) => BudgetRow(
     id: id ?? this.id,
     categoryId: categoryId.present ? categoryId.value : this.categoryId,
@@ -3068,6 +3112,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
     status: status ?? this.status,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    rolloverEnabled: rolloverEnabled ?? this.rolloverEnabled,
   );
   BudgetRow copyWithCompanion(BudgetsCompanion data) {
     return BudgetRow(
@@ -3086,6 +3131,9 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
       status: data.status.present ? data.status.value : this.status,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      rolloverEnabled: data.rolloverEnabled.present
+          ? data.rolloverEnabled.value
+          : this.rolloverEnabled,
     );
   }
 
@@ -3102,7 +3150,8 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
           ..write('endDate: $endDate, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rolloverEnabled: $rolloverEnabled')
           ..write(')'))
         .toString();
   }
@@ -3120,6 +3169,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
     status,
     createdAt,
     updatedAt,
+    rolloverEnabled,
   );
   @override
   bool operator ==(Object other) =>
@@ -3135,7 +3185,8 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
           other.endDate == this.endDate &&
           other.status == this.status &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.rolloverEnabled == this.rolloverEnabled);
 }
 
 class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
@@ -3150,6 +3201,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
   final Value<BudgetStatus> status;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<bool> rolloverEnabled;
   final Value<int> rowid;
   const BudgetsCompanion({
     this.id = const Value.absent(),
@@ -3163,6 +3215,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.rolloverEnabled = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   BudgetsCompanion.insert({
@@ -3177,6 +3230,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.rolloverEnabled = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        amountMinor = Value(amountMinor),
@@ -3194,6 +3248,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     Expression<String>? status,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
+    Expression<bool>? rolloverEnabled,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -3208,6 +3263,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
       if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (rolloverEnabled != null) 'rollover_enabled': rolloverEnabled,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -3224,6 +3280,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     Value<BudgetStatus>? status,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<bool>? rolloverEnabled,
     Value<int>? rowid,
   }) {
     return BudgetsCompanion(
@@ -3238,6 +3295,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      rolloverEnabled: rolloverEnabled ?? this.rolloverEnabled,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3284,6 +3342,9 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (rolloverEnabled.present) {
+      map['rollover_enabled'] = Variable<bool>(rolloverEnabled.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3304,6 +3365,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('rolloverEnabled: $rolloverEnabled, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8958,6 +9020,7 @@ typedef $$BudgetsTableCreateCompanionBuilder =
       Value<BudgetStatus> status,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<bool> rolloverEnabled,
       Value<int> rowid,
     });
 typedef $$BudgetsTableUpdateCompanionBuilder =
@@ -8973,6 +9036,7 @@ typedef $$BudgetsTableUpdateCompanionBuilder =
       Value<BudgetStatus> status,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<bool> rolloverEnabled,
       Value<int> rowid,
     });
 
@@ -9077,6 +9141,11 @@ class $$BudgetsTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get rolloverEnabled => $composableBuilder(
+    column: $table.rolloverEnabled,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9188,6 +9257,11 @@ class $$BudgetsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get rolloverEnabled => $composableBuilder(
+    column: $table.rolloverEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$CategoriesTableOrderingComposer get categoryId {
     final $$CategoriesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -9252,6 +9326,11 @@ class $$BudgetsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get rolloverEnabled => $composableBuilder(
+    column: $table.rolloverEnabled,
+    builder: (column) => column,
+  );
 
   $$CategoriesTableAnnotationComposer get categoryId {
     final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
@@ -9341,6 +9420,7 @@ class $$BudgetsTableTableManager
                 Value<BudgetStatus> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<bool> rolloverEnabled = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BudgetsCompanion(
                 id: id,
@@ -9354,6 +9434,7 @@ class $$BudgetsTableTableManager
                 status: status,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                rolloverEnabled: rolloverEnabled,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -9369,6 +9450,7 @@ class $$BudgetsTableTableManager
                 Value<BudgetStatus> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<bool> rolloverEnabled = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BudgetsCompanion.insert(
                 id: id,
@@ -9382,6 +9464,7 @@ class $$BudgetsTableTableManager
                 status: status,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                rolloverEnabled: rolloverEnabled,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -49,6 +49,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
   late BudgetPeriod _period;
   late DateTime _startDate;
   DateTime? _endDate;
+  late bool _rolloverEnabled;
   bool _saving = false;
 
   bool get _isEditing => widget.initial != null;
@@ -71,6 +72,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
     _period = initial?.period ?? draft?.period ?? BudgetPeriod.monthly;
     _startDate = initial?.startDate ?? DateTime.now();
     _endDate = initial?.endDate;
+    _rolloverEnabled = initial?.rolloverEnabled ?? false;
   }
 
   @override
@@ -188,6 +190,11 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
                     // A recurring period derives its window from the calendar,
                     // so any previously chosen end date no longer applies.
                     if (value != BudgetPeriod.custom) _endDate = null;
+                    // A custom period has no next period to carry into
+                    // (docs/adr/008-budget-rollover.md), so rollover is
+                    // forced off in the same setState that resets the end
+                    // date.
+                    if (value == BudgetPeriod.custom) _rolloverEnabled = false;
                   });
                 },
               ),
@@ -201,6 +208,20 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
                   context,
                 ).textTheme.bodySmall?.copyWith(color: colors.mutedText),
               ),
+
+              // ── Rollover ────────────────────────────────────────────────
+              if (!_isCustom)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Carry forward to next period'),
+                  subtitle: const Text(
+                    'Unused amount carries into next period; overspending '
+                    'reduces it.',
+                  ),
+                  value: _rolloverEnabled,
+                  onChanged: (value) =>
+                      setState(() => _rolloverEnabled = value),
+                ),
 
               // ── Dates ───────────────────────────────────────────────────
               const SizedBox(height: AppSpacing.sm),
@@ -318,6 +339,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
           period: _period,
           startDate: _startDate,
           endDate: _endDate,
+          rolloverEnabled: _rolloverEnabled,
         );
       } else {
         await controller.create(
@@ -326,6 +348,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
           period: _period,
           startDate: _startDate,
           endDate: _endDate,
+          rolloverEnabled: _rolloverEnabled,
         );
       }
       if (mounted) Navigator.of(context).pop();

@@ -21,6 +21,7 @@ class BudgetProgress {
     required this.categories,
     required this.window,
     required this.spentMinor,
+    this.carriedInMinor = 0,
   });
 
   /// The stored budget record.
@@ -40,12 +41,21 @@ class BudgetProgress {
   /// Total spending inside [window], in integer minor units.
   final int spentMinor;
 
+  /// The amount carried in from prior periods, in integer minor units
+  /// (docs/adr/008-budget-rollover.md). Positive for a carried-forward
+  /// surplus, negative for a carried-forward deficit, `0` when rollover is
+  /// off or inapplicable (e.g. [budget.period] is [BudgetPeriod.custom]).
+  final int carriedInMinor;
+
   /// Fraction of the limit at or above which a budget counts as "near limit"
   /// (docs/DATA_MODEL.md §25).
   static const double nearLimitThreshold = 0.8;
 
-  /// The budget's spending limit, in integer minor units.
-  int get limitMinor => budget.amountMinor;
+  /// The budget's effective spending limit, in integer minor units: its own
+  /// limit plus whatever carried in from prior periods
+  /// (docs/adr/008-budget-rollover.md). `budget.amountMinor` remains directly
+  /// reachable for anyone who wants the "own" (un-rolled) limit.
+  int get limitMinor => budget.amountMinor + carriedInMinor;
 
   /// Limit minus spending. Negative once the budget is exceeded, which is what
   /// lets the UI say "৳500 over budget" rather than clamping to zero.

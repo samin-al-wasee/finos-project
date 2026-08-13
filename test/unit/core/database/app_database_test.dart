@@ -38,8 +38,8 @@ void main() {
       await database.close();
     });
 
-    test('starts at schema version 12', () {
-      expect(database.schemaVersion, 12);
+    test('starts at schema version 13', () {
+      expect(database.schemaVersion, 13);
     });
 
     test('seeds the built-in categories on a fresh database', () async {
@@ -1012,6 +1012,144 @@ void main() {
         expect(await dao.categoriesFor('budget-multi-safe'), {'cat-safe'});
       },
     );
+
+    test(
+      'migrates a v12 database and adds the rollover_enabled column',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('finos_v12_to_v13');
+        final file = File('${dir.path}/migration_v13.db');
+        addTearDown(() async {
+          await file.delete();
+          await dir.delete(recursive: true);
+        });
+
+        // Build a genuinely current database first so every table other than
+        // budgets already has its final (v13) shape, then hand-roll just
+        // budgets back to its post-ADR-007/pre-ADR-008 shape (scope_type
+        // present, no rollover_enabled) and stamp user_version back to 12,
+        // mirroring the v11-to-v12 test's approach.
+        final seed = AppDatabase(NativeDatabase(file));
+        await CategoryDao(seed).insertOne(
+          CategoriesCompanion.insert(
+            id: 'cat-legacy',
+            name: 'Legacy Food',
+            type: CategoryType.expense,
+          ),
+        );
+        await seed.close();
+
+        final legacy = _RawDatabase(NativeDatabase(file));
+        await legacy.customStatement('DROP TABLE budgets');
+        await legacy.customStatement(_legacyV12BudgetsDdl);
+        await legacy.customStatement('''
+          INSERT INTO budgets
+            (id, category_id, scope_type, amount_minor, currency, period,
+             start_date, status, created_at, updated_at)
+          VALUES
+            ('budget-legacy', 'cat-legacy', 'SINGLE_CATEGORY', 1000000, 'BDT',
+             'MONTHLY', 1754000000, 'ACTIVE', 1754000000, 1754000000)
+        ''');
+        await legacy.customStatement('PRAGMA user_version = 12');
+        await legacy.close();
+
+        // Reopen as the current schema (v13). The additive column migration
+        // must add rollover_enabled, defaulting the pre-existing row to
+        // false.
+        final migrated = AppDatabase(NativeDatabase(file));
+        addTearDown(migrated.close);
+
+        final dao = BudgetDao(migrated);
+        final existing = await dao.getById('budget-legacy');
+        expect(existing, isNotNull);
+        expect(existing!.rolloverEnabled, isFalse);
+        expect(existing.scopeType, BudgetScopeType.singleCategory);
+
+        // The column genuinely accepts true, not just the default.
+        await dao.insertOne(
+          BudgetsCompanion.insert(
+            id: 'budget-rollover',
+            categoryId: const Value('cat-legacy'),
+            amountMinor: 500000,
+            period: BudgetPeriod.weekly,
+            startDate: DateTime(2026, 8, 10),
+            rolloverEnabled: const Value(true),
+          ),
+        );
+        expect((await dao.getById('budget-rollover'))!.rolloverEnabled, isTrue);
+      },
+    );
+
+    test(
+      'recovers a v13 database whose rollover_enabled column is missing',
+      () async {
+        final dir = await Directory.systemTemp.createTemp(
+          'finos_missing_rollover_enabled',
+        );
+        final file = File('${dir.path}/missing_rollover_enabled.db');
+        addTearDown(() async {
+          await file.delete();
+          await dir.delete(recursive: true);
+        });
+
+        // Build a genuinely correct v13 database, then simulate an
+        // interrupted migration by rewinding just the budgets table to its
+        // pre-rollover_enabled shape while user_version still claims v13.
+        final seed = AppDatabase(NativeDatabase(file));
+        await CategoryDao(seed).insertOne(
+          CategoriesCompanion.insert(
+            id: 'cat-safe',
+            name: 'Safe Food',
+            type: CategoryType.expense,
+          ),
+        );
+        await BudgetDao(seed).insertOne(
+          BudgetsCompanion.insert(
+            id: 'budget-safe',
+            categoryId: const Value('cat-safe'),
+            amountMinor: 750000,
+            period: BudgetPeriod.monthly,
+            startDate: DateTime(2026, 8, 1),
+          ),
+        );
+        await seed.close();
+
+        final legacy = _RawDatabase(NativeDatabase(file));
+        await legacy.customStatement('DROP TABLE budgets');
+        await legacy.customStatement(_legacyV12BudgetsDdl);
+        await legacy.customStatement('''
+          INSERT INTO budgets
+            (id, category_id, scope_type, amount_minor, currency, period,
+             start_date, status, created_at, updated_at)
+          VALUES
+            ('budget-safe', 'cat-safe', 'SINGLE_CATEGORY', 750000, 'BDT',
+             'MONTHLY', 1754000000, 'ACTIVE', 1754000000, 1754000000)
+        ''');
+        await legacy.close();
+
+        final reopened = AppDatabase(NativeDatabase(file));
+        addTearDown(reopened.close);
+
+        final dao = BudgetDao(reopened);
+        final existing = await dao.getById('budget-safe');
+        expect(existing, isNotNull);
+        expect(existing!.rolloverEnabled, isFalse);
+
+        await dao.insertOne(
+          BudgetsCompanion.insert(
+            id: 'budget-safe-2',
+            categoryId: const Value('cat-safe'),
+            amountMinor: 250000,
+            period: BudgetPeriod.weekly,
+            startDate: DateTime(2026, 8, 10),
+            rolloverEnabled: const Value(true),
+          ),
+        );
+        expect(
+          (await dao.getById('budget-safe-2'))!.rolloverEnabled,
+          isTrue,
+        );
+      },
+    );
   });
 }
 
@@ -1083,6 +1221,27 @@ const _legacyBudgetsDdl = '''
   )
 ''';
 
+/// The post-ADR-007/pre-ADR-008 shape of `budgets`: `category_id` already
+/// nullable and `scope_type` already present, but no `rollover_enabled`
+/// column yet.
+const _legacyV12BudgetsDdl = '''
+  CREATE TABLE budgets (
+    id TEXT NOT NULL PRIMARY KEY,
+    category_id TEXT REFERENCES categories (id),
+    scope_type TEXT NOT NULL DEFAULT 'SINGLE_CATEGORY',
+    amount_minor INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'BDT',
+    period TEXT NOT NULL,
+    start_date INTEGER NOT NULL,
+    end_date INTEGER,
+    status TEXT NOT NULL DEFAULT 'ACTIVE',
+    created_at INTEGER NOT NULL DEFAULT
+      (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+    updated_at INTEGER NOT NULL DEFAULT
+      (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+  )
+''';
+
 const _legacyPreferencesDdl = '''
   CREATE TABLE preferences (
     key TEXT NOT NULL PRIMARY KEY,
@@ -1119,7 +1278,7 @@ class _RawDatabase extends GeneratedDatabase {
   _RawDatabase(super.e);
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   Iterable<TableInfo<Table, dynamic>> get allTables =>

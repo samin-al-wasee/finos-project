@@ -38,6 +38,9 @@ class BudgetController {
   /// [amountMinor] is the spending limit in integer minor units and must be
   /// positive. [endDate] is required for [BudgetPeriod.custom] and ignored for
   /// the recurring periods, which derive their window from the calendar.
+  /// [rolloverEnabled] opts this budget into carrying its unused/overspent
+  /// amount into the next period (docs/adr/008-budget-rollover.md); rejected
+  /// together with [BudgetPeriod.custom], which has no next period.
   ///
   /// Returns the generated id so callers can navigate to the new budget.
   Future<String> create({
@@ -47,6 +50,7 @@ class BudgetController {
     DateTime? startDate,
     DateTime? endDate,
     String currency = 'BDT',
+    bool rolloverEnabled = false,
   }) async {
     final start = dayStart(startDate ?? DateTime.now());
     final end = period == BudgetPeriod.custom && endDate != null
@@ -59,6 +63,7 @@ class BudgetController {
       period: period,
       startDate: start,
       endDate: end,
+      rolloverEnabled: rolloverEnabled,
     );
 
     final id = generateId();
@@ -73,6 +78,7 @@ class BudgetController {
         period: period,
         startDate: start,
         endDate: Value(end),
+        rolloverEnabled: Value(rolloverEnabled),
       ),
     );
     if (scope is MultiCategoryScope) {
@@ -85,6 +91,9 @@ class BudgetController {
   ///
   /// The category is fixed at creation: changing it would silently reinterpret
   /// every past reading of the budget, so callers archive and recreate instead.
+  /// [rolloverEnabled] is not fixed the same way — turning it on or off
+  /// doesn't reinterpret any past reading, only whether today's effective
+  /// limit includes a derived carry (docs/adr/008-budget-rollover.md).
   /// Touches [BudgetRow.updatedAt]. Throws [StateError] if no such budget exists.
   Future<void> update({
     required String id,
@@ -92,6 +101,7 @@ class BudgetController {
     required BudgetPeriod period,
     required DateTime startDate,
     DateTime? endDate,
+    bool rolloverEnabled = false,
   }) async {
     final row = await _dao.getById(id);
     if (row == null) throw StateError('Budget not found: $id');
@@ -107,6 +117,7 @@ class BudgetController {
       period: period,
       startDate: start,
       endDate: end,
+      rolloverEnabled: rolloverEnabled,
       ignoreBudgetId: id,
     );
 
@@ -116,6 +127,7 @@ class BudgetController {
         period: period,
         startDate: start,
         endDate: Value(end),
+        rolloverEnabled: rolloverEnabled,
         updatedAt: DateTime.now(),
       ),
     );
@@ -198,10 +210,19 @@ class BudgetController {
     required BudgetPeriod period,
     required DateTime startDate,
     DateTime? endDate,
+    bool rolloverEnabled = false,
     String? ignoreBudgetId,
   }) async {
     if (amountMinor <= 0) {
       throw ArgumentError('Budget limit must be greater than zero');
+    }
+
+    // A custom period has no "next period" for anything to carry into
+    // (docs/adr/008-budget-rollover.md).
+    if (rolloverEnabled && period == BudgetPeriod.custom) {
+      throw ArgumentError(
+        'Rollover is not available for a custom budget period',
+      );
     }
 
     final categoryIds = switch (scope) {

@@ -457,15 +457,14 @@ The system can use the template to speed up transaction entry.
 > **Status:** Budget history is implemented, ahead of this phase's normal
 > sequence, with explicit authorization (see docs/ARCHITECTURE.md,
 > "budgets"). Multiple budget periods were already supported before this
-> phase. Rollover and budget recommendations are not built — rollover would
-> change budget accounting itself and needs a deliberate design decision
-> first, and recommendations overlaps with the Phase 4 "AI & Automation"
-> framing (§10.3).
+> phase. Budget rollover is now built too (see below); budget
+> recommendations are not — that overlaps with the Phase 4 "AI &
+> Automation" framing (§10.3).
 
 Potential additions:
 
 * Multiple budget periods
-* Budget rollover
+* Budget rollover — see below
 * Budget history
 * Spending trends
 * Budget recommendations
@@ -504,6 +503,39 @@ while also having its own single-category budget in the same period — is
 `WHOLE_ACCOUNT` budget consequently excludes every other active budget in its
 period value, so a user wanting both a whole-account ceiling and per-category
 budgets needs to give the ceiling a different `period` value.
+
+### Budget rollover
+
+> **Status:** Built ([ADR-008](adr/008-budget-rollover.md)). A budget can opt
+> into carrying its own unused or overspent amount into the next period; see
+> below for what that means and how it composes with flexible scope above.
+
+A budget may opt into rollover via a new `rollover_enabled` flag, off by
+default so every existing budget's numbers are unchanged unless its owner
+turns it on. When enabled, a period's own remainder — positive (unspent) or
+negative (overspent) — carries forward, unclamped, into the next period's
+effective limit:
+
+```text
+effective_limit(N) = amount_minor + carry_in(N)
+carry_in(N)         = effective_limit(N-1) − spent(N-1)
+```
+
+The carried-in amount is derived at read time, never stored — the same
+precedent as loan outstanding (ADR-004) and credit-card available credit
+(ADR-005) — and the backward walk is capped at `rolloverLookbackLimit`
+(currently 6, the same constant `budgetHistoryProvider` already uses), so the
+carry a user sees is always fully explained by the periods visible on the
+History screen. Rollover is not offered for a `CUSTOM` period, which has no
+next period to carry into.
+
+The design decision this needed (parallel to ADR-004/ADR-005) is recorded in
+[ADR-008](adr/008-budget-rollover.md). Because the spend a rollover period's
+remainder is measured against already goes through the scope-aware
+dispatcher [ADR-007](adr/007-flexible-budget-scope.md) introduced, rollover
+composes with every one of the four scope types above with no
+special-casing — a `MULTI_CATEGORY` or `WHOLE_ACCOUNT` budget can enable
+rollover exactly as a `SINGLE_CATEGORY` one can.
 
 ---
 

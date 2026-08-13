@@ -594,6 +594,108 @@ void main() {
     });
   });
 
+  group('rollover (docs/adr/008-budget-rollover.md)', () {
+    test('create(..., rolloverEnabled: true) persists the flag', () async {
+      final id = await controller.create(
+        scope: const SingleCategoryScope('test-food'),
+        amountMinor: 1000000,
+        period: BudgetPeriod.monthly,
+        rolloverEnabled: true,
+      );
+
+      expect((await dao.getById(id))!.rolloverEnabled, isTrue);
+    });
+
+    test('create defaults rolloverEnabled to false', () async {
+      final id = await controller.create(
+        scope: const SingleCategoryScope('test-food'),
+        amountMinor: 1000000,
+        period: BudgetPeriod.monthly,
+      );
+
+      expect((await dao.getById(id))!.rolloverEnabled, isFalse);
+    });
+
+    test(
+      'rejects rolloverEnabled: true combined with a custom period',
+      () async {
+        expect(
+          () => controller.create(
+            scope: const SingleCategoryScope('test-food'),
+            amountMinor: 1000000,
+            period: BudgetPeriod.custom,
+            startDate: DateTime(2026, 8, 1),
+            endDate: DateTime(2026, 8, 31),
+            rolloverEnabled: true,
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    test(
+      'update can flip rolloverEnabled alone without touching scope/period, '
+      'and without tripping the scope-overlap check',
+      () async {
+        final id = await controller.create(
+          scope: const SingleCategoryScope('test-food'),
+          amountMinor: 1000000,
+          period: BudgetPeriod.monthly,
+          startDate: DateTime(2026, 8, 1),
+        );
+
+        await controller.update(
+          id: id,
+          amountMinor: 1000000,
+          period: BudgetPeriod.monthly,
+          startDate: DateTime(2026, 8, 1),
+          rolloverEnabled: true,
+        );
+
+        final row = await dao.getById(id);
+        expect(row!.rolloverEnabled, isTrue);
+        expect(row.period, BudgetPeriod.monthly);
+        expect(row.categoryId, 'test-food');
+
+        // Flipping it back off works too, and neither flip collides with the
+        // budget's own unchanged scope/period (regression guard for the
+        // scope-overlap check, which must ignore the budget's own row).
+        await controller.update(
+          id: id,
+          amountMinor: 1000000,
+          period: BudgetPeriod.monthly,
+          startDate: DateTime(2026, 8, 1),
+          rolloverEnabled: false,
+        );
+        expect((await dao.getById(id))!.rolloverEnabled, isFalse);
+      },
+    );
+
+    test(
+      'update rejects rolloverEnabled: true combined with a custom period',
+      () async {
+        final id = await controller.create(
+          scope: const SingleCategoryScope('test-food'),
+          amountMinor: 1000000,
+          period: BudgetPeriod.monthly,
+          startDate: DateTime(2026, 8, 1),
+        );
+
+        expect(
+          () => controller.update(
+            id: id,
+            amountMinor: 1000000,
+            period: BudgetPeriod.custom,
+            startDate: DateTime(2026, 8, 1),
+            endDate: DateTime(2026, 8, 31),
+            rolloverEnabled: true,
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+  });
+
   group('lifecycle', () {
     test('archive then restore returns a budget to active', () async {
       final id = await controller.create(

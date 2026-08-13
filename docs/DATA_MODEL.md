@@ -609,7 +609,8 @@ Budget
 ├── start_date
 ├── end_date
 ├── created_at
-└── status
+├── status
+└── rollover_enabled
 ```
 
 ### V1 implementation
@@ -623,6 +624,9 @@ decisions:
 * The category is fixed once a budget is created. Changing it would silently
   reinterpret every past reading of that budget, so the application archives and
   recreates instead.
+* `rollover_enabled` (schema v13, ADR-008) opts a budget into carrying its
+  own unused/overspent amount into the next period; unlike the category, it
+  **is** editable after creation. See "Rollover" below and §24.
 
 ### Flexible scope (schema v12, ADR-007)
 
@@ -664,6 +668,17 @@ else. Archiving or deleting a budget frees its slot, as before.
 
 Scope — like category before it — is fixed once a budget is created; there is
 no update path for it (§22 above, ADR-005 §5 for the credit-card precedent).
+
+### Rollover (schema v13, ADR-008)
+
+A budget can opt into carrying its own unused or overspent amount into the
+next period, via a new `rollover_enabled` boolean column (default `false`).
+Unlike `category_id`/`period`/`scope_type`, `rollover_enabled` **is**
+editable after creation via `BudgetController.update` — toggling it doesn't
+reinterpret any past reading of the budget, only whether today's effective
+limit includes a derived carry (§24 below has the formula). Rollover is
+rejected for `CUSTOM` periods, which have no next period to carry into
+(§23).
 
 ---
 
@@ -767,6 +782,31 @@ ADR-005. A small dispatcher in the wiring layer
 (`lib/app/providers.dart`'s `_spentMinorForScope`) picks the right query for
 a given budget's resolved scope; domain code itself never depends on the
 DAO.
+
+### Effective limit and rollover (schema v13, ADR-008)
+
+When `rollover_enabled` is set, `BudgetProgress.limitMinor` means the
+*effective* limit — the budget's own `amount_minor` plus whatever carried in
+from prior periods — rather than `amount_minor` alone:
+
+```text
+effective_limit(N) = amount_minor + carry_in(N)
+carry_in(N)         = effective_limit(N-1) − spent(N-1)   [0 if N-1 doesn't qualify]
+```
+
+`carry_in` is derived at read time by `rolloverCarryInMinor`
+(`lib/features/budgets/domain/budget_rollover.dart`), never stored (§45),
+walking backward at most `rolloverLookbackLimit` periods (currently 6 — the
+same constant as `budgetHistoryLength`, so the carry a user sees is always
+fully explained by the periods visible on the History screen). A period
+before the budget's own `start_date` does not contribute, and the walk
+returns `0` outright for `BudgetPeriod.custom`, which has no next period to
+carry into. Overspend rolls forward as a negative, unclamped deficit rather
+than resetting to zero. `spent(N-1)` is computed through the same
+per-scope-type dispatcher above, so rollover applies uniformly to every
+scope type with no special-casing. `remainingMinor`, `usedFraction`, and
+`health` are unchanged — they already derive from `limitMinor`, so they
+automatically key off the effective figure once rollover is on.
 
 ---
 
@@ -1500,6 +1540,7 @@ The following values are generally derived:
 * Budget spent
 * Budget remaining
 * Budget percentage
+* Budget carried-in amount / effective limit (ADR-008)
 * Loan outstanding amount
 * Net cash flow
 * Total income

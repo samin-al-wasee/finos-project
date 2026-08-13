@@ -377,6 +377,68 @@ void main() {
     },
   );
 
+  group('rollover round trip (docs/adr/008-budget-rollover.md)', () {
+    test('restores rollover_enabled unchanged', () async {
+      await categories.insertOne(
+        CategoriesCompanion.insert(
+          id: 'test-food',
+          name: 'Food',
+          type: CategoryType.expense,
+        ),
+      );
+      await budgets.insertOne(
+        BudgetsCompanion.insert(
+          id: 'budget-rollover',
+          categoryId: const Value('test-food'),
+          amountMinor: 1000000,
+          period: BudgetPeriod.monthly,
+          startDate: DateTime(2026, 8),
+          rolloverEnabled: const Value(true),
+        ),
+      );
+
+      await service.importBackup(await service.export());
+
+      final restored = await budgets.getById('budget-rollover');
+      expect(restored!.rolloverEnabled, isTrue);
+    });
+
+    test(
+      'a backup written before this feature existed has no rollover_enabled '
+      'field, and restores it as false',
+      () async {
+        await categories.insertOne(
+          CategoriesCompanion.insert(
+            id: 'test-food',
+            name: 'Food',
+            type: CategoryType.expense,
+          ),
+        );
+        await budgets.insertOne(
+          BudgetsCompanion.insert(
+            id: 'budget-old',
+            categoryId: const Value('test-food'),
+            amountMinor: 1000000,
+            period: BudgetPeriod.monthly,
+            startDate: DateTime(2026, 8),
+          ),
+        );
+        final json =
+            jsonDecode(await service.export()) as Map<String, Object?>;
+        final rows = (json[BackupFormat.budgetsKey] as List)
+            .cast<Map<String, Object?>>();
+        for (final row in rows) {
+          row.remove('rollover_enabled');
+        }
+
+        await service.importBackup(jsonEncode(json));
+
+        final restored = await budgets.getById('budget-old');
+        expect(restored!.rolloverEnabled, isFalse);
+      },
+    );
+  });
+
   group('counts', () {
     test('reports what is currently stored', () async {
       await seedEverything();

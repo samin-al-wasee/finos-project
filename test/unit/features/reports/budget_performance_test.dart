@@ -48,6 +48,7 @@ void main() {
         status: status,
         createdAt: timestamp,
         updatedAt: timestamp,
+        rolloverEnabled: false,
       ),
       scope: SingleCategoryScope(category.id),
       categories: [category],
@@ -77,6 +78,7 @@ void main() {
         status: BudgetStatus.active,
         createdAt: timestamp,
         updatedAt: timestamp,
+        rolloverEnabled: false,
       ),
       scope: const WholeAccountScope(),
       categories: const [],
@@ -159,6 +161,43 @@ void main() {
       final result = budgetsForPerformanceReport([underLimit, wholeAccount]);
 
       expect(result.map((p) => p.budget.id), ['whole', 'under']);
+    },
+  );
+
+  test(
+    'sorts a rollover-adjusted budget by its effective limitMinor/usedFraction '
+    '(docs/adr/008-budget-rollover.md)',
+    () {
+      // A budget with an own limit of 1,000 but a 500 carried-in deficit has
+      // an effective limit of 500; spending 480 against that is 96% used —
+      // near limit — even though 480 is under the *own* 1,000 limit. The
+      // sort must key off the effective figures, not the own ones.
+      final rolledOver = BudgetProgress(
+        budget: BudgetRow(
+          id: 'rolled-over',
+          categoryId: 'cat-rolled-over',
+          scopeType: BudgetScopeType.singleCategory,
+          amountMinor: 1000,
+          currency: 'BDT',
+          period: BudgetPeriod.monthly,
+          startDate: DateTime(2026, 8, 1),
+          endDate: null,
+          status: BudgetStatus.active,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          rolloverEnabled: true,
+        ),
+        scope: SingleCategoryScope(categoryWith('cat-rolled-over').id),
+        categories: [categoryWith('cat-rolled-over')],
+        window: window,
+        spentMinor: 480,
+        carriedInMinor: -500,
+      );
+      final underLimit = progressWith(id: 'under', limitMinor: 1000, spentMinor: 100);
+
+      final result = budgetsForPerformanceReport([underLimit, rolledOver]);
+
+      expect(result.map((p) => p.budget.id), ['rolled-over', 'under']);
     },
   );
 }

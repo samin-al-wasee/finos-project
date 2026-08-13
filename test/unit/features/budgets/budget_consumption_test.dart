@@ -2,6 +2,11 @@ import 'package:drift/drift.dart';
 import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/features/accounts/data/account_dao.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
+import 'package:finos_app/features/budgets/data/budget_dao.dart';
+import 'package:finos_app/features/budgets/domain/budget_period.dart';
+import 'package:finos_app/features/budgets/domain/budget_rollover.dart';
+import 'package:finos_app/features/budgets/domain/budget_scope.dart';
+import 'package:finos_app/features/budgets/domain/budget_status.dart';
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
@@ -428,5 +433,169 @@ void main() {
       await dao.deleteOne('tx-food');
       expect(await dao.expenseTotalAll(from, to), 0);
     });
+  });
+
+  group('rollover end-to-end (docs/adr/008-budget-rollover.md)', () {
+    late BudgetDao budgets;
+
+    setUp(() {
+      budgets = BudgetDao(database);
+    });
+
+    /// Mirrors `lib/app/providers.dart`'s private `_spentMinorForScope`
+    /// dispatcher, built from the real, public [TransactionDao] queries —
+    /// exercising the same generalisation against a real in-memory database
+    /// rather than a fake, window-only `SpendLookup`.
+    Future<int> spentForScope(BudgetScope scope, DateTime from, DateTime to) {
+      return switch (scope) {
+        SingleCategoryScope(:final categoryId) => dao.expenseTotalForCategory(
+          categoryId,
+          from,
+          to,
+        ),
+        MultiCategoryScope(:final categoryIds) => dao.expenseTotalForCategories(
+          categoryIds,
+          from,
+          to,
+        ),
+        UncategorizedScope() => dao.expenseTotalUncategorized(from, to),
+        WholeAccountScope() => dao.expenseTotalAll(from, to),
+      };
+    }
+
+    test(
+      'a SINGLE_CATEGORY rollover budget carries 3 real monthly windows '
+      'into the current effective limit',
+      () async {
+        // start_date pinned to June so only June and July are eligible ahead
+        // of the August "current" period under test.
+        await budgets.insertOne(
+          BudgetsCompanion.insert(
+            id: 'budget-rollover',
+            categoryId: const Value('test-food'),
+            amountMinor: 1000000, // ৳10,000
+            period: BudgetPeriod.monthly,
+            startDate: DateTime(2026, 6, 1),
+            rolloverEnabled: const Value(true),
+          ),
+        );
+        // June: 6,000 spent of a 10,000 limit → 4,000 unspent.
+        await add('tx-jun', date: DateTime(2026, 6, 10), amountMinor: 600000);
+        // July: effective limit 10,000 + 4,000 = 14,000; 9,000 spent →
+        // 5,000 unspent carries into August.
+        await add('tx-jul', date: DateTime(2026, 7, 10), amountMinor: 900000);
+        // August (current): 3,000 spent.
+        await add('tx-aug', date: DateTime(2026, 8, 10), amountMinor: 300000);
+
+        final budget = (await budgets.getById('budget-rollover'))!;
+        const scope = SingleCategoryScope('test-food');
+        final reference = DateTime(2026, 8, 15);
+
+        final carriedInMinor = await rolloverCarryInMinor(
+          budget: budget,
+          reference: reference,
+          spentBetween: (from, to) => spentForScope(scope, from, to),
+        );
+        expect(carriedInMinor, 500000); // ৳5,000
+
+        final window = budgetWindow(
+          BudgetPeriod.monthly,
+          reference: reference,
+          startDate: budget.startDate,
+        );
+        final spentMinor = await spentForScope(scope, window.from, window.to);
+        final effectiveLimitMinor = budget.amountMinor + carriedInMinor;
+
+        expect(spentMinor, 300000);
+        expect(effectiveLimitMinor, 1500000); // ৳15,000
+        expect(effectiveLimitMinor - spentMinor, 1200000); // ৳12,000
+      },
+    );
+
+    test(
+      'an archive/restore gap in between periods does not change the '
+      'carry-in calendar walk',
+      () async {
+        await budgets.insertOne(
+          BudgetsCompanion.insert(
+            id: 'budget-gap',
+            categoryId: const Value('test-food'),
+            amountMinor: 1000000,
+            period: BudgetPeriod.monthly,
+            startDate: DateTime(2026, 6, 1),
+            rolloverEnabled: const Value(true),
+          ),
+        );
+        await add('tx-jun', date: DateTime(2026, 6, 10), amountMinor: 700000);
+        await add('tx-jul', date: DateTime(2026, 7, 10), amountMinor: 400000);
+
+        const scope = SingleCategoryScope('test-food');
+        final reference = DateTime(2026, 8, 15);
+        Future<int> computeCarry() async {
+          final budget = (await budgets.getById('budget-gap'))!;
+          return rolloverCarryInMinor(
+            budget: budget,
+            reference: reference,
+            spentBetween: (from, to) => spentForScope(scope, from, to),
+          );
+        }
+
+        final before = await computeCarry();
+
+        // Archiving and restoring in between touches only `status`, which the
+        // calendar walk never inspects — the same rule
+        // `budgetHistoryProvider` already relies on.
+        await budgets.updateStatus('budget-gap', BudgetStatus.archived);
+        await budgets.updateStatus('budget-gap', BudgetStatus.active);
+
+        final after = await computeCarry();
+
+        expect(after, before);
+        // June: 10,000 - 7,000 = 3,000 remainder.
+        // July: (10,000 + 3,000) - 4,000 = 9,000 remainder, carried into
+        // August.
+        expect(after, 900000);
+      },
+    );
+
+    test(
+      'a WHOLE_ACCOUNT rollover budget generalises with no special-casing',
+      () async {
+        // Proves the window-only SpendLookup generalisation end-to-end for a
+        // non-SINGLE_CATEGORY scope, not just SINGLE_CATEGORY.
+        await budgets.insertOne(
+          BudgetsCompanion.insert(
+            id: 'budget-whole',
+            categoryId: const Value(null),
+            scopeType: const Value(BudgetScopeType.wholeAccount),
+            amountMinor: 2000000, // ৳20,000
+            period: BudgetPeriod.monthly,
+            startDate: DateTime(2026, 7, 1),
+            rolloverEnabled: const Value(true),
+          ),
+        );
+        // July: 12,000 food + 3,000 transport = 15,000 spent of a 20,000
+        // limit → 5,000 unspent carries into August.
+        await add('tx-jul-food', date: DateTime(2026, 7, 5), amountMinor: 1200000);
+        await add(
+          'tx-jul-transport',
+          date: DateTime(2026, 7, 6),
+          amountMinor: 300000,
+          categoryId: 'test-transport',
+        );
+
+        final budget = (await budgets.getById('budget-whole'))!;
+        const scope = WholeAccountScope();
+        final reference = DateTime(2026, 8, 15);
+
+        final carriedInMinor = await rolloverCarryInMinor(
+          budget: budget,
+          reference: reference,
+          spentBetween: (from, to) => spentForScope(scope, from, to),
+        );
+
+        expect(carriedInMinor, 500000); // ৳5,000
+      },
+    );
   });
 }

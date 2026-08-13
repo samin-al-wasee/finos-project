@@ -74,6 +74,16 @@ class Budgets extends Table {
 
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
+  /// Whether unused/overspent amounts carry into the next period
+  /// (docs/ROADMAP.md §8.3, "Budget rollover", docs/adr/008-budget-rollover.md).
+  /// Only meaningful for a recurring period; CUSTOM periods have no next
+  /// period to carry into. Editable without archive+recreate — unlike
+  /// categoryId/period/scopeType, toggling it doesn't reinterpret any past
+  /// reading of the budget, only whether today's effective limit includes a
+  /// derived carry.
+  BoolColumn get rolloverEnabled =>
+      boolean().withDefault(const Constant(false))();
+
   @override
   Set<Column<Object>> get primaryKey => {id};
 }

@@ -226,6 +226,7 @@ void main() {
         status: BudgetStatus.active,
         createdAt: timestamp,
         updatedAt: timestamp,
+        rolloverEnabled: false,
       );
     }
 

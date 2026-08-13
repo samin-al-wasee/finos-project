@@ -200,6 +200,13 @@ class _BudgetCard extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         Text('$spent / $limit', style: theme.textTheme.titleLarge),
+        if (budgetCarryInLabel(progress) != null)
+          Text(
+            budgetCarryInLabel(progress)!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colors.mutedText,
+            ),
+          ),
         const SizedBox(height: AppSpacing.sm),
         BudgetBar(progress: progress),
         const SizedBox(height: AppSpacing.sm),

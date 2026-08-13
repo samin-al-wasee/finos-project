@@ -49,6 +49,7 @@ void main() {
     DateTime? startDate,
     DateTime? endDate,
     BudgetStatus status = BudgetStatus.active,
+    bool? rolloverEnabled,
   }) async {
     await dao.insertOne(
       BudgetsCompanion.insert(
@@ -60,6 +61,9 @@ void main() {
         startDate: startDate ?? DateTime(2026, 8, 1),
         endDate: Value(endDate),
         status: Value(status),
+        rolloverEnabled: rolloverEnabled == null
+            ? const Value.absent()
+            : Value(rolloverEnabled),
       ),
     );
   }
@@ -81,6 +85,18 @@ void main() {
       expect(row.endDate, isNull);
       expect(row.createdAt, isNotNull);
       expect(row.updatedAt, isNotNull);
+      // Off by default (docs/adr/008-budget-rollover.md).
+      expect(row.rolloverEnabled, isFalse);
+    });
+
+    test('round-trips rolloverEnabled through insert and update', () async {
+      await insert('budget-rollover', rolloverEnabled: true);
+
+      final inserted = await dao.getById('budget-rollover');
+      expect(inserted!.rolloverEnabled, isTrue);
+
+      await dao.updateOne(inserted.copyWith(rolloverEnabled: false));
+      expect((await dao.getById('budget-rollover'))!.rolloverEnabled, isFalse);
     });
 
     test('accepts a null category for a non-single-category scope', () async {

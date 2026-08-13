@@ -40,6 +40,7 @@ void main() {
   BudgetProgress progressWith({
     required int limitMinor,
     required int spentMinor,
+    int carriedInMinor = 0,
   }) {
     return BudgetProgress(
       budget: BudgetRow(
@@ -54,11 +55,13 @@ void main() {
         status: BudgetStatus.active,
         createdAt: timestamp,
         updatedAt: timestamp,
+        rolloverEnabled: false,
       ),
       scope: SingleCategoryScope(category.id),
       categories: [category],
       window: window,
       spentMinor: spentMinor,
+      carriedInMinor: carriedInMinor,
     );
   }
 
@@ -171,6 +174,7 @@ void main() {
         status: BudgetStatus.active,
         createdAt: timestamp,
         updatedAt: timestamp,
+        rolloverEnabled: false,
       );
     }
 
@@ -234,6 +238,69 @@ void main() {
           spentMinor: 470000,
         ),
       );
+    });
+  });
+
+  group('carriedInMinor (docs/adr/008-budget-rollover.md)', () {
+    test('defaults to 0 when omitted', () {
+      final progress = progressWith(limitMinor: 1000000, spentMinor: 470000);
+
+      expect(progress.carriedInMinor, 0);
+      expect(progress.limitMinor, 1000000);
+    });
+
+    test('a positive carry raises the effective limit', () {
+      final progress = progressWith(
+        limitMinor: 1000000,
+        spentMinor: 470000,
+        carriedInMinor: 300000,
+      );
+
+      expect(progress.limitMinor, 1300000);
+      expect(progress.remainingMinor, 830000);
+    });
+
+    test('a negative carry (a deficit) lowers the effective limit', () {
+      final progress = progressWith(
+        limitMinor: 1000000,
+        spentMinor: 470000,
+        carriedInMinor: -300000,
+      );
+
+      expect(progress.limitMinor, 700000);
+      expect(progress.remainingMinor, 230000);
+    });
+
+    test('remainingMinor/usedFraction/health key off the effective limit', () {
+      // 1,000,000 own limit + 300,000 carried in = 1,300,000 effective; 1,100,000
+      // spent is 84.6%, past the 80% near-limit threshold but not exceeded.
+      final progress = progressWith(
+        limitMinor: 1000000,
+        spentMinor: 1100000,
+        carriedInMinor: 300000,
+      );
+
+      expect(progress.limitMinor, 1300000);
+      expect(progress.remainingMinor, 200000);
+      expect(progress.usedFraction, closeTo(0.846, 0.001));
+      expect(progress.isExceeded, isFalse);
+      expect(progress.health, BudgetHealth.nearLimit);
+    });
+
+    test('a deficit can push a budget into exceeded even under its own '
+        'limit', () {
+      // Spent 900,000 of an own 1,000,000 limit — under limit on its own —
+      // but a -300,000 carried-in deficit drops the effective limit to
+      // 700,000, which 900,000 exceeds.
+      final progress = progressWith(
+        limitMinor: 1000000,
+        spentMinor: 900000,
+        carriedInMinor: -300000,
+      );
+
+      expect(progress.limitMinor, 700000);
+      expect(progress.isExceeded, isTrue);
+      expect(progress.health, BudgetHealth.exceeded);
     });
   });
 }
