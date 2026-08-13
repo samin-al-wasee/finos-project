@@ -777,6 +777,19 @@ Border
 
 Financial semantic colors must remain consistent.
 
+> **Implementation note:** `AppTheme` (`lib/core/theme/app_theme.dart`)
+> generates `Primary`/`Secondary`/`Surface`/`Background` via Material 3's
+> `ColorScheme.fromSeed`, seeded from a fixed brand teal by default. On
+> Android 12+ (including Samsung One UI, which reads from the same
+> `WallpaperColors` platform API), the app is Material You compliant: it
+> instead uses the device's wallpaper-derived `ColorScheme`, via
+> `DynamicColorBuilder` (`dynamic_color` package) in `lib/app/app.dart`.
+> Platforms without that capability (iOS, older Android) keep the fixed seed.
+> The financial semantic colors below (`Income`/`Expense`/`Transfer`/etc.,
+> `FinosColors` in `lib/core/theme/app_colors.dart`) are unaffected either
+> way — they stay fixed regardless of dynamic color, per the consistency
+> requirement above.
+
 ---
 
 # 26. Financial Color Semantics
