@@ -36,6 +36,50 @@ void main() {
     return database;
   }
 
+  /// Bounds the bar to [height] — a stand-in for how little room the app
+  /// shell's `ConstrainedBox(maxHeight: ...)` can end up giving it once a
+  /// keyboard (or a larger system text-scale setting) eats most of the
+  /// screen. Used to reproduce the "RenderFlex overflowed ... on the bottom"
+  /// regression the suggestion dropdown used to hit in that situation.
+  Future<AppDatabase> pumpBarConstrained(
+    WidgetTester tester,
+    double height,
+  ) async {
+    final database = AppDatabase.inMemory();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(database)],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: SizedBox(height: height, child: const QuickEntryBar()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    return database;
+  }
+
+  testWidgets(
+    'the dropdown does not overflow when the bar has very little height '
+    '(e.g. keyboard + a small screen)',
+    (tester) async {
+      // 40px is comfortably below the input row's own natural height, so
+      // pre-fix this reliably reproduced "A RenderFlex overflowed ... on the
+      // bottom" — the suggestion list shrinking to zero wasn't enough, since
+      // the input row itself couldn't shrink below its intrinsic size.
+      final database = await pumpBarConstrained(tester, 40);
+
+      await tester.enterText(find.byType(TextField), '@');
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+
+      await database.close();
+    },
+  );
+
   testWidgets('"@" shows the top-level commands, scrollable to the rest', (
     tester,
   ) async {

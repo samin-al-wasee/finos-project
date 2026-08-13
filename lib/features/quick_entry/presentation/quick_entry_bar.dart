@@ -44,6 +44,18 @@ class QuickEntryBar extends ConsumerStatefulWidget {
 }
 
 class _QuickEntryBarState extends ConsumerState<QuickEntryBar> {
+  // The suggestion list's own cap, unchanged from before this fix.
+  static const _maxSuggestionsHeight = 220.0;
+
+  // A conservative upper bound on the input row's natural height (the
+  // TextField + send button, plus their padding) at the default text scale —
+  // reserved first so the suggestion list never claims space the input row
+  // actually needs. Deliberately rounded up from the ~64px this row measures
+  // at scale 1.0, since underestimating here is what causes the vertical
+  // overflow this constant exists to prevent; the SingleChildScrollView in
+  // build() covers the rest (e.g. a larger system text-scale setting).
+  static const _minInputRowHeight = 72.0;
+
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
 
@@ -114,107 +126,136 @@ class _QuickEntryBarState extends ConsumerState<QuickEntryBar> {
       vertical: AppSpacing.md,
     );
 
+    final inputRow = Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.xs,
+        AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Stack(
+              children: [
+                if (ghostHint != null)
+                  // An invisible mirror of the typed text followed by
+                  // the low-opacity hint, positioned exactly where
+                  // the real TextField (same style/padding) would
+                  // continue it — a ghost-text overlay, since
+                  // InputDecoration.hintText disappears entirely the
+                  // moment the field has any content.
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Padding(
+                        padding: fieldPadding,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text.rich(
+                            TextSpan(
+                              style: fieldStyle,
+                              children: [
+                                TextSpan(
+                                  text: text,
+                                  style: const TextStyle(
+                                    color: Colors.transparent,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: ghostHint,
+                                  style: TextStyle(
+                                    color: theme
+                                        .extension<FinosColors>()!
+                                        .mutedText
+                                        .withValues(alpha: 0.5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.clip,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  style: fieldStyle,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _submit(lookups),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: fieldPadding,
+                    hintText: parsed.command == null
+                        ? 'Try @ — income, expense, transfer…'
+                        : null,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.send),
+            tooltip: 'Record',
+            onPressed: canSubmit ? () => _submit(lookups) : null,
+          ),
+        ],
+      ),
+    );
+
     return Material(
       color: theme.colorScheme.surfaceContainerHighest,
       elevation: 8,
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (suggestions != null)
-              // Flexible (not a bare ConstrainedBox) so this shrinks to
-              // whatever height the bar actually has room for instead of
-              // demanding its full 220px and overflowing the screen — the
-              // bar's own space is capped by the app shell to the height
-              // left after the keyboard, which can be less than that.
-              Flexible(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 220),
-                  child: suggestions,
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.sm,
-                AppSpacing.xs,
-                AppSpacing.sm,
-              ),
-              child: Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // A plain Flexible around the suggestion list still assumes the
+            // *rest* of the Column (the input row) always gets its full,
+            // unshrinkable natural height — a Column's non-flexible children
+            // are laid out at their intrinsic size regardless of the
+            // incoming constraint, so if the keyboard (or a larger system
+            // text-scale setting, which grows the input row itself) leaves
+            // less room than that alone, the Column overflows even with the
+            // suggestion list's share reduced to nothing. Reserving the input
+            // row's space first and handing only the remainder to the
+            // suggestion list — capped at the same 220px as before — keeps
+            // the common case pixel-identical to a plain ConstrainedBox(220)
+            // while guaranteeing the total never exceeds what's available.
+            final available = constraints.maxHeight;
+            final suggestionsMaxHeight = available.isFinite
+                ? (available - _minInputRowHeight).clamp(
+                    0.0,
+                    _maxSuggestionsHeight,
+                  )
+                : _maxSuggestionsHeight;
+
+            // SingleChildScrollView is the last-resort net: if the input
+            // row's *actual* height still exceeds the reserved estimate
+            // (e.g. an even larger text scale than accounted for), this
+            // turns that into a small scroll instead of a hard render
+            // overflow — the dropdown clips/scrolls rather than showing the
+            // overflow banner, on any screen size.
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        if (ghostHint != null)
-                          // An invisible mirror of the typed text followed by
-                          // the low-opacity hint, positioned exactly where
-                          // the real TextField (same style/padding) would
-                          // continue it — a ghost-text overlay, since
-                          // InputDecoration.hintText disappears entirely the
-                          // moment the field has any content.
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: Padding(
-                                padding: fieldPadding,
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text.rich(
-                                    TextSpan(
-                                      style: fieldStyle,
-                                      children: [
-                                        TextSpan(
-                                          text: text,
-                                          style: const TextStyle(
-                                            color: Colors.transparent,
-                                          ),
-                                        ),
-                                        TextSpan(
-                                          text: ghostHint,
-                                          style: TextStyle(
-                                            color: theme
-                                                .extension<FinosColors>()!
-                                                .mutedText
-                                                .withValues(alpha: 0.5),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    maxLines: 1,
-                                    softWrap: false,
-                                    overflow: TextOverflow.clip,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        TextField(
-                          controller: _controller,
-                          focusNode: _focusNode,
-                          style: fieldStyle,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => _submit(lookups),
-                          decoration: InputDecoration(
-                            isDense: true,
-                            contentPadding: fieldPadding,
-                            hintText: parsed.command == null
-                                ? 'Try @ — income, expense, transfer…'
-                                : null,
-                            border: const OutlineInputBorder(),
-                          ),
-                        ),
-                      ],
+                  if (suggestions != null)
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: suggestionsMaxHeight,
+                      ),
+                      child: suggestions,
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.send),
-                    tooltip: 'Record',
-                    onPressed: canSubmit ? () => _submit(lookups) : null,
-                  ),
+                  inputRow,
                 ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
