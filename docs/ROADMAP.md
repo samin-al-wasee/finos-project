@@ -737,6 +737,25 @@ template or applying a saved filter (§8.2, §8.5).
 
 ---
 
+## 8.9 Accounts Card View
+
+> **Status:** Implemented, built directly at user request rather than from
+> anything sketched elsewhere in this document. An `AppBar` toggle on the
+> Accounts tab switches between the existing list and a swipeable single-
+> account card (`PageView`, one account per page, not a peeking carousel),
+> additive to the list rather than replacing it. Below the current card, a
+> live feed shows that account's transactions and transfers, reusing the
+> existing `TransactionFilter`/`TransactionTile` machinery the Transactions
+> tab already uses — no new query layer. Loan repayments need no special
+> casing: they are ordinary transactions with `accountId` set (ADR-004), so
+> they already appear in the same feed. Tapping a card opens the existing
+> `AccountDetailsScreen` unchanged — card view is an additional way to browse
+> accounts, not a replacement for that screen's edit/archive actions. The
+> toggle is hidden when there are no active accounts; archived accounts
+> remain reachable only through the list.
+
+---
+
 # 9. Phase 3 — Personal Finance Hub
 
 ## Goal

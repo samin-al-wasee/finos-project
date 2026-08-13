@@ -8,19 +8,32 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../domain/account_status.dart';
+import 'account_card_view.dart';
 import 'account_details_screen.dart';
 import 'account_form_screen.dart';
 import 'account_type_label.dart';
+
+/// Whether the Accounts tab shows every account as a plain list, or one
+/// account at a time as a swipeable card with its own transaction feed below.
+/// Card view is additive — list stays the default.
+enum _ViewMode { list, card }
 
 /// Accounts tab content.
 ///
 /// Watches the accounts stream and groups active accounts above archived ones.
 /// A floating action button and the empty state both lead to the account form.
-class AccountsListScreen extends ConsumerWidget {
+class AccountsListScreen extends ConsumerStatefulWidget {
   const AccountsListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AccountsListScreen> createState() => _AccountsListScreenState();
+}
+
+class _AccountsListScreenState extends ConsumerState<AccountsListScreen> {
+  _ViewMode _viewMode = _ViewMode.list;
+
+  @override
+  Widget build(BuildContext context) {
     final accounts = ref.watch(accountsStreamProvider);
     // Live balances (opening balance + net transaction impact), so the list
     // reflects recent transactions instead of the balance at creation time.
@@ -29,7 +42,28 @@ class AccountsListScreen extends ConsumerWidget {
     return Scaffold(
       // Category management now lives under Settings → Categories, so this
       // screen no longer carries a shortcut for it.
-      appBar: AppBar(title: const Text('Accounts')),
+      appBar: AppBar(
+        title: const Text('Accounts'),
+        actions: [
+          accounts.maybeWhen(
+            data: (rows) {
+              final hasActive = rows.any(
+                (r) => r.status == AccountStatus.active,
+              );
+              if (!hasActive) return const SizedBox.shrink();
+              final isCard = _viewMode == _ViewMode.card;
+              return IconButton(
+                icon: Icon(isCard ? Icons.view_list : Icons.view_carousel),
+                tooltip: isCard ? 'List view' : 'Card view',
+                onPressed: () => setState(
+                  () => _viewMode = isCard ? _ViewMode.list : _ViewMode.card,
+                ),
+              );
+            },
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         // Distinct from the other tab FABs — see the note in
         // transactions_list_screen.dart.
@@ -52,10 +86,7 @@ class AccountsListScreen extends ConsumerWidget {
                   label: const Text('Add account'),
                 ),
               )
-            : _AccountList(
-                rows: rows,
-                balances: balances.valueOrNull ?? const <String, int>{},
-              ),
+            : _buildBody(rows, balances.valueOrNull ?? const <String, int>{}),
         error: (error, _) => EmptyState(
           icon: Icons.error_outline,
           title: 'Something went wrong',
@@ -74,6 +105,15 @@ class AccountsListScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildBody(List<FinancialAccountRow> rows, Map<String, int> balances) {
+    final active = rows.where((r) => r.status == AccountStatus.active).toList();
+
+    if (_viewMode == _ViewMode.card && active.isNotEmpty) {
+      return AccountCardView(rows: active, balances: balances);
+    }
+    return _AccountList(rows: rows, balances: balances);
   }
 
   void _openForm(BuildContext context) {
