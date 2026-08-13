@@ -874,12 +874,14 @@ LENT
 BORROWED
 ```
 
-Every loan is currently an independent row: there is no relationship between
-loans made with the same counterparty (no "extend an existing loan" or "merge
-into an existing relationship" concept). This is tracked as future work in
-docs/ROADMAP.md §8.7 ("Loan Relationships") and is not authorized for
-implementation until the roadmap moves it into the current phase (AGENTS.md
-§34).
+A loan may optionally belong to a **relationship** with other loans made with
+the same counterparty — for example, a partial repayment followed by another
+advance (docs/ROADMAP.md §8.7, ADR-006). This is represented by a nullable,
+self-referencing `group_id` column: every loan in a relationship stores the
+id of the relationship's *root* loan (the first one created), so a
+relationship is always exactly one level deep and needs no recursive lookup.
+Outstanding and status remain entirely per-row, unaffected by grouping — see
+§32.
 
 ---
 
@@ -953,6 +955,15 @@ differences, all recorded in ADR-004:
   and moves no money today — opening state, exactly as an account's opening balance
   is (§9). Without this, a loan made today would leave the user's cash balance
   overstated until they recorded the movement by hand.
+* **A nullable, self-referencing `group_id` is added (schema v11, ADR-006).** It
+  links a loan into a relationship with other loans made with the same
+  counterparty — "extend an existing loan" and "merge on creation" both resolve
+  to this column. It holds the relationship's *root* loan id, never a parent
+  chain, so grouping is a flat `WHERE id = :root OR group_id = :root` with no
+  recursion. **`outstanding_amount` and `status` stay entirely per-row**,
+  computed by the unmodified rules above; a relationship's combined figures are
+  a separate, purely derived, read-time aggregate (`LoanGroup`) that is never
+  stored and never feeds back into a row's own figures.
 
 The `LoanRepayment` entity in §34 does not exist as a table. Repayments are
 transactions of type `LOAN_RECEIPT` / `LOAN_PAYMENT` carrying the loan's id (§12),
@@ -1148,15 +1159,20 @@ FinancialAccount
       │ N                          │              │
       ▼                            ▼              │ disbursement
 Transaction ─── loan_id ───────▶ Loan ────────────┘
-      │
-      ├── category_id ──▶ Category ──▶ Budget
-      │
+      │                            │
+      ├── category_id ──▶ Category │  Loan ─── group_id ───▶ Loan (root)
+      │                    │          (self-reference, ADR-006)
+      │                    ▼
+      │                  Budget
       └── destination_account_id ──▶ FinancialAccount   (transfers)
 ```
 
 A loan optionally points back at the account its principal moved through, and every
 loan movement points at its loan. Ordinary transactions leave `loan_id` null;
-loan movements leave `category_id` null.
+loan movements leave `category_id` null. A loan optionally points at another
+loan via `group_id` — the id of the relationship's root loan — when it is
+linked into a relationship (§29, ADR-006); this edge is read-time only and
+never participates in balance or budget derivation.
 
 Recurring transactions generate or schedule actual transactions:
 
@@ -1238,11 +1254,11 @@ Conceptually:
 
 
 ┌─────────────────────┐
-│ Loan                │
-│                     │
-│ id                  │
-│ type                │
-│ principal           │
+│ Loan                │◀──┐
+│                     │   │ group_id
+│ id                  │   │ (self-reference,
+│ type                │───┘  ADR-006 — points
+│ principal           │      at the root loan)
 │ outstanding         │
 └──────────┬──────────┘
            │

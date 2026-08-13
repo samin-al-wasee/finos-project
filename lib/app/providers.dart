@@ -21,6 +21,7 @@ import '../features/categories/data/category_dao.dart';
 import '../features/dashboard/domain/dashboard_data.dart';
 import '../features/loans/application/loan_controller.dart';
 import '../features/loans/data/loan_dao.dart';
+import '../features/loans/domain/loan_group.dart';
 import '../features/loans/domain/loan_progress.dart';
 import '../features/recurring/application/recurring_transaction_controller.dart';
 import '../features/recurring/data/recurring_transaction_dao.dart';
@@ -400,6 +401,30 @@ final loanMovementsProvider =
       await ref.watch(transactionsStreamProvider.future);
       return ref.watch(transactionDaoProvider).forLoan(loanId);
     });
+
+/// Loans grouped into relationships, for the list screen
+/// (docs/adr/006-loan-relationships.md).
+///
+/// Grouping is a pure, in-memory transform over [loanProgressProvider] — no
+/// separate DAO query is needed, since a relationship is never itself a source
+/// of truth for money.
+final loanGroupsProvider = FutureProvider<List<LoanGroup>>((ref) async {
+  final progress = await ref.watch(loanProgressProvider.future);
+  return groupLoanProgress(progress);
+});
+
+/// The relationship containing [loanId], or `null` if that loan does not
+/// exist. Used by the details screen's "Related loans" section.
+final loanGroupForLoanProvider = FutureProvider.family<LoanGroup?, String>((
+  ref,
+  loanId,
+) async {
+  final groups = await ref.watch(loanGroupsProvider.future);
+  for (final group in groups) {
+    if (group.members.any((m) => m.loan.id == loanId)) return group;
+  }
+  return null;
+});
 
 // ------------------------------------------------------------------
 // Credit cards

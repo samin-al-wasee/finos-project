@@ -632,6 +632,27 @@ Repayments should maintain the relationship between the loan and the correspondi
 
 The domain model must prevent loan calculations from being duplicated across UI screens.
 
+### V1 implementation
+
+Relationships between loans (ADR-006) are modelled as a flat self-reference,
+resolved at read time — never a stored aggregate and never a parent chain:
+
+* `loans.group_id` is a nullable column pointing at the id of the
+  relationship's *root* loan. Extending a loan resolves the new row's
+  `group_id` to `parent.groupId ?? parent.id`, so a relationship of any
+  length stays exactly one level deep and every "loans in this relationship"
+  query is a flat `WHERE id = :root OR group_id = :root` — no recursive CTE.
+* `LoanController.create()` gained one optional parameter, `extendsLoanId`,
+  used by both the loan detail screen's "Extend" action and the create
+  form's "Link to an existing loan" picker — the two entry points the
+  roadmap asked for share one code path rather than two implementations that
+  could drift apart.
+* Per-row derivation (`LoanProgress`: `outstandingMinor`, `standing()`,
+  `isPaid`) is completely unaffected — grouping is a domain-layer, read-only
+  aggregation (`LoanGroup`/`groupLoanProgress()`) built entirely on top of
+  existing per-row `LoanProgress` values, never a second source of truth for
+  a row's own outstanding amount or status.
+
 ---
 
 # 20. Recurring Transaction Architecture

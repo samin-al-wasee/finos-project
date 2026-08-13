@@ -169,11 +169,22 @@ class BackupService {
         await _database.delete(_database.categories).go();
         await _database.delete(_database.financialAccounts).go();
 
-        // Parents first on the way back in.
+        // Parents first on the way back in. Within loans, `group_id` is a
+        // same-table foreign key, so a root (no group_id) must land before any
+        // loan that points at it — a naive backup file order (e.g. insertion
+        // order from a different device) could otherwise place a child first
+        // and fail the FK check. A stable partition is enough since a
+        // relationship is always exactly one level deep
+        // (docs/adr/006-loan-relationships.md).
+        final orderedLoans = [
+          ...backup.loans.where((l) => l.groupId == null),
+          ...backup.loans.where((l) => l.groupId != null),
+        ];
+
         await _database.batch((b) {
           b.insertAll(_database.financialAccounts, backup.accounts);
           b.insertAll(_database.categories, backup.categories);
-          b.insertAll(_database.loans, backup.loans);
+          b.insertAll(_database.loans, orderedLoans);
           b.insertAll(_database.transactions, backup.transactions);
           b.insertAll(_database.budgets, backup.budgets);
         });

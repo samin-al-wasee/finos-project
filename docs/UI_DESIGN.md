@@ -639,6 +639,16 @@ John
 
 This avoids ambiguity.
 
+### V1 implementation
+
+A loan that has been extended, or linked to another loan on creation, renders
+as **one tile per relationship** rather than one tile per row
+(ADR-006): the tile shows the primary member's name, the combined
+outstanding/principal across the relationship's active members, and a small
+"+N linked" indicator when more than one loan is linked. Tapping it opens the
+primary member's own `LoanDetailsScreen` — there is no separate "group
+details" screen.
+
 ---
 
 # 22. Loan Details
@@ -664,6 +674,17 @@ Due
 ```
 
 Repayment history should be accessible.
+
+### V1 implementation
+
+An "Extend" button sits beside "Record payment"/"Record receipt", visible
+whenever the loan is not archived — deliberately including a fully paid
+loan, since "partial repayment, then another advance" is exactly the
+scenario this exists for (ADR-006). When the loan belongs to a relationship
+with more than one member, a "Related loans" section appears below the
+Activity list: a one-line combined-outstanding summary, then each sibling
+with its own start date, principal, outstanding, and standing, each tappable
+into its own details screen.
 
 ---
 

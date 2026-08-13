@@ -1153,6 +1153,20 @@ class $LoansTable extends Loans with TableInfo<$LoansTable, LoanRow> {
         requiredDuringInsert: false,
         defaultValue: const Constant('ACTIVE'),
       ).withConverter<LoanStatus>($LoansTable.$converterstatus);
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES loans (id)',
+    ),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1189,6 +1203,7 @@ class $LoansTable extends Loans with TableInfo<$LoansTable, LoanRow> {
     description,
     disbursementAccountId,
     status,
+    groupId,
     createdAt,
     updatedAt,
   ];
@@ -1266,6 +1281,12 @@ class $LoansTable extends Loans with TableInfo<$LoansTable, LoanRow> {
         ),
       );
     }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1331,6 +1352,10 @@ class $LoansTable extends Loans with TableInfo<$LoansTable, LoanRow> {
           data['${effectivePrefix}status'],
         )!,
       ),
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -1390,6 +1415,13 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
 
   /// Stored lifecycle state — docs/DATA_MODEL.md §33, §39.
   final LoanStatus status;
+
+  /// The relationship this loan belongs to, when it is an extension of (or has
+  /// been extended by) another loan. Points at the *root* loan of the
+  /// relationship — the first one created — so every member of a relationship
+  /// shares one value and grouping needs no recursive traversal
+  /// (docs/adr/006-loan-relationships.md).
+  final String? groupId;
   final DateTime createdAt;
   final DateTime updatedAt;
   const LoanRow({
@@ -1403,6 +1435,7 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
     required this.description,
     this.disbursementAccountId,
     required this.status,
+    this.groupId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -1429,6 +1462,9 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
         $LoansTable.$converterstatus.toSql(status),
       );
     }
+    if (!nullToAbsent || groupId != null) {
+      map['group_id'] = Variable<String>(groupId);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -1450,6 +1486,9 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
           ? const Value.absent()
           : Value(disbursementAccountId),
       status: Value(status),
+      groupId: groupId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(groupId),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -1473,6 +1512,7 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
         json['disbursementAccountId'],
       ),
       status: serializer.fromJson<LoanStatus>(json['status']),
+      groupId: serializer.fromJson<String?>(json['groupId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -1493,6 +1533,7 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
         disbursementAccountId,
       ),
       'status': serializer.toJson<LoanStatus>(status),
+      'groupId': serializer.toJson<String?>(groupId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -1509,6 +1550,7 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
     String? description,
     Value<String?> disbursementAccountId = const Value.absent(),
     LoanStatus? status,
+    Value<String?> groupId = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => LoanRow(
@@ -1524,6 +1566,7 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
         ? disbursementAccountId.value
         : this.disbursementAccountId,
     status: status ?? this.status,
+    groupId: groupId.present ? groupId.value : this.groupId,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1545,6 +1588,7 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
           ? data.disbursementAccountId.value
           : this.disbursementAccountId,
       status: data.status.present ? data.status.value : this.status,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1563,6 +1607,7 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
           ..write('description: $description, ')
           ..write('disbursementAccountId: $disbursementAccountId, ')
           ..write('status: $status, ')
+          ..write('groupId: $groupId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1581,6 +1626,7 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
     description,
     disbursementAccountId,
     status,
+    groupId,
     createdAt,
     updatedAt,
   );
@@ -1598,6 +1644,7 @@ class LoanRow extends DataClass implements Insertable<LoanRow> {
           other.description == this.description &&
           other.disbursementAccountId == this.disbursementAccountId &&
           other.status == this.status &&
+          other.groupId == this.groupId &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1613,6 +1660,7 @@ class LoansCompanion extends UpdateCompanion<LoanRow> {
   final Value<String> description;
   final Value<String?> disbursementAccountId;
   final Value<LoanStatus> status;
+  final Value<String?> groupId;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -1627,6 +1675,7 @@ class LoansCompanion extends UpdateCompanion<LoanRow> {
     this.description = const Value.absent(),
     this.disbursementAccountId = const Value.absent(),
     this.status = const Value.absent(),
+    this.groupId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1642,6 +1691,7 @@ class LoansCompanion extends UpdateCompanion<LoanRow> {
     this.description = const Value.absent(),
     this.disbursementAccountId = const Value.absent(),
     this.status = const Value.absent(),
+    this.groupId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1661,6 +1711,7 @@ class LoansCompanion extends UpdateCompanion<LoanRow> {
     Expression<String>? description,
     Expression<String>? disbursementAccountId,
     Expression<String>? status,
+    Expression<String>? groupId,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -1677,6 +1728,7 @@ class LoansCompanion extends UpdateCompanion<LoanRow> {
       if (disbursementAccountId != null)
         'disbursement_account_id': disbursementAccountId,
       if (status != null) 'status': status,
+      if (groupId != null) 'group_id': groupId,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -1694,6 +1746,7 @@ class LoansCompanion extends UpdateCompanion<LoanRow> {
     Value<String>? description,
     Value<String?>? disbursementAccountId,
     Value<LoanStatus>? status,
+    Value<String?>? groupId,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -1710,6 +1763,7 @@ class LoansCompanion extends UpdateCompanion<LoanRow> {
       disbursementAccountId:
           disbursementAccountId ?? this.disbursementAccountId,
       status: status ?? this.status,
+      groupId: groupId ?? this.groupId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -1755,6 +1809,9 @@ class LoansCompanion extends UpdateCompanion<LoanRow> {
         $LoansTable.$converterstatus.toSql(status.value),
       );
     }
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1780,6 +1837,7 @@ class LoansCompanion extends UpdateCompanion<LoanRow> {
           ..write('description: $description, ')
           ..write('disbursementAccountId: $disbursementAccountId, ')
           ..write('status: $status, ')
+          ..write('groupId: $groupId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -7099,6 +7157,7 @@ typedef $$LoansTableCreateCompanionBuilder =
       Value<String> description,
       Value<String?> disbursementAccountId,
       Value<LoanStatus> status,
+      Value<String?> groupId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -7115,6 +7174,7 @@ typedef $$LoansTableUpdateCompanionBuilder =
       Value<String> description,
       Value<String?> disbursementAccountId,
       Value<LoanStatus> status,
+      Value<String?> groupId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -7140,6 +7200,23 @@ final class $$LoansTableReferences
     final item = $_typedResult.readTableOrNull(
       _disbursementAccountIdTable($_db),
     );
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $LoansTable _groupIdTable(_$AppDatabase db) =>
+      db.loans.createAlias('loans__group_id__loans__id');
+
+  $$LoansTableProcessedTableManager? get groupId {
+    final $_column = $_itemColumn<String>('group_id');
+    if ($_column == null) return null;
+    final manager = $$LoansTableTableManager(
+      $_db,
+      $_db.loans,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_groupIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -7244,6 +7321,29 @@ class $$LoansTableFilterComposer extends Composer<_$AppDatabase, $LoansTable> {
           }) => $$FinancialAccountsTableFilterComposer(
             $db: $db,
             $table: $db.financialAccounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$LoansTableFilterComposer get groupId {
+    final $$LoansTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.loans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LoansTableFilterComposer(
+            $db: $db,
+            $table: $db.loans,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -7365,6 +7465,29 @@ class $$LoansTableOrderingComposer
     );
     return composer;
   }
+
+  $$LoansTableOrderingComposer get groupId {
+    final $$LoansTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.loans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LoansTableOrderingComposer(
+            $db: $db,
+            $table: $db.loans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$LoansTableAnnotationComposer
@@ -7437,6 +7560,29 @@ class $$LoansTableAnnotationComposer
     return composer;
   }
 
+  $$LoansTableAnnotationComposer get groupId {
+    final $$LoansTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.loans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LoansTableAnnotationComposer(
+            $db: $db,
+            $table: $db.loans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
   Expression<T> transactionsRefs<T extends Object>(
     Expression<T> Function($$TransactionsTableAnnotationComposer a) f,
   ) {
@@ -7478,6 +7624,7 @@ class $$LoansTableTableManager
           LoanRow,
           PrefetchHooks Function({
             bool disbursementAccountId,
+            bool groupId,
             bool transactionsRefs,
           })
         > {
@@ -7504,6 +7651,7 @@ class $$LoansTableTableManager
                 Value<String> description = const Value.absent(),
                 Value<String?> disbursementAccountId = const Value.absent(),
                 Value<LoanStatus> status = const Value.absent(),
+                Value<String?> groupId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -7518,6 +7666,7 @@ class $$LoansTableTableManager
                 description: description,
                 disbursementAccountId: disbursementAccountId,
                 status: status,
+                groupId: groupId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -7534,6 +7683,7 @@ class $$LoansTableTableManager
                 Value<String> description = const Value.absent(),
                 Value<String?> disbursementAccountId = const Value.absent(),
                 Value<LoanStatus> status = const Value.absent(),
+                Value<String?> groupId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -7548,6 +7698,7 @@ class $$LoansTableTableManager
                 description: description,
                 disbursementAccountId: disbursementAccountId,
                 status: status,
+                groupId: groupId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -7559,7 +7710,11 @@ class $$LoansTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({disbursementAccountId = false, transactionsRefs = false}) {
+              ({
+                disbursementAccountId = false,
+                groupId = false,
+                transactionsRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
@@ -7590,6 +7745,19 @@ class $$LoansTableTableManager
                                         ._disbursementAccountIdTable(db),
                                     referencedColumn: $$LoansTableReferences
                                         ._disbursementAccountIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+                        if (groupId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.groupId,
+                                    referencedTable: $$LoansTableReferences
+                                        ._groupIdTable(db),
+                                    referencedColumn: $$LoansTableReferences
+                                        ._groupIdTable(db)
                                         .id,
                                   )
                                   as T;
@@ -7642,6 +7810,7 @@ typedef $$LoansTableProcessedTableManager =
       LoanRow,
       PrefetchHooks Function({
         bool disbursementAccountId,
+        bool groupId,
         bool transactionsRefs,
       })
     >;

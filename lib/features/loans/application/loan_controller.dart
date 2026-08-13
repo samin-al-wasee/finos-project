@@ -35,6 +35,15 @@ class LoanController {
   /// Leave [disbursementAccountId] null for a loan that pre-dates FinOS: it is
   /// opening state and moves no money today.
   ///
+  /// [extendsLoanId], when given, links the new loan into an existing
+  /// relationship (docs/adr/006-loan-relationships.md) — this is both the
+  /// "Extend" action from a loan's detail screen and "Link to an existing
+  /// loan" on the create form; the two are the same code path. The parent
+  /// must exist and not be archived, and must share this loan's direction and
+  /// currency. The new loan's `groupId` resolves to the parent's own root
+  /// (`parent.groupId ?? parent.id`), so a relationship of any length stays
+  /// flat — one level deep.
+  ///
   /// Returns the generated loan id.
   Future<String> create({
     required LoanDirection direction,
@@ -45,6 +54,7 @@ class LoanController {
     DateTime? dueDate,
     String description = '',
     String currency = 'BDT',
+    String? extendsLoanId,
   }) async {
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) {
@@ -64,6 +74,22 @@ class LoanController {
       await _requireActiveAccount(disbursementAccountId);
     }
 
+    String? groupId;
+    if (extendsLoanId != null) {
+      final parent = await _dao.getById(extendsLoanId);
+      if (parent == null) throw StateError('Loan not found: $extendsLoanId');
+      if (parent.status == LoanStatus.archived) {
+        throw StateError('Restore this loan before extending it');
+      }
+      if (parent.type != direction) {
+        throw ArgumentError('An extension must match the loan\'s direction');
+      }
+      if (parent.currency != currency) {
+        throw ArgumentError('An extension must match the loan\'s currency');
+      }
+      groupId = parent.groupId ?? parent.id;
+    }
+
     final id = generateId();
     // One transaction so a loan can never be left without the movement that
     // created it, or the movement without its loan.
@@ -79,6 +105,7 @@ class LoanController {
           dueDate: Value(due),
           description: Value(description),
           disbursementAccountId: Value(disbursementAccountId),
+          groupId: Value(groupId),
         ),
       );
 
@@ -208,6 +235,12 @@ class LoanController {
   Future<void> delete(String id) async {
     final loan = await _dao.getById(id);
     if (loan == null) throw StateError('Loan not found: $id');
+
+    if (await _dao.hasGroupChildren(id)) {
+      throw ArgumentError(
+        'This loan has linked extensions. Archive it instead of deleting it.',
+      );
+    }
 
     final hasRepayments = await _transactions.hasLoanMovement(
       id,

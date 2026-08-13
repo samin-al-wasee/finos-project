@@ -11,6 +11,7 @@ import '../../accounts/domain/account_status.dart';
 import '../application/loan_controller.dart';
 import '../domain/loan_direction.dart';
 import '../domain/loan_draft.dart';
+import '../domain/loan_progress.dart';
 import 'loan_labels.dart';
 
 /// Add/edit form for a loan (FR-06).
@@ -22,14 +23,23 @@ import 'loan_labels.dart';
 ///
 /// [draft] pre-fills a *new* loan from quick entry (docs/ARCHITECTURE.md,
 /// "quick entry") — a one-off, unsaved seed, ignored when [initial] is set.
+///
+/// [extending] puts the form in "extend" mode (docs/adr/006-loan-relationships.md):
+/// the direction is fixed to the loan being extended and the name is pre-filled
+/// (still editable), but everything else — amount, disbursement, dates — is a
+/// fresh choice, exactly like creating any other loan. Saving links the new loan
+/// into [extending]'s relationship via `LoanController.create(extendsLoanId:)`.
 class LoanFormScreen extends ConsumerStatefulWidget {
-  const LoanFormScreen({super.key, this.initial, this.draft});
+  const LoanFormScreen({super.key, this.initial, this.draft, this.extending});
 
   /// The loan being edited, or `null` when creating a new one.
   final LoanRow? initial;
 
   /// A quick-entry seed to pre-fill a new loan from, or `null`.
   final LoanDraft? draft;
+
+  /// The loan being extended, or `null` for a plain create/edit.
+  final LoanRow? extending;
 
   @override
   ConsumerState<LoanFormScreen> createState() => _LoanFormScreenState();
@@ -44,20 +54,27 @@ class _LoanFormScreenState extends ConsumerState<LoanFormScreen> {
   late DateTime _startDate;
   DateTime? _dueDate;
   String? _disbursementAccountId;
+
+  /// The loan picked from "Link to an existing loan," or `null`. Only
+  /// meaningful on the plain create path — [widget.extending] takes over this
+  /// role when the form was opened via the "Extend" action.
+  String? _linkedLoanId;
   bool _saving = false;
 
   bool get _isEditing => widget.initial != null;
+  bool get _isExtending => widget.extending != null;
 
   @override
   void initState() {
     super.initState();
     final initial = widget.initial;
-    final draft = initial == null ? widget.draft : null;
+    final extending = widget.extending;
+    final draft = initial == null && extending == null ? widget.draft : null;
 
     final presetPrincipalMinor =
         initial?.principalMinor ?? draft?.principalMinor;
     _nameController = TextEditingController(
-      text: initial?.name ?? draft?.name ?? '',
+      text: initial?.name ?? extending?.name ?? draft?.name ?? '',
     );
     _amountController = TextEditingController(
       text: presetPrincipalMinor == null
@@ -67,7 +84,11 @@ class _LoanFormScreenState extends ConsumerState<LoanFormScreen> {
     _noteController = TextEditingController(
       text: initial?.description ?? draft?.description ?? '',
     );
-    _direction = initial?.type ?? draft?.direction ?? LoanDirection.borrowed;
+    _direction =
+        initial?.type ??
+        extending?.type ??
+        draft?.direction ??
+        LoanDirection.borrowed;
     _startDate = initial?.startDate ?? draft?.startDate ?? DateTime.now();
     _dueDate = initial?.dueDate;
     _disbursementAccountId =
@@ -95,8 +116,27 @@ class _LoanFormScreenState extends ConsumerState<LoanFormScreen> {
           orElse: () => <FinancialAccountRow>[],
         );
 
+    final linkCandidates = _isEditing || _isExtending
+        ? const <LoanProgress>[]
+        : ref
+              .watch(loanProgressProvider)
+              .maybeWhen(
+                data: (rows) => rows
+                    .where((r) => !r.isArchived && r.direction == _direction)
+                    .toList(),
+                orElse: () => const <LoanProgress>[],
+              );
+
     return Scaffold(
-      appBar: AppBar(title: Text(_isEditing ? 'Edit loan' : 'Add loan')),
+      appBar: AppBar(
+        title: Text(
+          _isEditing
+              ? 'Edit loan'
+              : _isExtending
+              ? 'Extend loan'
+              : 'Add loan',
+        ),
+      ),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -104,7 +144,7 @@ class _LoanFormScreenState extends ConsumerState<LoanFormScreen> {
             padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
               // ── Direction ───────────────────────────────────────────────
-              if (!_isEditing) ...[
+              if (!_isEditing && !_isExtending) ...[
                 SegmentedButton<LoanDirection>(
                   segments: [
                     for (final direction in LoanDirection.values)
@@ -114,8 +154,48 @@ class _LoanFormScreenState extends ConsumerState<LoanFormScreen> {
                       ),
                   ],
                   selected: {_direction},
-                  onSelectionChanged: (selection) =>
-                      setState(() => _direction = selection.first),
+                  onSelectionChanged: (selection) => setState(() {
+                    _direction = selection.first;
+                    // A linked loan from the old direction is no longer a
+                    // valid relationship to join.
+                    _linkedLoanId = null;
+                  }),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+
+              // ── Link to an existing loan ─────────────────────────────────
+              if (!_isEditing && !_isExtending) ...[
+                DropdownButtonFormField<String?>(
+                  initialValue: _linkedLoanId,
+                  decoration: const InputDecoration(
+                    labelText: 'Link to an existing loan',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('None — this is a new relationship'),
+                    ),
+                    for (final candidate in linkCandidates)
+                      DropdownMenuItem(
+                        value: candidate.loan.id,
+                        child: Text(
+                          '${candidate.loan.name} · '
+                          '${formatMinorUnits(candidate.outstandingMinor, symbol: currencySymbol(candidate.loan.currency))} '
+                          'outstanding',
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() {
+                    _linkedLoanId = value;
+                    if (value != null) {
+                      final picked = linkCandidates.firstWhere(
+                        (c) => c.loan.id == value,
+                      );
+                      _nameController.text = picked.loan.name;
+                    }
+                  }),
                 ),
                 const SizedBox(height: AppSpacing.lg),
               ],
@@ -245,7 +325,13 @@ class _LoanFormScreenState extends ConsumerState<LoanFormScreen> {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Text(_isEditing ? 'Save changes' : 'Add loan'),
+                      : Text(
+                          _isEditing
+                              ? 'Save changes'
+                              : _isExtending
+                              ? 'Extend loan'
+                              : 'Add loan',
+                        ),
                 ),
               ),
             ],
@@ -322,6 +408,7 @@ class _LoanFormScreenState extends ConsumerState<LoanFormScreen> {
           startDate: _startDate,
           dueDate: _dueDate,
           description: _noteController.text.trim(),
+          extendsLoanId: widget.extending?.id ?? _linkedLoanId,
         );
       }
       if (mounted) Navigator.of(context).pop();

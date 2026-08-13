@@ -147,6 +147,46 @@ void main() {
       await database.close();
     });
 
+    testWidgets(
+      'a linked group renders as one tile with a "+N linked" indicator; '
+      'tapping opens the primary member\'s details screen',
+      (tester) async {
+        final database = await seedDatabase();
+        final controller = controllerFor(database);
+        final rootId = await controller.create(
+          direction: LoanDirection.lent,
+          name: 'John',
+          principalMinor: 2000000,
+          startDate: DateTime(2026, 1, 1),
+        );
+        await controller.create(
+          direction: LoanDirection.lent,
+          name: 'John',
+          principalMinor: 500000,
+          startDate: DateTime(2026, 6, 1),
+          extendsLoanId: rootId,
+        );
+
+        await pumpLoans(tester, database);
+
+        // One tile, not two, with the "+1 linked" indicator.
+        expect(find.text('John'), findsOneWidget);
+        expect(find.text('+1 linked'), findsOneWidget);
+
+        await tester.tap(find.text('John'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(LoanDetailsScreen), findsOneWidget);
+        // The primary is the most recently started active member — the
+        // ৳5,000 extension, not the original ৳20,000 loan.
+        expect(find.text('Original amount'), findsOneWidget);
+        expect(find.text('৳5,000.00'), findsWidgets);
+        expect(find.text('৳20,000.00'), findsNothing);
+
+        await database.close();
+      },
+    );
+
     testWidgets('marks a settled loan as fully repaid', (tester) async {
       final database = await seedDatabase();
       final controller = controllerFor(database);
@@ -237,8 +277,10 @@ void main() {
       await tester.enterText(find.byType(TextFormField).first, 'Bank Loan');
       await tester.enterText(find.byType(TextFormField).at(1), '25000');
 
-      // Pick the account the money arrives in.
-      await tester.tap(find.byType(DropdownButtonFormField<String?>));
+      // Pick the account the money arrives in. The "Link to an existing loan"
+      // picker is the first dropdown on the create form, so the disbursement
+      // picker is the last one.
+      await tester.tap(find.byType(DropdownButtonFormField<String?>).last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Main Bank').last);
       await tester.pumpAndSettle();
@@ -254,6 +296,57 @@ void main() {
 
       await database.close();
     });
+
+    testWidgets(
+      'the "Link to an existing loan" picker lists only active loans of the '
+      'matching direction, and selecting one pre-fills the name field',
+      (tester) async {
+        final database = await seedDatabase();
+        final controller = controllerFor(database);
+        await controller.create(
+          direction: LoanDirection.lent,
+          name: 'John',
+          principalMinor: 2000000,
+        );
+        final archivedId = await controller.create(
+          direction: LoanDirection.lent,
+          name: 'Old Friend',
+          principalMinor: 100000,
+        );
+        await controller.archive(archivedId);
+        await controller.create(
+          direction: LoanDirection.borrowed,
+          name: 'Other Bank',
+          principalMinor: 500000,
+        );
+
+        await pumpLoans(tester, database);
+        await tester.tap(find.byType(FloatingActionButton));
+        await tester.pumpAndSettle();
+
+        // Default direction is "borrowed"; switch to "lent" to match John's
+        // and the archived loan's direction.
+        await tester.tap(find.text('Money I lent'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byType(DropdownButtonFormField<String?>).first);
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('John ·'), findsOneWidget);
+        expect(find.textContaining('Old Friend'), findsNothing);
+        expect(find.textContaining('Other Bank'), findsNothing);
+
+        await tester.tap(find.textContaining('John ·').last);
+        await tester.pumpAndSettle();
+
+        final nameField = tester.widget<TextFormField>(
+          find.byType(TextFormField).first,
+        );
+        expect(nameField.controller!.text, 'John');
+
+        await database.close();
+      },
+    );
   });
 
   group('details', () {
@@ -412,6 +505,99 @@ void main() {
 
       expect(find.text('Fully repaid'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Record receipt'), findsNothing);
+
+      await database.close();
+    });
+
+    testWidgets('Related loans lists siblings and navigates to each one\'s own '
+        'details screen', (tester) async {
+      final database = await seedDatabase();
+      final controller = controllerFor(database);
+      final rootId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+        startDate: DateTime(2026, 1, 1),
+      );
+      await controller.create(
+        direction: LoanDirection.lent,
+        name: 'Jane',
+        principalMinor: 500000,
+        startDate: DateTime(2026, 6, 1),
+        extendsLoanId: rootId,
+      );
+
+      await pumpDetails(tester, database, rootId);
+
+      expect(find.text('Related loans'), findsOneWidget);
+      expect(
+        find.textContaining('Combined outstanding across 2 linked loans'),
+        findsOneWidget,
+      );
+      expect(find.text('Jane'), findsOneWidget);
+
+      await tester.tap(find.text('Jane'));
+      await tester.pumpAndSettle();
+
+      // Now looking at Jane's own details screen.
+      expect(find.text('Jane'), findsOneWidget);
+      expect(find.text('Owed to me'), findsOneWidget);
+      expect(find.text('Original amount'), findsOneWidget);
+      expect(find.text('৳5,000.00'), findsWidgets);
+
+      await database.close();
+    });
+
+    testWidgets(
+      '"Extend" is visible on an active loan regardless of paid status, and '
+      'hidden once archived',
+      (tester) async {
+        final database = await seedDatabase();
+        final controller = controllerFor(database);
+        final id = await controller.create(
+          direction: LoanDirection.lent,
+          name: 'John',
+          principalMinor: 2000000,
+        );
+        await controller.recordRepayment(
+          loanId: id,
+          amountMinor: 2000000,
+          accountId: 'acct-bank',
+        );
+
+        await pumpDetails(tester, database, id);
+        expect(find.text('Fully repaid'), findsOneWidget);
+        expect(find.widgetWithText(OutlinedButton, 'Extend'), findsOneWidget);
+
+        await controller.archive(id);
+        await pumpDetails(tester, database, id);
+        expect(find.widgetWithText(OutlinedButton, 'Extend'), findsNothing);
+
+        await database.close();
+      },
+    );
+
+    testWidgets('tapping Extend opens the form in extend mode', (tester) async {
+      final database = await seedDatabase();
+      final controller = controllerFor(database);
+      final id = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+
+      await pumpDetails(tester, database, id);
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Extend'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoanFormScreen), findsOneWidget);
+      expect(find.text('Extend loan'), findsWidgets);
+      // The direction selector is hidden and the name is pre-filled.
+      expect(find.byType(SegmentedButton<LoanDirection>), findsNothing);
+      final nameField = tester.widget<TextFormField>(
+        find.byType(TextFormField).first,
+      );
+      expect(nameField.controller!.text, 'John');
 
       await database.close();
     });

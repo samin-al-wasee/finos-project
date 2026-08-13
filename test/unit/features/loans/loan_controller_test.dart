@@ -9,6 +9,7 @@ import 'package:finos_app/features/loans/domain/loan_direction.dart';
 import 'package:finos_app/features/loans/domain/loan_progress.dart';
 import 'package:finos_app/features/loans/domain/loan_status.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
+import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Loan lifecycle rules: outstanding, overpayment, standing, and deletion
@@ -669,5 +670,265 @@ void main() {
     test('delete throws for an unknown loan', () async {
       expect(() => controller.delete('loan-ghost'), throwsStateError);
     });
+  });
+
+  group('extend', () {
+    test("sets the new row's groupId to the parent's own id", () async {
+      final parentId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+
+      final childId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 500000,
+        extendsLoanId: parentId,
+      );
+
+      expect((await loans.getById(childId))!.groupId, parentId);
+      expect((await loans.getById(parentId))!.groupId, isNull);
+    });
+
+    test('extending an already-linked loan resolves to the same root '
+        '(flattening)', () async {
+      final rootId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+      final middleId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 500000,
+        extendsLoanId: rootId,
+      );
+
+      // Extending B (itself extended from A) must land on A, not B.
+      final grandchildId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 300000,
+        extendsLoanId: middleId,
+      );
+
+      expect((await loans.getById(grandchildId))!.groupId, rootId);
+    });
+
+    test('with a disbursement account creates its own origination transaction '
+        'atomically, exactly like create()', () async {
+      final parentId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+
+      final childId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 500000,
+        extendsLoanId: parentId,
+        disbursementAccountId: 'acct-bank',
+      );
+
+      final movements = await transactions.forLoan(childId);
+      expect(movements, hasLength(1));
+      expect(movements.single.type, TransactionType.loanPayment);
+    });
+
+    test('rejects extending an archived loan', () async {
+      final parentId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+      await controller.archive(parentId);
+
+      expect(
+        () => controller.create(
+          direction: LoanDirection.lent,
+          name: 'John',
+          principalMinor: 500000,
+          extendsLoanId: parentId,
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('rejects a direction mismatch', () async {
+      final parentId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+
+      expect(
+        () => controller.create(
+          direction: LoanDirection.borrowed,
+          name: 'John',
+          principalMinor: 500000,
+          extendsLoanId: parentId,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects a currency mismatch', () async {
+      final parentId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+
+      expect(
+        () => controller.create(
+          direction: LoanDirection.lent,
+          name: 'John',
+          principalMinor: 500000,
+          extendsLoanId: parentId,
+          currency: 'USD',
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects extending a non-existent loan', () async {
+      expect(
+        () => controller.create(
+          direction: LoanDirection.lent,
+          name: 'John',
+          principalMinor: 500000,
+          extendsLoanId: 'loan-ghost',
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('a rejected extension leaves nothing behind', () async {
+      final parentId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+
+      await expectLater(
+        () => controller.create(
+          direction: LoanDirection.borrowed,
+          name: 'John',
+          principalMinor: 500000,
+          extendsLoanId: parentId,
+        ),
+        throwsArgumentError,
+      );
+
+      expect(await loans.getAll(), hasLength(1));
+      expect(await transactions.getAll(), isEmpty);
+    });
+
+    test("extending a fully repaid (PAID) loan doesn't reopen the original "
+        "row's own status, only the group's aggregate", () async {
+      final parentId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+      await controller.recordRepayment(
+        loanId: parentId,
+        amountMinor: 2000000,
+        accountId: 'acct-bank',
+      );
+      expect((await progressOf(parentId)).isPaid, isTrue);
+
+      final childId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 500000,
+        extendsLoanId: parentId,
+      );
+
+      // The original row's own progress is untouched.
+      final parentProgress = await progressOf(parentId);
+      expect(parentProgress.isPaid, isTrue);
+      expect(parentProgress.outstandingMinor, 0);
+
+      // The group's aggregate reflects the new row.
+      final childProgress = await progressOf(childId);
+      expect(childProgress.outstandingMinor, 500000);
+    });
+  });
+
+  group('delete with group', () {
+    test('refuses to delete a loan that is a group root with an existing '
+        'child, even if the root itself has no repayments', () async {
+      final rootId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+      await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 500000,
+        extendsLoanId: rootId,
+      );
+
+      await expectLater(
+        () => controller.delete(rootId),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message.toString(),
+            'message',
+            contains('linked extensions'),
+          ),
+        ),
+      );
+
+      expect(await loans.getById(rootId), isNotNull);
+    });
+
+    test('deletes a non-root child freely when it has no repayments', () async {
+      final rootId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+      final childId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 500000,
+        extendsLoanId: rootId,
+      );
+
+      await controller.delete(childId);
+
+      expect(await loans.getById(childId), isNull);
+      // The root and its linkage are untouched.
+      final root = await loans.getById(rootId);
+      expect(root, isNotNull);
+      expect(root!.groupId, isNull);
+    });
+
+    test(
+      'deleting every child first, then the now-childless root, succeeds',
+      () async {
+        final rootId = await controller.create(
+          direction: LoanDirection.lent,
+          name: 'John',
+          principalMinor: 2000000,
+        );
+        final childId = await controller.create(
+          direction: LoanDirection.lent,
+          name: 'John',
+          principalMinor: 500000,
+          extendsLoanId: rootId,
+        );
+
+        await controller.delete(childId);
+        await controller.delete(rootId);
+
+        expect(await loans.getAll(), isEmpty);
+      },
+    );
   });
 }

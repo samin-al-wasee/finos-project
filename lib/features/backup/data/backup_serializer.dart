@@ -76,6 +76,7 @@ abstract final class BackupSerializer {
     'description': row.description,
     'disbursement_account_id': row.disbursementAccountId,
     'status': const LoanStatusConverter().toSql(row.status),
+    'group_id': row.groupId,
     'created_at': _dateToJson(row.createdAt),
     'updated_at': _dateToJson(row.updatedAt),
   };
@@ -222,6 +223,7 @@ abstract final class BackupSerializer {
         where,
         const LoanStatusConverter().fromSql,
       ),
+      groupId: _optionalString(json, 'group_id', where),
       createdAt: _date(json, 'created_at', where),
       updatedAt: _date(json, 'updated_at', where),
     );

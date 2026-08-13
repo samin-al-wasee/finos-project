@@ -211,6 +211,104 @@ void main() {
     });
   });
 
+  group('loan relationships (group_id)', () {
+    test('round-trips a loan with a non-null groupId', () async {
+      final rootId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+      final childId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 500000,
+        extendsLoanId: rootId,
+      );
+
+      final document = await service.export();
+      await service.importBackup(document);
+
+      expect((await loans.getById(childId))!.groupId, rootId);
+      expect((await loans.getById(rootId))!.groupId, isNull);
+    });
+
+    test('restores a full group correctly even when the child appears before '
+        'the root in the source list (insert-ordering in restore())', () async {
+      final rootId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000,
+      );
+      final childId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 500000,
+        extendsLoanId: rootId,
+      );
+
+      final root = (await loans.getById(rootId))!;
+      final child = (await loans.getById(childId))!;
+
+      // Simulate a backup file whose loans are listed child-before-root —
+      // restore() must still land the root first so the group_id foreign
+      // key holds.
+      final parsed = ParsedBackup(
+        accounts: await accounts.getAll(),
+        categories: const [],
+        transactions: await transactions.getAll(),
+        budgets: const [],
+        loans: [child, root],
+      );
+
+      final counts = await service.restore(parsed);
+
+      expect(counts.loans, 2);
+      expect((await loans.getById(childId))!.groupId, rootId);
+    });
+
+    test('a backup with no group_id key at all still imports cleanly with '
+        'every groupId null', () async {
+      final contents = jsonEncode({
+        BackupFormat.versionKey: BackupFormat.version,
+        BackupFormat.accountsKey: [
+          {
+            'id': 'acct-1',
+            'name': 'Bank',
+            'type': 'BANK',
+            'currency': 'BDT',
+            'opening_balance_minor': 0,
+            'status': 'ACTIVE',
+            'created_at': '2026-08-01T00:00:00.000',
+            'updated_at': '2026-08-01T00:00:00.000',
+          },
+        ],
+        BackupFormat.loansKey: [
+          {
+            'id': 'loan-1',
+            'type': 'LENT',
+            'name': 'John',
+            'principal_minor': 2000000,
+            'currency': 'BDT',
+            'start_date': '2026-08-01T00:00:00.000',
+            'due_date': null,
+            'description': '',
+            'disbursement_account_id': null,
+            'status': 'ACTIVE',
+            // No 'group_id' key at all — simulates a pre-this-change export.
+            'created_at': '2026-08-01T00:00:00.000',
+            'updated_at': '2026-08-01T00:00:00.000',
+          },
+        ],
+      });
+
+      final parsed = service.parse(contents);
+      expect(parsed.loans.single.groupId, isNull);
+
+      await service.restore(parsed);
+      expect((await loans.getById('loan-1'))!.groupId, isNull);
+    });
+  });
+
   group('validation', () {
     /// A document with a loan movement but no matching loan.
     String orphanedMovement() => jsonEncode({

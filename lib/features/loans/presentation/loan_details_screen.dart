@@ -9,9 +9,12 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../accounts/domain/account_status.dart';
+import '../domain/loan_direction.dart';
+import '../domain/loan_group.dart';
 import '../domain/loan_progress.dart';
 import 'loan_form_screen.dart';
 import 'loan_labels.dart';
+import 'loans_list_screen.dart';
 import 'repayment_dialog.dart';
 
 /// Loan detail screen (docs/UI_DESIGN.md §22).
@@ -64,6 +67,7 @@ class _Details extends ConsumerWidget {
     final symbol = currencySymbol(loan.currency);
     final standing = progress.standing();
     final movements = ref.watch(loanMovementsProvider(loan.id));
+    final group = ref.watch(loanGroupForLoanProvider(loan.id));
 
     // Watched, not read on demand: a StreamProvider that nothing is listening to
     // reports as loading, which would make the repayment flow believe there are
@@ -166,16 +170,44 @@ class _Details extends ConsumerWidget {
             child: Text(loan.description, style: theme.textTheme.bodyMedium),
           ),
 
-        // ── Record a repayment ────────────────────────────────────────────
-        if (!progress.isPaid && !progress.isArchived)
+        // ── Record a repayment / Extend ─────────────────────────────────────
+        if (!progress.isArchived)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: FilledButton.icon(
-              onPressed: () => _recordRepayment(context, ref, accounts),
-              icon: const Icon(Icons.add),
-              label: Text(repaymentActionLabel(loan.type)),
+            child: Row(
+              children: [
+                if (!progress.isPaid)
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _recordRepayment(context, ref, accounts),
+                      icon: const Icon(Icons.add),
+                      label: Text(repaymentActionLabel(loan.type)),
+                    ),
+                  ),
+                // Visible whenever the loan is not archived — deliberately
+                // including a fully paid loan, since "partial repayment, then
+                // another advance" is exactly the scenario this exists for
+                // (docs/adr/006-loan-relationships.md).
+                if (!progress.isPaid) const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => openExtendLoanForm(context, loan),
+                    icon: const Icon(Icons.call_split),
+                    label: const Text('Extend'),
+                  ),
+                ),
+              ],
             ),
           ),
+
+        // ── Related loans ────────────────────────────────────────────────
+        group.when(
+          data: (value) => value == null || !value.isLinked
+              ? const SizedBox.shrink()
+              : _RelatedLoans(group: value, currentLoanId: loan.id),
+          error: (_, _) => const SizedBox.shrink(),
+          loading: () => const SizedBox.shrink(),
+        ),
 
         // ── History ───────────────────────────────────────────────────────
         Padding(
@@ -315,6 +347,89 @@ class _AmountRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The other loans in this loan's relationship
+/// (docs/adr/006-loan-relationships.md).
+///
+/// Rendered only when the group has more than one member. Each sibling shows
+/// its own start date, principal, outstanding, and standing — all of it
+/// per-row, exactly as the details screen for that loan on its own would show
+/// — and taps through to that loan's own [LoanDetailsScreen].
+class _RelatedLoans extends StatelessWidget {
+  const _RelatedLoans({required this.group, required this.currentLoanId});
+
+  final LoanGroup group;
+  final String currentLoanId;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<FinosColors>()!;
+    final siblings = group.members
+        .where((m) => m.loan.id != currentLoanId)
+        .toList();
+    final symbol = currencySymbol(group.primary.loan.currency);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.xl,
+            AppSpacing.lg,
+            AppSpacing.sm,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Related loans',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: colors.mutedText,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Combined outstanding across ${group.members.length} linked '
+                'loans: ${formatMinorUnits(group.outstandingMinor, symbol: symbol)}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.mutedText,
+                ),
+              ),
+            ],
+          ),
+        ),
+        for (final sibling in siblings)
+          ListTile(
+            leading: Icon(
+              sibling.direction == LoanDirection.borrowed
+                  ? Icons.south_west
+                  : Icons.north_east,
+            ),
+            title: Text(sibling.loan.name),
+            subtitle: Text(
+              'Started ${formatDate(sibling.loan.startDate)} · '
+              '${formatMinorUnits(sibling.outstandingMinor, symbol: symbol)} '
+              'of ${formatMinorUnits(sibling.principalMinor, symbol: symbol)}'
+              ' · ${loanStandingLabel(sibling.standing())}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: sibling.standing() == LoanStanding.overdue
+                    ? colors.error
+                    : colors.mutedText,
+              ),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => LoanDetailsScreen(loanId: sibling.loan.id),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

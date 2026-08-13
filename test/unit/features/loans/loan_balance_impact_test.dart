@@ -345,6 +345,48 @@ void main() {
     );
   });
 
+  group('linked loans (relationships)', () {
+    test('two linked rows each independently and correctly contribute to their '
+        'account balance and to the portfolio total — grouping is display-only '
+        'and introduces no second source of truth for balance math '
+        '(docs/adr/006-loan-relationships.md)', () async {
+      final rootId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 2000000, // ৳20,000
+        disbursementAccountId: 'acct-bank',
+      );
+      final childId = await controller.create(
+        direction: LoanDirection.lent,
+        name: 'John',
+        principalMinor: 1000000, // ৳10,000
+        disbursementAccountId: 'acct-bank',
+        extendsLoanId: rootId,
+      );
+
+      // Each row's own origination reduced the balance independently.
+      expect(await balanceOf('acct-bank'), 7000000); // ৳100,000 − ৳30,000
+      expect(await transactions.totalBalanceImpact(), -3000000);
+
+      // A repayment against just the child still only affects that row.
+      await controller.recordRepayment(
+        loanId: childId,
+        amountMinor: 400000,
+        accountId: 'acct-bank',
+      );
+
+      expect(await balanceOf('acct-bank'), 7400000);
+      final rootProgress = await controller.progressFor(
+        (await loans.getById(rootId))!,
+      );
+      final childProgress = await controller.progressFor(
+        (await loans.getById(childId))!,
+      );
+      expect(rootProgress.outstandingMinor, 2000000); // untouched
+      expect(childProgress.outstandingMinor, 600000);
+    });
+  });
+
   group('exclusion from budgets', () {
     test('loan movements never consume a budget', () async {
       await categories.insertOne(

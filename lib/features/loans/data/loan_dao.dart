@@ -48,4 +48,18 @@ class LoanDao extends DatabaseAccessor<AppDatabase> with _$LoanDaoMixin {
     if (loan == null) throw StateError('Loan not found: $id');
     await updateOne(loan.copyWith(status: status, updatedAt: DateTime.now()));
   }
+
+  /// Whether any other loan's `group_id` points at [id] — i.e. whether [id] is
+  /// a relationship root with at least one linked extension.
+  ///
+  /// Used only by the delete guard (docs/adr/006-loan-relationships.md): a root
+  /// with linked children must be archived rather than deleted.
+  Future<bool> hasGroupChildren(String id) async {
+    final count = countAll();
+    final query = selectOnly(loans)
+      ..addColumns([count])
+      ..where(loans.groupId.equals(id));
+    final row = await query.getSingle();
+    return (row.read(count) ?? 0) > 0;
+  }
 }

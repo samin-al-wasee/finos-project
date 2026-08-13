@@ -61,7 +61,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -121,6 +121,10 @@ class AppDatabase extends _$AppDatabase {
         // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
         await m.createTable(creditCardDetails);
       }
+      if (from < 11) {
+        // Additive column, null for every existing row — no loan is linked yet.
+        await _addLoanGroupIdColumnIfMissing();
+      }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
     beforeOpen: (details) async {
@@ -179,6 +183,11 @@ class AppDatabase extends _$AppDatabase {
       // Same safety net for the v10 credit card details table.
       if (details.versionNow >= 10 && !details.wasCreated) {
         await _ensureCreditCardDetailsTable();
+      }
+
+      // Same safety net for the v11 loans.group_id column.
+      if (details.versionNow >= 11 && !details.wasCreated) {
+        await _addLoanGroupIdColumnIfMissing();
       }
     },
   );
@@ -336,5 +345,30 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _ensureCreditCardDetailsTable() async {
     final migrator = Migrator(this);
     await migrator.createTable(creditCardDetails);
+  }
+
+  /// Adds `loans.group_id` only when it is absent.
+  ///
+  /// Mirrors [_addLoanIdColumnIfMissing] exactly: `ALTER TABLE ADD COLUMN` is
+  /// not idempotent, and the column could already exist either because the
+  /// loans table was just created from the current schema earlier in the same
+  /// upgrade, or because a previous run added it before being interrupted.
+  /// The DDL still comes from drift's own definition, so there is no
+  /// hand-maintained SQL to drift out of sync.
+  Future<void> _addLoanGroupIdColumnIfMissing() async {
+    final columns = await customSelect('PRAGMA table_info(loans)').get();
+
+    // An empty result means the loans table itself is missing — the v6 safety
+    // net handles recreating it (from the current schema, which already
+    // includes this column), so there is nothing to alter yet.
+    if (columns.isEmpty) return;
+
+    final hasGroupId = columns.any(
+      (row) => row.read<String>('name') == 'group_id',
+    );
+    if (hasGroupId) return;
+
+    debugPrint('[AppDatabase] loans.group_id missing — adding');
+    await Migrator(this).addColumn(loans, loans.groupId);
   }
 }

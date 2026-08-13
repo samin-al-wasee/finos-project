@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/database/app_database.dart';
 import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../domain/loan_direction.dart';
+import '../domain/loan_group.dart';
 import '../domain/loan_progress.dart';
 import 'loan_details_screen.dart';
 import 'loan_form_screen.dart';
@@ -17,12 +19,17 @@ import 'loan_labels.dart';
 /// Splits loans into "I Owe" and "Owed to Me" rather than showing one mixed list,
 /// because that is the distinction users actually reason about and mixing the two
 /// invites exactly the ambiguity AGENTS.md §10 warns against.
+///
+/// Rows are grouped into relationships (docs/adr/006-loan-relationships.md): a
+/// loan that has been extended, or linked to on creation, renders as one tile
+/// alongside the loans it is linked with, rather than as separate unrelated
+/// entries.
 class LoansListScreen extends ConsumerWidget {
   const LoansListScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final loans = ref.watch(loanProgressProvider);
+    final groups = ref.watch(loanGroupsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Loans')),
@@ -32,7 +39,7 @@ class LoansListScreen extends ConsumerWidget {
         tooltip: 'Add loan',
         child: const Icon(Icons.add),
       ),
-      body: loans.when(
+      body: groups.when(
         data: (rows) => rows.isEmpty
             ? EmptyState(
                 icon: Icons.handshake_outlined,
@@ -46,7 +53,7 @@ class LoansListScreen extends ConsumerWidget {
                   label: const Text('Add loan'),
                 ),
               )
-            : _LoanList(rows: rows),
+            : _LoanList(groups: rows),
         error: (error, _) => EmptyState(
           icon: Icons.error_outline,
           title: 'Something went wrong',
@@ -77,33 +84,45 @@ void openLoanForm(BuildContext context, {LoanProgress? initial}) {
   );
 }
 
-/// Groups loans by direction, with archived ones collected below.
-class _LoanList extends StatelessWidget {
-  const _LoanList({required this.rows});
+/// Opens the loan form in "extend" mode for [loan]
+/// (docs/adr/006-loan-relationships.md).
+void openExtendLoanForm(BuildContext context, LoanRow loan) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => LoanFormScreen(extending: loan)),
+  );
+}
 
-  final List<LoanProgress> rows;
+/// Groups relationships by direction, with fully-archived ones collected
+/// below.
+class _LoanList extends StatelessWidget {
+  const _LoanList({required this.groups});
+
+  final List<LoanGroup> groups;
 
   @override
   Widget build(BuildContext context) {
-    final active = rows.where((r) => !r.isArchived).toList();
-    final archived = rows.where((r) => r.isArchived).toList();
+    // A relationship is "active" for section purposes as soon as it has any
+    // active member; it only drops to "Archived" once every member is.
+    final active = groups.where((g) => g.active.isNotEmpty).toList();
+    final archived = groups.where((g) => g.active.isEmpty).toList();
 
     final children = <Widget>[
       // "I Owe" first: a liability is the more urgent of the two.
       for (final direction in [LoanDirection.borrowed, LoanDirection.lent])
-        if (active.any((r) => r.direction == direction)) ...[
+        if (active.any((g) => g.direction == direction)) ...[
           _SectionHeader(
             title: loanDirectionHeading(direction),
             totalMinor: active
-                .where((r) => r.direction == direction)
-                .fold<int>(0, (sum, r) => sum + r.outstandingMinor),
+                .where((g) => g.direction == direction)
+                .fold<int>(0, (sum, g) => sum + g.outstandingMinor),
           ),
-          for (final row in active.where((r) => r.direction == direction))
-            _LoanTile(progress: row),
+          for (final group in active.where((g) => g.direction == direction))
+            _LoanGroupTile(group: group),
         ],
       if (archived.isNotEmpty) ...[
         const _SectionHeader(title: 'Archived'),
-        for (final row in archived) _LoanTile(progress: row, archived: true),
+        for (final group in archived)
+          _LoanGroupTile(group: group, archived: true),
       ],
     ];
 
@@ -156,34 +175,48 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// One loan: who it is with, what is left, and how far along it is.
-class _LoanTile extends StatelessWidget {
-  const _LoanTile({required this.progress, this.archived = false});
+/// One relationship: the primary member's name, the combined figures across
+/// active members, and — when more than one loan is linked — a "+N linked"
+/// indicator (docs/adr/006-loan-relationships.md).
+///
+/// A fully-archived relationship falls back to the primary member's own
+/// figures rather than a group aggregate, since there are no active members to
+/// combine — the same figure a lone archived loan showed before grouping
+/// existed.
+class _LoanGroupTile extends StatelessWidget {
+  const _LoanGroupTile({required this.group, this.archived = false});
 
-  final LoanProgress progress;
+  final LoanGroup group;
   final bool archived;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.extension<FinosColors>()!;
-    final symbol = currencySymbol(progress.loan.currency);
-    final standing = progress.standing();
+    final primary = group.primary;
+    final symbol = currencySymbol(primary.loan.currency);
+    final standing = archived ? primary.standing() : group.standing();
+    final outstandingMinor = archived
+        ? primary.outstandingMinor
+        : group.outstandingMinor;
+    final principalMinor = archived
+        ? primary.principalMinor
+        : group.principalMinor;
 
     final tile = ListTile(
       leading: CircleAvatar(
         child: Icon(
-          progress.direction == LoanDirection.borrowed
+          group.direction == LoanDirection.borrowed
               ? Icons.south_west
               : Icons.north_east,
         ),
       ),
-      title: Text(progress.loan.name),
+      title: Text(primary.loan.name),
       subtitle: Text(
         // Amounts and words carry the meaning; colour only reinforces it.
-        '${formatMinorUnits(progress.outstandingMinor, symbol: symbol)} '
+        '${formatMinorUnits(outstandingMinor, symbol: symbol)} '
         'remaining of '
-        '${formatMinorUnits(progress.principalMinor, symbol: symbol)}'
+        '${formatMinorUnits(principalMinor, symbol: symbol)}'
         ' · ${loanStandingLabel(standing)}',
         style: theme.textTheme.bodySmall?.copyWith(
           color: standing == LoanStanding.overdue
@@ -191,10 +224,25 @@ class _LoanTile extends StatelessWidget {
               : colors.mutedText,
         ),
       ),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (group.isLinked)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.xs),
+              child: Text(
+                '+${group.members.length - 1} linked',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colors.mutedText,
+                ),
+              ),
+            ),
+          const Icon(Icons.chevron_right),
+        ],
+      ),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => LoanDetailsScreen(loanId: progress.loan.id),
+          builder: (_) => LoanDetailsScreen(loanId: primary.loan.id),
         ),
       ),
     );

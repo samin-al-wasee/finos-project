@@ -622,9 +622,18 @@ same shape loans took relative to accounts — see
 
 ## 8.7 Loan Relationships
 
-> **Status:** Not built. Every loan is currently an independent row with no
-> relationship to other loans with the same counterparty
-> ([ADR-004](adr/004-loan-accounting.md); docs/DATA_MODEL.md §29–§33).
+> **Status:** Implemented ([ADR-006](adr/006-loan-relationships.md)).
+> "Extend an existing loan" and "merge on creation" both funnel through
+> `LoanController.create(..., extendsLoanId:)` — one code path for both entry
+> points. Relationships are a flat, self-referencing `loans.group_id`
+> pointing at the relationship's root loan, never a parent chain, so grouping
+> is always a single flat query with no recursion. Outstanding and status
+> stay entirely per-row, computed by the unmodified ADR-004 rules; a new
+> read-only `LoanGroup` aggregates per-row `LoanProgress` figures for display
+> only. Deliberately not built: cross-row automatic repayment allocation (a
+> repayment still targets exactly one loan row) and a `Counterparty`/`Contact`
+> entity (`name` stays free text; the create form's picker is simply
+> direction-filtered over existing active loans).
 
 In practice, lending or borrowing with the same person is often a continuing
 relationship, not a series of unrelated events: a partial repayment followed by

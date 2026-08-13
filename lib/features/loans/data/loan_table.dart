@@ -57,6 +57,13 @@ class Loans extends Table {
       .map(const LoanStatusConverter())
       .withDefault(const Constant('ACTIVE'))();
 
+  /// The relationship this loan belongs to, when it is an extension of (or has
+  /// been extended by) another loan. Points at the *root* loan of the
+  /// relationship — the first one created — so every member of a relationship
+  /// shares one value and grouping needs no recursive traversal
+  /// (docs/adr/006-loan-relationships.md).
+  TextColumn get groupId => text().nullable().references(Loans, #id)();
+
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();

@@ -10,6 +10,7 @@ This directory records significant architectural decisions for FinOS.
 | [003](003-state-management.md) | Accepted | State management approach |
 | [004](004-loan-accounting.md) | Accepted | Loan accounting |
 | [005](005-credit-card-accounts.md) | Accepted | Credit card accounts |
+| [006](006-loan-relationships.md) | Accepted | Loan relationships |
 
 ## Conventions
 
