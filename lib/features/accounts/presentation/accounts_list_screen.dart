@@ -7,16 +7,12 @@ import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../settings/domain/list_view_mode.dart';
 import '../domain/account_status.dart';
 import 'account_card_view.dart';
 import 'account_details_screen.dart';
 import 'account_form_screen.dart';
 import 'account_type_label.dart';
-
-/// Whether the Accounts tab shows every account as a plain list, or one
-/// account at a time as a swipeable card with its own transaction feed below.
-/// Card view is additive — list stays the default.
-enum _ViewMode { list, card }
 
 /// Accounts tab content.
 ///
@@ -30,7 +26,12 @@ class AccountsListScreen extends ConsumerStatefulWidget {
 }
 
 class _AccountsListScreenState extends ConsumerState<AccountsListScreen> {
-  _ViewMode _viewMode = _ViewMode.list;
+  ListViewMode _viewMode = ListViewMode.list;
+
+  /// Set once the persisted view mode has been read, so a later settings
+  /// change (e.g. from another screen) doesn't stomp on the user's toggle
+  /// mid-session.
+  bool _viewModeLoaded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +39,14 @@ class _AccountsListScreenState extends ConsumerState<AccountsListScreen> {
     // Live balances (opening balance + net transaction impact), so the list
     // reflects recent transactions instead of the balance at creation time.
     final balances = ref.watch(accountBalancesProvider);
+
+    if (!_viewModeLoaded) {
+      final settings = ref.watch(appSettingsProvider).valueOrNull;
+      if (settings != null) {
+        _viewModeLoaded = true;
+        _viewMode = settings.accountsViewMode;
+      }
+    }
 
     return Scaffold(
       // Category management now lives under Settings → Categories, so this
@@ -51,13 +60,17 @@ class _AccountsListScreenState extends ConsumerState<AccountsListScreen> {
                 (r) => r.status == AccountStatus.active,
               );
               if (!hasActive) return const SizedBox.shrink();
-              final isCard = _viewMode == _ViewMode.card;
+              final isCard = _viewMode == ListViewMode.card;
               return IconButton(
                 icon: Icon(isCard ? Icons.view_list : Icons.view_carousel),
                 tooltip: isCard ? 'List view' : 'Card view',
-                onPressed: () => setState(
-                  () => _viewMode = isCard ? _ViewMode.list : _ViewMode.card,
-                ),
+                onPressed: () {
+                  final next = isCard ? ListViewMode.list : ListViewMode.card;
+                  setState(() => _viewMode = next);
+                  ref
+                      .read(settingsControllerProvider)
+                      .setAccountsViewMode(next);
+                },
               );
             },
             orElse: () => const SizedBox.shrink(),
@@ -110,7 +123,7 @@ class _AccountsListScreenState extends ConsumerState<AccountsListScreen> {
   Widget _buildBody(List<FinancialAccountRow> rows, Map<String, int> balances) {
     final active = rows.where((r) => r.status == AccountStatus.active).toList();
 
-    if (_viewMode == _ViewMode.card && active.isNotEmpty) {
+    if (_viewMode == ListViewMode.card && active.isNotEmpty) {
       return AccountCardView(rows: active, balances: balances);
     }
     return _AccountList(rows: rows, balances: balances);

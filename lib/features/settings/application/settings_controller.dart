@@ -1,6 +1,7 @@
 import '../../../core/constants/currencies.dart';
 import '../data/settings_dao.dart';
 import '../domain/app_settings.dart';
+import '../domain/list_view_mode.dart';
 import '../domain/theme_preference.dart';
 
 /// Application-service for user preferences (docs/UI_DESIGN.md §23).
@@ -31,6 +32,18 @@ class SettingsController {
     }
     await _dao.put(SettingKeys.defaultCurrency, code);
   }
+
+  /// Stores the Accounts tab's remembered list/card view mode.
+  Future<void> setAccountsViewMode(ListViewMode mode) =>
+      _dao.put(SettingKeys.accountsViewMode, listViewModeToStorage(mode));
+
+  /// Stores the Loans tab's remembered list/card view mode.
+  Future<void> setLoansViewMode(ListViewMode mode) =>
+      _dao.put(SettingKeys.loansViewMode, listViewModeToStorage(mode));
+
+  /// Stores the Budgets tab's remembered list/card view mode.
+  Future<void> setBudgetsViewMode(ListViewMode mode) =>
+      _dao.put(SettingKeys.budgetsViewMode, listViewModeToStorage(mode));
 
   /// Reads the current preferences, falling back to defaults for unset keys.
   Future<AppSettings> read() async => AppSettings.fromRows(await _dao.getAll());

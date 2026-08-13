@@ -811,6 +811,18 @@ template or applying a saved filter (§8.2, §8.5).
 > card opens the existing `BudgetDetailsScreen` unchanged; edit/archive/
 > delete remain reachable only through the list's own per-card menu, since
 > the details screen never had one.
+>
+> **Update:** the list/card toggle on all three tabs (§8.9–§8.11) now persists
+> across app restarts, at the user's request — previously each screen held its
+> choice in local `State` only, so relaunching the app always reset to list
+> view. Each tab's choice is stored under its own key
+> (`accounts_view_mode`/`loans_view_mode`/`budgets_view_mode`) in the existing
+> `preferences` key-value table, following the same pattern as
+> `theme_preference` (`ListViewMode` in
+> `lib/features/settings/domain/list_view_mode.dart`, read via
+> `AppSettings`/`appSettingsProvider` and written via
+> `SettingsController.set*ViewMode`). The three tabs remember their view modes
+> independently rather than sharing one setting.
 
 ---
 

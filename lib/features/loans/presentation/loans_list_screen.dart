@@ -7,6 +7,7 @@ import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../settings/domain/list_view_mode.dart';
 import '../domain/loan_direction.dart';
 import '../domain/loan_group.dart';
 import '../domain/loan_progress.dart';
@@ -14,11 +15,6 @@ import 'loan_card_view.dart';
 import 'loan_details_screen.dart';
 import 'loan_form_screen.dart';
 import 'loan_labels.dart';
-
-/// Whether the Loans tab shows every relationship as a plain list, or one at
-/// a time as a swipeable card with its own repayment feed below. Card view is
-/// additive — list stays the default.
-enum _ViewMode { list, card }
 
 /// Loans tab (FR-06, docs/UI_DESIGN.md §21).
 ///
@@ -38,11 +34,24 @@ class LoansListScreen extends ConsumerStatefulWidget {
 }
 
 class _LoansListScreenState extends ConsumerState<LoansListScreen> {
-  _ViewMode _viewMode = _ViewMode.list;
+  ListViewMode _viewMode = ListViewMode.list;
+
+  /// Set once the persisted view mode has been read, so a later settings
+  /// change (e.g. from another screen) doesn't stomp on the user's toggle
+  /// mid-session.
+  bool _viewModeLoaded = false;
 
   @override
   Widget build(BuildContext context) {
     final groups = ref.watch(loanGroupsProvider);
+
+    if (!_viewModeLoaded) {
+      final settings = ref.watch(appSettingsProvider).valueOrNull;
+      if (settings != null) {
+        _viewModeLoaded = true;
+        _viewMode = settings.loansViewMode;
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -52,13 +61,15 @@ class _LoansListScreenState extends ConsumerState<LoansListScreen> {
             data: (rows) {
               final hasActive = rows.any((g) => g.active.isNotEmpty);
               if (!hasActive) return const SizedBox.shrink();
-              final isCard = _viewMode == _ViewMode.card;
+              final isCard = _viewMode == ListViewMode.card;
               return IconButton(
                 icon: Icon(isCard ? Icons.view_list : Icons.view_carousel),
                 tooltip: isCard ? 'List view' : 'Card view',
-                onPressed: () => setState(
-                  () => _viewMode = isCard ? _ViewMode.list : _ViewMode.card,
-                ),
+                onPressed: () {
+                  final next = isCard ? ListViewMode.list : ListViewMode.card;
+                  setState(() => _viewMode = next);
+                  ref.read(settingsControllerProvider).setLoansViewMode(next);
+                },
               );
             },
             orElse: () => const SizedBox.shrink(),
@@ -107,7 +118,7 @@ class _LoansListScreenState extends ConsumerState<LoansListScreen> {
   }
 
   Widget _buildBody(List<LoanGroup> groups) {
-    if (_viewMode == _ViewMode.card) {
+    if (_viewMode == ListViewMode.card) {
       // "I Owe" before "Owed to Me" — the same order the list builds below,
       // so card view never mixes the two directions (docs/UI_DESIGN.md §21).
       final ordered = [

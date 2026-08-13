@@ -6,6 +6,7 @@ import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../settings/domain/list_view_mode.dart';
 import '../domain/budget_period.dart';
 import '../domain/budget_progress.dart';
 import '../domain/budget_status.dart';
@@ -14,11 +15,6 @@ import 'budget_card_view.dart';
 import 'budget_details_screen.dart';
 import 'budget_form_screen.dart';
 import 'budget_labels.dart';
-
-/// Whether the Budgets tab shows every budget as a plain list, or one at a
-/// time as a swipeable card with its own spending feed below. Card view is
-/// additive — list stays the default.
-enum _ViewMode { list, card }
 
 /// Budget overview screen (FR-04, docs/UI_DESIGN.md §19–§20).
 ///
@@ -34,11 +30,24 @@ class BudgetsListScreen extends ConsumerStatefulWidget {
 }
 
 class _BudgetsListScreenState extends ConsumerState<BudgetsListScreen> {
-  _ViewMode _viewMode = _ViewMode.list;
+  ListViewMode _viewMode = ListViewMode.list;
+
+  /// Set once the persisted view mode has been read, so a later settings
+  /// change (e.g. from another screen) doesn't stomp on the user's toggle
+  /// mid-session.
+  bool _viewModeLoaded = false;
 
   @override
   Widget build(BuildContext context) {
     final budgets = ref.watch(budgetProgressProvider);
+
+    if (!_viewModeLoaded) {
+      final settings = ref.watch(appSettingsProvider).valueOrNull;
+      if (settings != null) {
+        _viewModeLoaded = true;
+        _viewMode = settings.budgetsViewMode;
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -50,13 +59,15 @@ class _BudgetsListScreenState extends ConsumerState<BudgetsListScreen> {
                 (r) => r.budget.status == BudgetStatus.active,
               );
               if (!hasActive) return const SizedBox.shrink();
-              final isCard = _viewMode == _ViewMode.card;
+              final isCard = _viewMode == ListViewMode.card;
               return IconButton(
                 icon: Icon(isCard ? Icons.view_list : Icons.view_carousel),
                 tooltip: isCard ? 'List view' : 'Card view',
-                onPressed: () => setState(
-                  () => _viewMode = isCard ? _ViewMode.list : _ViewMode.card,
-                ),
+                onPressed: () {
+                  final next = isCard ? ListViewMode.list : ListViewMode.card;
+                  setState(() => _viewMode = next);
+                  ref.read(settingsControllerProvider).setBudgetsViewMode(next);
+                },
               );
             },
             orElse: () => const SizedBox.shrink(),
@@ -107,7 +118,7 @@ class _BudgetsListScreenState extends ConsumerState<BudgetsListScreen> {
   }
 
   Widget _buildBody(List<BudgetProgress> rows) {
-    if (_viewMode == _ViewMode.card) {
+    if (_viewMode == ListViewMode.card) {
       // Same order the list groups by below (period, in enum order), so
       // card view never reshuffles what the list already shows.
       final ordered = [

@@ -1,4 +1,5 @@
 import '../../../core/database/app_database.dart';
+import 'list_view_mode.dart';
 import 'theme_preference.dart';
 
 /// Keys under which each preference is stored in the `preferences` table.
@@ -9,6 +10,9 @@ import 'theme_preference.dart';
 abstract final class SettingKeys {
   static const themePreference = 'theme_preference';
   static const defaultCurrency = 'default_currency';
+  static const accountsViewMode = 'accounts_view_mode';
+  static const loansViewMode = 'loans_view_mode';
+  static const budgetsViewMode = 'budgets_view_mode';
 }
 
 /// A typed view over the stored preference rows.
@@ -23,6 +27,9 @@ class AppSettings {
   const AppSettings({
     this.themePreference = ThemePreference.system,
     this.defaultCurrency = defaultCurrencyFallback,
+    this.accountsViewMode = ListViewMode.list,
+    this.loansViewMode = ListViewMode.list,
+    this.budgetsViewMode = ListViewMode.list,
   });
 
   /// The currency used when no preference has been stored.
@@ -37,6 +44,15 @@ class AppSettings {
   /// ISO 4217 code preselected when creating a new account.
   final String defaultCurrency;
 
+  /// Whether the Accounts tab remembers list or card view across restarts.
+  final ListViewMode accountsViewMode;
+
+  /// Whether the Loans tab remembers list or card view across restarts.
+  final ListViewMode loansViewMode;
+
+  /// Whether the Budgets tab remembers list or card view across restarts.
+  final ListViewMode budgetsViewMode;
+
   /// Builds settings from raw preference rows, ignoring unknown keys.
   ///
   /// Unknown keys are tolerated rather than rejected so a database written by a
@@ -49,16 +65,29 @@ class AppSettings {
       ),
       defaultCurrency:
           values[SettingKeys.defaultCurrency] ?? defaultCurrencyFallback,
+      accountsViewMode: listViewModeFromStorage(
+        values[SettingKeys.accountsViewMode],
+      ),
+      loansViewMode: listViewModeFromStorage(values[SettingKeys.loansViewMode]),
+      budgetsViewMode: listViewModeFromStorage(
+        values[SettingKeys.budgetsViewMode],
+      ),
     );
   }
 
   AppSettings copyWith({
     ThemePreference? themePreference,
     String? defaultCurrency,
+    ListViewMode? accountsViewMode,
+    ListViewMode? loansViewMode,
+    ListViewMode? budgetsViewMode,
   }) {
     return AppSettings(
       themePreference: themePreference ?? this.themePreference,
       defaultCurrency: defaultCurrency ?? this.defaultCurrency,
+      accountsViewMode: accountsViewMode ?? this.accountsViewMode,
+      loansViewMode: loansViewMode ?? this.loansViewMode,
+      budgetsViewMode: budgetsViewMode ?? this.budgetsViewMode,
     );
   }
 
@@ -66,8 +95,17 @@ class AppSettings {
   bool operator ==(Object other) =>
       other is AppSettings &&
       other.themePreference == themePreference &&
-      other.defaultCurrency == defaultCurrency;
+      other.defaultCurrency == defaultCurrency &&
+      other.accountsViewMode == accountsViewMode &&
+      other.loansViewMode == loansViewMode &&
+      other.budgetsViewMode == budgetsViewMode;
 
   @override
-  int get hashCode => Object.hash(themePreference, defaultCurrency);
+  int get hashCode => Object.hash(
+    themePreference,
+    defaultCurrency,
+    accountsViewMode,
+    loansViewMode,
+    budgetsViewMode,
+  );
 }
