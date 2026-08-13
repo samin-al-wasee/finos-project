@@ -62,6 +62,7 @@ class DashboardData {
     required this.categorySpending,
     required this.budgetStatus,
     required this.recentTransactions,
+    required this.transactionCountThisPeriod,
   });
 
   final int totalBalanceMinor;
@@ -77,8 +78,14 @@ class DashboardData {
   /// summarise — the section is hidden rather than shown empty.
   final BudgetStatusSummary? budgetStatus;
 
-  /// Newest transactions, capped at five (docs/UI_DESIGN.md §8).
+  /// Newest transactions, capped at five (docs/UI_DESIGN.md §8) — the
+  /// Recent Activity summary card shows only the first of these as a
+  /// preview, never the whole list.
   final List<TransactionRow> recentTransactions;
+
+  /// How many transactions fall inside this same period as [incomeMinor]/
+  /// [expenseMinor] — a plain in-memory count, not a new query.
+  final int transactionCountThisPeriod;
 
   int get netCashFlowMinor => incomeMinor - expenseMinor;
 }

@@ -5,17 +5,19 @@ import 'package:finos_app/core/formatting/money.dart';
 import 'package:finos_app/core/theme/app_theme.dart';
 import 'package:finos_app/features/accounts/data/account_dao.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
-import 'package:finos_app/features/accounts/presentation/account_details_screen.dart';
+import 'package:finos_app/features/accounts/presentation/accounts_list_screen.dart';
 import 'package:finos_app/features/accounts/presentation/account_form_screen.dart';
 import 'package:finos_app/features/budgets/data/budget_dao.dart';
 import 'package:finos_app/features/budgets/domain/budget_period.dart';
 import 'package:finos_app/features/budgets/domain/budget_status.dart';
+import 'package:finos_app/features/budgets/presentation/budgets_list_screen.dart';
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
 import 'package:finos_app/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:finos_app/features/reports/presentation/reports_screen.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
 import 'package:finos_app/features/transactions/domain/transaction_type.dart';
-import 'package:finos_app/features/transactions/presentation/transaction_form_screen.dart';
+import 'package:finos_app/features/transactions/presentation/transactions_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +25,12 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   Future<AppDatabase> pumpDashboard(WidgetTester tester) async {
     final database = AppDatabase.inMemory();
+    // A tall viewport fits every summary card without scrolling, so cards
+    // near the bottom (e.g. Recent Activity) are hit-testable directly.
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appDatabaseProvider.overrideWithValue(database)],
@@ -82,13 +90,16 @@ void main() {
     );
 
     final now = DateTime.now();
+    // The expense is strictly later, so it — not the income — is
+    // deterministically the "latest" transaction the Recent Activity card
+    // previews.
     await transactions.insertOne(
       TransactionsCompanion.insert(
         id: 'tx-income',
         type: TransactionType.income,
         amountMinor: 50000,
         accountId: 'acct-1',
-        date: now,
+        date: now.subtract(const Duration(minutes: 1)),
         description: Value('Salary'),
       ),
     );
@@ -116,9 +127,11 @@ void main() {
     expect(find.text('Income'), findsOneWidget);
     expect(find.text(formatMinorUnits(50000)), findsOneWidget);
     expect(find.text('Expenses'), findsOneWidget);
-    // Appears on both the Expenses card and the "Spending by category" tile,
-    // since the one expense is entirely in the 'Food' category.
-    expect(find.text(formatMinorUnits(30000)), findsNWidgets(2));
+    // Appears on the Expenses card, the Spending-by-category card's top
+    // entry, and the Recent Activity card's latest-transaction preview —
+    // all the same expense, since it's the only one and it's also the
+    // latest transaction.
+    expect(find.text(formatMinorUnits(30000)), findsNWidgets(3));
 
     // Net cash flow.
     expect(
@@ -126,80 +139,97 @@ void main() {
       findsOneWidget,
     );
 
-    // Account section.
-    expect(find.text('Main Bank'), findsWidgets);
+    // Accounts summary card — a count, not a per-account list.
+    expect(find.text('Accounts'), findsOneWidget);
+    expect(find.text('1 account'), findsOneWidget);
+    expect(find.text('Main Bank'), findsNothing);
 
-    // Recent transactions — category title 'Food' for the expense, and the
-    // description 'Salary' for the uncategorized income.
-    expect(find.text('Food'), findsWidgets);
-    expect(find.text('Salary'), findsOneWidget);
-
-    // Spending by category section is present.
+    // Spending-by-category summary card shows the (only) top category, and
+    // the Recent Activity card's latest-transaction preview shows the same
+    // category name (not its raw description) since it's the categorized
+    // expense.
     expect(find.text('Spending by category'), findsOneWidget);
+    expect(find.text('Food'), findsNWidgets(2));
+
+    // Recent Activity summary card previews the latest transaction (the
+    // categorized expense) rather than listing every transaction.
+    expect(find.text('Recent activity'), findsOneWidget);
+    expect(find.text('2 transactions this month'), findsOneWidget);
+    expect(find.text('Salary'), findsNothing);
+    expect(find.text('Lunch'), findsNothing);
 
     await database.close();
   });
 
-  testWidgets('spending by category ranks categories by amount', (
-    tester,
-  ) async {
-    final database = await pumpDashboard(tester);
-    final accounts = AccountDao(database);
-    final transactions = TransactionDao(database);
+  testWidgets(
+    'the spending-by-category card shows the highest-spend category and a '
+    'count of the rest',
+    (tester) async {
+      final database = await pumpDashboard(tester);
+      final accounts = AccountDao(database);
+      final transactions = TransactionDao(database);
 
-    await accounts.insertOne(
-      FinancialAccountsCompanion.insert(
-        id: 'acct-1',
-        name: 'Main Bank',
-        type: AccountType.bank,
-      ),
-    );
-    // 'cat-food' and 'cat-transport' are built-in categories, seeded on every
-    // fresh database — no need to insert them.
+      await accounts.insertOne(
+        FinancialAccountsCompanion.insert(
+          id: 'acct-1',
+          name: 'Main Bank',
+          type: AccountType.bank,
+        ),
+      );
+      // 'cat-food' and 'cat-transport' are built-in categories, seeded on
+      // every fresh database — no need to insert them.
 
-    final now = DateTime.now();
-    await transactions.insertOne(
-      TransactionsCompanion.insert(
-        id: 'tx-transport',
-        type: TransactionType.expense,
-        amountMinor: 5000,
-        accountId: 'acct-1',
-        categoryId: Value('cat-transport'),
-        date: now,
-      ),
-    );
-    await transactions.insertOne(
-      TransactionsCompanion.insert(
-        id: 'tx-food',
-        type: TransactionType.expense,
-        amountMinor: 30000,
-        accountId: 'acct-1',
-        categoryId: Value('cat-food'),
-        date: now,
-      ),
-    );
-    await transactions.insertOne(
-      TransactionsCompanion.insert(
-        id: 'tx-uncategorized',
-        type: TransactionType.expense,
-        amountMinor: 1000,
-        accountId: 'acct-1',
-        date: now,
-      ),
-    );
-    await tester.pumpAndSettle();
+      final now = DateTime.now();
+      // Distinct dates, with Food both the highest amount AND the latest
+      // transaction, so the Recent Activity card's own latest-transaction
+      // preview can never accidentally surface Transport or Uncategorized
+      // and make this test flaky.
+      await transactions.insertOne(
+        TransactionsCompanion.insert(
+          id: 'tx-uncategorized',
+          type: TransactionType.expense,
+          amountMinor: 1000,
+          accountId: 'acct-1',
+          date: now.subtract(const Duration(minutes: 2)),
+        ),
+      );
+      await transactions.insertOne(
+        TransactionsCompanion.insert(
+          id: 'tx-transport',
+          type: TransactionType.expense,
+          amountMinor: 5000,
+          accountId: 'acct-1',
+          categoryId: Value('cat-transport'),
+          date: now.subtract(const Duration(minutes: 1)),
+        ),
+      );
+      await transactions.insertOne(
+        TransactionsCompanion.insert(
+          id: 'tx-food',
+          type: TransactionType.expense,
+          amountMinor: 30000,
+          accountId: 'acct-1',
+          categoryId: Value('cat-food'),
+          date: now,
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    // Highest spend first: Food, then Transport, then Uncategorized.
-    final sectionTop = tester.getTopLeft(find.text('Spending by category'));
-    final foodTop = tester.getTopLeft(find.text('Food').last);
-    final transportTop = tester.getTopLeft(find.text('Transport'));
-    final uncategorizedTop = tester.getTopLeft(find.text('Uncategorized'));
-    expect(foodTop.dy, greaterThan(sectionTop.dy));
-    expect(transportTop.dy, greaterThan(foodTop.dy));
-    expect(uncategorizedTop.dy, greaterThan(transportTop.dy));
+      // Highest spend (Food) is the one shown; Transport and Uncategorized
+      // are folded into the "more categories" count instead of their own
+      // rows — that per-category detail lives on Reports, not here. 'Food'
+      // appears twice: once as the Spending card's top entry, once again as
+      // the Recent Activity card's latest-transaction preview, since it's
+      // both here.
+      expect(find.text('Spending by category'), findsOneWidget);
+      expect(find.text('Food'), findsNWidgets(2));
+      expect(find.text('Transport'), findsNothing);
+      expect(find.text('Uncategorized'), findsNothing);
+      expect(find.text('and 2 more categories'), findsOneWidget);
 
-    await database.close();
-  });
+      await database.close();
+    },
+  );
 
   testWidgets('no expenses hides the spending-by-category section', (
     tester,
@@ -255,9 +285,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // '.first': the Spending-by-category card's own "Food" (inside the
+    // MergeSemantics below) renders before the Recent Activity card's latest-
+    // transaction preview, which also happens to read "Food" here since this
+    // expense is both the top category and the most recent transaction.
     final row = tester.getSemantics(
       find.ancestor(
-        of: find.text('Food'),
+        of: find.text('Food').first,
         matching: find.byType(MergeSemantics),
       ),
     );
@@ -269,7 +303,7 @@ void main() {
     await database.close();
   });
 
-  testWidgets('tapping a recent transaction opens the edit form', (
+  testWidgets('tapping the Recent Activity card opens the Transactions tab', (
     tester,
   ) async {
     final database = await pumpDashboard(tester);
@@ -295,16 +329,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Lunch'));
+    await tester.tap(find.text('Recent activity'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(TransactionFormScreen), findsOneWidget);
-    expect(find.widgetWithText(AppBar, 'Edit transaction'), findsOneWidget);
+    expect(find.byType(TransactionsListScreen), findsOneWidget);
 
     await database.close();
   });
 
-  testWidgets('tapping an account navigates to the account details screen', (
+  testWidgets('tapping the Accounts card opens the Accounts tab', (
     tester,
   ) async {
     final database = await pumpDashboard(tester);
@@ -319,10 +352,62 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Main Bank').first);
+    await tester.tap(find.text('Accounts'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AccountDetailsScreen), findsOneWidget);
+    expect(find.byType(AccountsListScreen), findsOneWidget);
+
+    await database.close();
+  });
+
+  testWidgets('tapping the Budgets card opens the Budgets tab', (tester) async {
+    final database = await pumpDashboard(tester);
+    final accounts = AccountDao(database);
+    final budgets = BudgetDao(database);
+
+    await accounts.insertOne(
+      FinancialAccountsCompanion.insert(
+        id: 'acct-1',
+        name: 'Main Bank',
+        type: AccountType.bank,
+      ),
+    );
+    await budgets.insertOne(
+      BudgetsCompanion.insert(
+        id: 'budget-1',
+        categoryId: const Value('cat-food'),
+        amountMinor: 100000,
+        period: BudgetPeriod.monthly,
+        startDate: DateTime.now(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Budgets'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BudgetsListScreen), findsOneWidget);
+
+    await database.close();
+  });
+
+  testWidgets('tapping the Income card opens Reports', (tester) async {
+    final database = await pumpDashboard(tester);
+    final accounts = AccountDao(database);
+
+    await accounts.insertOne(
+      FinancialAccountsCompanion.insert(
+        id: 'acct-1',
+        name: 'Main Bank',
+        type: AccountType.bank,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Income'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ReportsScreen), findsOneWidget);
 
     await database.close();
   });

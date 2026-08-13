@@ -729,6 +729,9 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
     periodStart,
     periodEnd,
   );
+  final transactionCountThisPeriod = transactions
+      .where((t) => !t.date.isBefore(periodStart) && t.date.isBefore(periodEnd))
+      .length;
 
   final categorySpending =
       expenseByCategory.entries
@@ -774,6 +777,7 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
     categorySpending: categorySpending.take(5).toList(),
     budgetStatus: budgetStatus,
     recentTransactions: transactions.take(5).toList(),
+    transactionCountThisPeriod: transactionCountThisPeriod,
   );
 });
 

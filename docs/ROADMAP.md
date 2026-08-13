@@ -247,6 +247,24 @@ The dashboard should provide:
 
 The dashboard should prioritize clarity over analytics.
 
+> **V1 revision (at user request):** every section below the balance is
+> exactly one tappable summary card — never a per-item list — so the
+> Dashboard never duplicates the Accounts or Transactions tab's own list.
+> "Recent transactions" became a Recent Activity card (a this-period count
+> plus the single latest transaction's preview); the per-account list
+> became an Accounts card (a count); "Spending by category" became a card
+> showing only the single highest-spend category plus how many more there
+> are. Each card taps through to the relevant full screen
+> (`AccountsListScreen`, `TransactionsListScreen`, `BudgetsListScreen`, or
+> `ReportsScreen` for Income/Expense/Category) rather than switching the
+> bottom navigation tab — no mechanism exists today for a nested screen to
+> request that, and building one was out of scope here. Separately, the
+> Total Balance card is now pinned at a constant height
+> (`SliverPersistentHeader`) while everything else scrolls underneath it;
+> Income and Expense scroll away with the rest rather than staying pinned
+> alongside it, since Balance is the single dominant figure this document's
+> own mockup already treats as more important than the two supporting ones.
+
 ---
 
 ## 6.5 Budgets
