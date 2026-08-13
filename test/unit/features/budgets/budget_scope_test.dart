@@ -2,6 +2,7 @@ import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/features/budgets/domain/budget_period.dart';
 import 'package:finos_app/features/budgets/domain/budget_scope.dart';
 import 'package:finos_app/features/budgets/domain/budget_status.dart';
+import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Tests for [budgetScopesOverlap] and [resolveBudgetScope]
@@ -265,6 +266,57 @@ void main() {
         const {},
       );
       expect(scope, isA<WholeAccountScope>());
+    });
+  });
+
+  group('budgetScopeMatches', () {
+    TransactionRow row({
+      TransactionType type = TransactionType.expense,
+      String? categoryId,
+    }) {
+      final timestamp = DateTime(2026, 8, 10);
+      return TransactionRow(
+        id: 'tx-1',
+        type: type,
+        amountMinor: 1000,
+        currency: 'BDT',
+        accountId: 'acct-bank',
+        categoryId: categoryId,
+        date: timestamp,
+        description: '',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      );
+    }
+
+    test('single-category scope matches only its own category', () {
+      const scope = SingleCategoryScope('food');
+      expect(budgetScopeMatches(scope, row(categoryId: 'food')), isTrue);
+      expect(budgetScopeMatches(scope, row(categoryId: 'transport')), isFalse);
+      expect(budgetScopeMatches(scope, row(categoryId: null)), isFalse);
+    });
+
+    test('multi-category scope matches any member category', () {
+      const scope = MultiCategoryScope({'dining', 'entertainment'});
+      expect(budgetScopeMatches(scope, row(categoryId: 'dining')), isTrue);
+      expect(
+        budgetScopeMatches(scope, row(categoryId: 'entertainment')),
+        isTrue,
+      );
+      expect(budgetScopeMatches(scope, row(categoryId: 'travel')), isFalse);
+      expect(budgetScopeMatches(scope, row(categoryId: null)), isFalse);
+    });
+
+    test('uncategorized scope matches only categoryless rows', () {
+      const scope = UncategorizedScope();
+      expect(budgetScopeMatches(scope, row(categoryId: null)), isTrue);
+      expect(budgetScopeMatches(scope, row(categoryId: 'food')), isFalse);
+    });
+
+    test('whole-account scope matches every row regardless of category', () {
+      const scope = WholeAccountScope();
+      expect(budgetScopeMatches(scope, row(categoryId: 'food')), isTrue);
+      expect(budgetScopeMatches(scope, row(categoryId: null)), isTrue);
     });
   });
 }

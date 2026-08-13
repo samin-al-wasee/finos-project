@@ -775,6 +775,27 @@ template or applying a saved filter (§8.2, §8.5).
 
 ---
 
+## 8.11 Budgets Card View
+
+> **Status:** Implemented, completing the list⇄card pattern (§8.9–§8.10)
+> across all three tabs that have it. Unlike Accounts/Loans, this one filled
+> a real gap: `budget_details_screen.dart` had no transaction-level feed
+> before this, only aggregate numbers. A budget's spend depends on its
+> flexible scope (ADR-007: single-category, multi-category, uncategorized,
+> whole-account), so a new pure predicate, `budgetScopeMatches(BudgetScope,
+> TransactionRow)`, was added next to the existing `budgetScopesOverlap` in
+> `budget_scope.dart`, combined with `BudgetProgress.window.contains(date)`
+> and an expense-type check to build the live feed — no new DAO query or
+> provider. The `AppBar` toggle switches between the existing list and a
+> swipeable single-budget card, ordered by period the same way the list
+> groups them (period isn't a safety-relevant distinction the way loans'
+> direction split is, so no special per-card badge was needed). Tapping a
+> card opens the existing `BudgetDetailsScreen` unchanged; edit/archive/
+> delete remain reachable only through the list's own per-card menu, since
+> the details screen never had one.
+
+---
+
 # 9. Phase 3 — Personal Finance Hub
 
 ## Goal

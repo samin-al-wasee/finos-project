@@ -10,9 +10,15 @@ import '../domain/budget_period.dart';
 import '../domain/budget_progress.dart';
 import '../domain/budget_status.dart';
 import 'budget_bar.dart';
+import 'budget_card_view.dart';
 import 'budget_details_screen.dart';
 import 'budget_form_screen.dart';
 import 'budget_labels.dart';
+
+/// Whether the Budgets tab shows every budget as a plain list, or one at a
+/// time as a swipeable card with its own spending feed below. Card view is
+/// additive — list stays the default.
+enum _ViewMode { list, card }
 
 /// Budget overview screen (FR-04, docs/UI_DESIGN.md §19–§20).
 ///
@@ -20,15 +26,43 @@ import 'budget_labels.dart';
 /// limit, a progress bar, and what is left. Active budgets are grouped by period
 /// with archived ones collected below. A floating action button opens the create
 /// form; per-card menus expose edit/archive/restore/delete.
-class BudgetsListScreen extends ConsumerWidget {
+class BudgetsListScreen extends ConsumerStatefulWidget {
   const BudgetsListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BudgetsListScreen> createState() => _BudgetsListScreenState();
+}
+
+class _BudgetsListScreenState extends ConsumerState<BudgetsListScreen> {
+  _ViewMode _viewMode = _ViewMode.list;
+
+  @override
+  Widget build(BuildContext context) {
     final budgets = ref.watch(budgetProgressProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Budgets')),
+      appBar: AppBar(
+        title: const Text('Budgets'),
+        actions: [
+          budgets.maybeWhen(
+            data: (rows) {
+              final hasActive = rows.any(
+                (r) => r.budget.status == BudgetStatus.active,
+              );
+              if (!hasActive) return const SizedBox.shrink();
+              final isCard = _viewMode == _ViewMode.card;
+              return IconButton(
+                icon: Icon(isCard ? Icons.view_list : Icons.view_carousel),
+                tooltip: isCard ? 'List view' : 'Card view',
+                onPressed: () => setState(
+                  () => _viewMode = isCard ? _ViewMode.list : _ViewMode.card,
+                ),
+              );
+            },
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         // Distinct from the other tab FABs — see the note in
         // transactions_list_screen.dart.
@@ -51,7 +85,7 @@ class BudgetsListScreen extends ConsumerWidget {
                   label: const Text('Add budget'),
                 ),
               )
-            : _BudgetList(rows: rows),
+            : _buildBody(rows),
         error: (error, _) => EmptyState(
           icon: Icons.error_outline,
           title: 'Something went wrong',
@@ -70,6 +104,24 @@ class BudgetsListScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildBody(List<BudgetProgress> rows) {
+    if (_viewMode == _ViewMode.card) {
+      // Same order the list groups by below (period, in enum order), so
+      // card view never reshuffles what the list already shows.
+      final ordered = [
+        for (final period in BudgetPeriod.values)
+          for (final row in rows.where(
+            (r) =>
+                r.budget.status == BudgetStatus.active &&
+                r.budget.period == period,
+          ))
+            row,
+      ];
+      if (ordered.isNotEmpty) return BudgetCardView(rows: ordered);
+    }
+    return _BudgetList(rows: rows);
   }
 }
 
@@ -203,9 +255,7 @@ class _BudgetCard extends ConsumerWidget {
         if (budgetCarryInLabel(progress) != null)
           Text(
             budgetCarryInLabel(progress)!,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colors.mutedText,
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedText),
           ),
         const SizedBox(height: AppSpacing.sm),
         BudgetBar(progress: progress),

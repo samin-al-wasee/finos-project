@@ -119,3 +119,20 @@ bool budgetScopesOverlap(BudgetScope a, BudgetScope b) {
       : (b as MultiCategoryScope).categoryIds;
   return aIds.intersection(bIds).isNotEmpty;
 }
+
+/// Whether [row] falls inside [scope]'s categories.
+///
+/// A pure per-row predicate, the same shape as `TransactionFilter.matches`
+/// for accounts — callers still need to check `row.type ==
+/// TransactionType.expense` and the budget's current window themselves,
+/// since scope alone doesn't decide either of those (docs/DATA_MODEL.md §25:
+/// "income and transfers are excluded").
+bool budgetScopeMatches(BudgetScope scope, TransactionRow row) {
+  return switch (scope) {
+    SingleCategoryScope(:final categoryId) => row.categoryId == categoryId,
+    MultiCategoryScope(:final categoryIds) =>
+      row.categoryId != null && categoryIds.contains(row.categoryId),
+    UncategorizedScope() => row.categoryId == null,
+    WholeAccountScope() => true,
+  };
+}
