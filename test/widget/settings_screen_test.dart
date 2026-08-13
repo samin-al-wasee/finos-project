@@ -3,6 +3,7 @@ import 'package:finos_app/app/providers.dart';
 import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/core/theme/app_theme.dart';
 import 'package:finos_app/features/categories/presentation/categories_list_screen.dart';
+import 'package:finos_app/features/net_worth/presentation/net_worth_screen.dart';
 import 'package:finos_app/features/settings/data/settings_dao.dart';
 import 'package:finos_app/features/settings/domain/app_settings.dart';
 import 'package:finos_app/features/settings/presentation/settings_screen.dart';
@@ -48,6 +49,18 @@ void main() {
     expect(find.text('Export backup'), findsOneWidget);
     expect(find.text('Import backup'), findsOneWidget);
     expect(find.text('FinOS'), findsOneWidget);
+
+    await database.close();
+  });
+
+  testWidgets('the Net Worth entry opens the Net Worth screen', (tester) async {
+    final database = AppDatabase.inMemory();
+    await pumpSettings(tester, database);
+
+    await tester.tap(find.text('Net Worth'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NetWorthScreen), findsOneWidget);
 
     await database.close();
   });

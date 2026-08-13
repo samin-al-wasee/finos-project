@@ -25,6 +25,7 @@ import '../features/loans/application/loan_controller.dart';
 import '../features/loans/data/loan_dao.dart';
 import '../features/loans/domain/loan_group.dart';
 import '../features/loans/domain/loan_progress.dart';
+import '../features/net_worth/domain/net_worth_data.dart';
 import '../features/recurring/application/recurring_transaction_controller.dart';
 import '../features/recurring/data/recurring_transaction_dao.dart';
 import '../features/recurring/domain/due_occurrences.dart';
@@ -689,6 +690,20 @@ final accountBalancesProvider = FutureProvider<Map<String, int>>((ref) async {
       account.id:
           account.openingBalanceMinor + await dao.balanceImpactFor(account.id),
   };
+});
+
+// ------------------------------------------------------------------
+// Net worth
+// ------------------------------------------------------------------
+
+/// Assets minus liabilities, derived entirely at read time from accounts and
+/// loans (docs/ROADMAP.md §9.1) — reuses [accountBalancesProvider] and
+/// [loanProgressProvider] rather than recomputing either.
+final netWorthProvider = FutureProvider<NetWorthData>((ref) async {
+  final accounts = await ref.watch(accountsStreamProvider.future);
+  final balances = await ref.watch(accountBalancesProvider.future);
+  final loans = await ref.watch(loanProgressProvider.future);
+  return computeNetWorth(accounts: accounts, balances: balances, loans: loans);
 });
 
 // ------------------------------------------------------------------

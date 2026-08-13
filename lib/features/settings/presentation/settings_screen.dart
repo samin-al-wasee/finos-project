@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../backup/presentation/backup_section.dart';
 import '../../categories/presentation/categories_list_screen.dart';
+import '../../net_worth/presentation/net_worth_screen.dart';
 import '../../recurring/presentation/recurring_transactions_list_screen.dart';
 import '../../reports/presentation/reports_screen.dart';
 import '../../templates/presentation/templates_list_screen.dart';
@@ -94,6 +95,15 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const ReportsScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.balance),
+            title: const Text('Net Worth'),
+            subtitle: const Text('Assets minus liabilities'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const NetWorthScreen()),
             ),
           ),
 

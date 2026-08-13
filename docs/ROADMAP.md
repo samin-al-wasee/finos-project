@@ -808,6 +808,23 @@ This is where the application begins moving toward the long-term product vision.
 
 # 9.1 Net Worth
 
+> **Status:** Implemented, ahead of the normal Phase 2 → Phase 3 sequence,
+> at the user's explicit request. Reached from Settings → Insights,
+> alongside Reports — a new screen, not a change to the Dashboard, following
+> the same "derived cross-feature aggregate" precedent Reports already
+> established. Assets are every active non-credit-card account's live
+> balance plus every non-archived `lent` loan's outstanding amount;
+> liabilities are every active credit card's owed amount (`max(0,
+> -balance)`, the same sign convention `CreditCardCycle` already documents)
+> plus every non-archived `borrowed` loan's outstanding amount. Everything
+> is computed by a pure `computeNetWorth` function reusing
+> `accountBalancesProvider` and `loanProgressProvider` — no new DAO methods,
+> no schema changes, nothing stored. An overdrawn non-credit account shows
+> as a negative asset entry rather than being reclassified as a liability —
+> a deliberate simplification. Investments and Cash/Bank/Receivables beyond
+> what Accounts and Loans already model are not built; this is exactly the
+> "Assets − Liabilities" figure below, no more.
+
 Introduce:
 
 ```text
