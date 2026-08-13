@@ -91,6 +91,27 @@ void main() {
     await database.close();
   });
 
+  testWidgets(
+    'shows a fading hint for the active field, gone once it\'s typed',
+    (tester) async {
+      final database = await pumpBar(tester);
+
+      await tester.enterText(find.byType(TextField), 'income ');
+      await tester.pump();
+      expect(find.text('income <amount>'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'income 5');
+      await tester.pump();
+      expect(find.text('income <amount>'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'income 500 ');
+      await tester.pump();
+      expect(find.text('income 500 <date>'), findsOneWidget);
+
+      await database.close();
+    },
+  );
+
   testWidgets('"@" inside a chosen command suggests that field\'s accounts', (
     tester,
   ) async {

@@ -20,8 +20,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  // The app bar's search field, disambiguated from the QuickEntryBar's own
-  // TextField pinned below the list (docs/ARCHITECTURE.md, "quick entry").
   Finder searchTextField() => find.descendant(
     of: find.byType(AppBar),
     matching: find.byType(TextField),

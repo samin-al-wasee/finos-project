@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/formatting/money.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../accounts/domain/account_status.dart';
 import '../../accounts/presentation/account_form_screen.dart';
@@ -99,6 +100,20 @@ class _QuickEntryBarState extends ConsumerState<QuickEntryBar> {
 
     final suggestions = _buildSuggestions(parsed, lookups);
 
+    // Shown only on a fresh, untyped slot (right after the command word or a
+    // trailing space) and gone the instant a character lands in that slot —
+    // "income <amount>" fades as soon as the amount itself starts.
+    final atFreshSlot = text.isEmpty || text.endsWith(' ');
+    final ghostHint = (parsed.activeField != null && atFreshSlot)
+        ? '<${parsed.activeField!.label.toLowerCase()}>'
+        : null;
+    final fieldStyle =
+        theme.textTheme.bodyLarge ?? const TextStyle(fontSize: 16);
+    const fieldPadding = EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.md,
+    );
+
     return Material(
       color: theme.colorScheme.surfaceContainerHighest,
       elevation: 8,
@@ -108,9 +123,16 @@ class _QuickEntryBarState extends ConsumerState<QuickEntryBar> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (suggestions != null)
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 220),
-                child: suggestions,
+              // Flexible (not a bare ConstrainedBox) so this shrinks to
+              // whatever height the bar actually has room for instead of
+              // demanding its full 220px and overflowing the screen — the
+              // bar's own space is capped by the app shell to the height
+              // left after the keyboard, which can be less than that.
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: suggestions,
+                ),
               ),
             Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -122,18 +144,66 @@ class _QuickEntryBarState extends ConsumerState<QuickEntryBar> {
               child: Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _submit(lookups),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: parsed.command == null
-                            ? 'Try @ — income, expense, transfer…'
-                            : parsed.activeField?.label ?? 'Send when ready',
-                        border: const OutlineInputBorder(),
-                      ),
+                    child: Stack(
+                      children: [
+                        if (ghostHint != null)
+                          // An invisible mirror of the typed text followed by
+                          // the low-opacity hint, positioned exactly where
+                          // the real TextField (same style/padding) would
+                          // continue it — a ghost-text overlay, since
+                          // InputDecoration.hintText disappears entirely the
+                          // moment the field has any content.
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: Padding(
+                                padding: fieldPadding,
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text.rich(
+                                    TextSpan(
+                                      style: fieldStyle,
+                                      children: [
+                                        TextSpan(
+                                          text: text,
+                                          style: const TextStyle(
+                                            color: Colors.transparent,
+                                          ),
+                                        ),
+                                        TextSpan(
+                                          text: ghostHint,
+                                          style: TextStyle(
+                                            color: theme
+                                                .extension<FinosColors>()!
+                                                .mutedText
+                                                .withValues(alpha: 0.5),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    maxLines: 1,
+                                    softWrap: false,
+                                    overflow: TextOverflow.clip,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        TextField(
+                          controller: _controller,
+                          focusNode: _focusNode,
+                          style: fieldStyle,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _submit(lookups),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: fieldPadding,
+                            hintText: parsed.command == null
+                                ? 'Try @ — income, expense, transfer…'
+                                : null,
+                            border: const OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   IconButton(

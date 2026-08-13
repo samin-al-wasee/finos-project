@@ -4,6 +4,7 @@ import '../features/accounts/presentation/accounts_list_screen.dart';
 import '../features/budgets/presentation/budgets_list_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/loans/presentation/loans_list_screen.dart';
+import '../features/quick_entry/presentation/quick_entry_bar.dart';
 import '../features/transactions/presentation/transactions_list_screen.dart';
 
 /// The root scaffold hosting the bottom navigation shell.
@@ -53,15 +54,32 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: const [
-          DashboardScreen(),
-          TransactionsListScreen(),
-          AccountsListScreen(),
-          BudgetsListScreen(),
-          LoansListScreen(),
-        ],
+      // Quick entry is hoisted here (rather than left inside individual tab
+      // screens) so it's available from every tab, and so its per-keystroke
+      // suggestion list is bounded by the layout's actual available height —
+      // a plain Column child would report its unbounded intrinsic height and
+      // overflow once that content plus a shown keyboard exceeds the screen.
+      body: LayoutBuilder(
+        builder: (context, constraints) => Column(
+          children: [
+            Expanded(
+              child: IndexedStack(
+                index: _selectedIndex,
+                children: const [
+                  DashboardScreen(),
+                  TransactionsListScreen(),
+                  AccountsListScreen(),
+                  BudgetsListScreen(),
+                  LoansListScreen(),
+                ],
+              ),
+            ),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: constraints.maxHeight),
+              child: const QuickEntryBar(),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
