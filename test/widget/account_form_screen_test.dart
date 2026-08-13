@@ -3,6 +3,7 @@ import 'package:finos_app/app/providers.dart';
 import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/core/theme/app_theme.dart';
 import 'package:finos_app/features/accounts/data/account_dao.dart';
+import 'package:finos_app/features/accounts/data/credit_card_dao.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
 import 'package:finos_app/features/accounts/presentation/account_form_screen.dart';
 import 'package:flutter/material.dart';
@@ -169,5 +170,137 @@ void main() {
     expect(updated!.name, 'Primary Bank');
 
     await database.close();
+  });
+
+  group('credit card', () {
+    Future<void> selectCreditCardType(WidgetTester tester) async {
+      await tester.tap(find.byType(DropdownButtonFormField<AccountType>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Credit Card').last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('reveals billing fields only once selected', (tester) async {
+      final database = await pumpForm(tester);
+
+      expect(find.text('Credit limit'), findsNothing);
+      await selectCreditCardType(tester);
+      expect(find.text('Credit limit'), findsOneWidget);
+      expect(find.text('Statement closes on'), findsOneWidget);
+      expect(find.text('Payment due'), findsOneWidget);
+
+      await database.close();
+    });
+
+    testWidgets('requires a credit limit and payment due offset', (
+      tester,
+    ) async {
+      final database = await pumpForm(tester);
+
+      await tester.enterText(find.byType(TextFormField).at(0), 'Visa');
+      await selectCreditCardType(tester);
+      // Payment due already carries a default, so clear it to hit that
+      // validator too.
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Payment due'),
+        '',
+      );
+      // The credit-card fields push "Add account" beyond the ListView's
+      // initially-built range.
+      await tester.drag(find.byType(ListView), const Offset(0, -400));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add account'));
+      await tester.pump();
+
+      expect(find.text('Enter a credit limit'), findsOneWidget);
+      expect(
+        find.text('Enter how many days after the statement'),
+        findsOneWidget,
+      );
+
+      await database.close();
+    });
+
+    testWidgets('creates the account and its billing details together', (
+      tester,
+    ) async {
+      final database = await pumpForm(tester);
+      final accounts = AccountDao(database);
+      final creditCards = CreditCardDao(database);
+
+      await tester.enterText(find.byType(TextFormField).at(0), 'Visa');
+      await selectCreditCardType(tester);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Credit limit'),
+        '100,000.00',
+      );
+      // The credit-card fields push "Add account" beyond the ListView's
+      // initially-built range.
+      await tester.drag(find.byType(ListView), const Offset(0, -400));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add account'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AccountFormScreen), findsNothing);
+
+      final account = (await accounts.getAll()).single;
+      expect(account.name, 'Visa');
+      expect(account.type, AccountType.creditCard);
+
+      final details = await creditCards.getByAccountId(account.id);
+      expect(details, isNotNull);
+      expect(details!.creditLimitMinor, 10000000);
+      expect(details.paymentDueOffsetDays, 21);
+
+      await database.close();
+    });
+
+    testWidgets('pre-fills billing details in edit mode and locks the type', (
+      tester,
+    ) async {
+      final database = AppDatabase.inMemory();
+      final accounts = AccountDao(database);
+      final creditCards = CreditCardDao(database);
+      await accounts.insertOne(
+        FinancialAccountsCompanion.insert(
+          id: 'a1',
+          name: 'Visa',
+          type: AccountType.creditCard,
+        ),
+      );
+      await creditCards.insertOne(
+        CreditCardDetailsCompanion.insert(
+          id: 'card-1',
+          accountId: 'a1',
+          creditLimitMinor: 5000000,
+          statementDay: 12,
+          paymentDueOffsetDays: 18,
+        ),
+      );
+      final row = (await accounts.getById('a1'))!;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(database)],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: _FormHost(initial: row),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('50000'), findsOneWidget); // credit limit
+      expect(find.text('Day 12'), findsOneWidget);
+      expect(find.text('18'), findsOneWidget); // payment due offset
+
+      // Only "Credit Card" is offered once an account already is one.
+      await tester.tap(find.byType(DropdownButtonFormField<AccountType>));
+      await tester.pumpAndSettle();
+      expect(find.text('Bank'), findsNothing);
+      expect(find.text('Credit Card'), findsWidgets);
+
+      await database.close();
+    });
   });
 }

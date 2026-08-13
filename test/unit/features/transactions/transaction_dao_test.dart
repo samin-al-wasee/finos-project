@@ -192,6 +192,72 @@ void main() {
       });
     });
 
+    group('balanceImpactForBefore', () {
+      test('returns 0 for an account with no transactions', () async {
+        await seedAccount('One');
+        expect(
+          await dao.balanceImpactForBefore('acct-One', DateTime(2026, 8, 10)),
+          0,
+        );
+      });
+
+      test('excludes transactions on or after the cutoff', () async {
+        final source = await seedAccount('One');
+        await seedTransaction(
+          'before',
+          accountId: source,
+          type: TransactionType.expense,
+          amountMinor: 100000,
+          date: DateTime(2026, 8, 4),
+        );
+        await seedTransaction(
+          'on-cutoff',
+          accountId: source,
+          type: TransactionType.expense,
+          amountMinor: 200000,
+          date: DateTime(2026, 8, 5),
+        );
+        await seedTransaction(
+          'after',
+          accountId: source,
+          type: TransactionType.expense,
+          amountMinor: 400000,
+          date: DateTime(2026, 8, 6),
+        );
+
+        expect(
+          await dao.balanceImpactForBefore(source, DateTime(2026, 8, 5)),
+          -100000,
+        );
+      });
+
+      test(
+        'matches balanceImpactFor once the cutoff is in the future',
+        () async {
+          final source = await seedAccount('One');
+          await seedTransaction(
+            'inc',
+            accountId: source,
+            type: TransactionType.income,
+            amountMinor: 500000,
+            date: DateTime(2026, 8, 1),
+          );
+          await seedTransaction(
+            'exp',
+            accountId: source,
+            type: TransactionType.expense,
+            amountMinor: 150000,
+            date: DateTime(2026, 8, 2),
+          );
+
+          expect(
+            await dao.balanceImpactForBefore(source, DateTime(2100, 1, 1)),
+            await dao.balanceImpactFor(source),
+          );
+        },
+      );
+    });
+
     group('totalsForAccountAndPeriod', () {
       test('returns zero totals for an account with no transactions', () async {
         await seedAccount('One');

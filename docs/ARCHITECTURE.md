@@ -1242,7 +1242,37 @@ An architectural change is considered complete when:
 
 ---
 
-# 40. Final Principle
+# 40. Credit Card Architecture
+
+A credit card is a `financial_accounts` row like any other — its balance is
+computed the same way every other account's is (§17, §14). What it adds is a
+billing cycle layered on top, modeled the same shape a loan takes relative to
+an account (§19, ADR-004): a separate one-to-one details table rather than
+extending the account table itself.
+
+```text
+CreditCardDetails
+├── credit limit
+├── statement day
+└── payment due offset
+```
+
+Everything about the *current* cycle — outstanding balance, available
+credit, the previous statement's balance, the payment due date — is
+derived at read time from these three fields plus the account's
+transactions, never stored (ADR-005). This is the same rule §14 (Source of
+Truth) and §19 already apply to a loan's outstanding amount: deriving it
+makes it impossible for available credit to disagree with the spending
+behind it.
+
+Because a credit card is a `financial_accounts` row, it does not get a
+parallel form/details screen the way a loan does. Its extra fields are
+conditional additions to the existing account form and details screen,
+gated on the account's type.
+
+---
+
+# 41. Final Principle
 
 The architecture of FinOS should follow one central principle:
 

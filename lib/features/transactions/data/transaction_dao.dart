@@ -100,6 +100,46 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return row.read<int>('impact');
   }
 
+  /// Net balance impact of every transaction touching [accountId], dated
+  /// strictly before [cutoffExclusive].
+  ///
+  /// Same CASE logic as [balanceImpactFor], scoped to a cutoff date so a
+  /// credit card's balance as of its last statement close can be recovered —
+  /// the figure a payment due date applies to (docs/DATA_MODEL.md §60).
+  Future<int> balanceImpactForBefore(
+    String accountId,
+    DateTime cutoffExclusive,
+  ) async {
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(
+        CASE
+          WHEN type = '${_storage(TransactionType.income)}' THEN amount_minor
+          WHEN type = '${_storage(TransactionType.expense)}' THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.transfer)}'
+               AND account_id = ? THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.transfer)}'
+               AND destination_account_id = ? THEN amount_minor
+          WHEN type = '${_storage(TransactionType.loanReceipt)}' THEN amount_minor
+          WHEN type = '${_storage(TransactionType.loanPayment)}' THEN -amount_minor
+          ELSE 0
+        END
+      ), 0) AS impact
+      FROM transactions
+      WHERE (account_id = ? OR destination_account_id = ?) AND date < ?
+      ''',
+      variables: [
+        Variable(accountId),
+        Variable(accountId),
+        Variable(accountId),
+        Variable(accountId),
+        Variable(cutoffExclusive),
+      ],
+    ).getSingle();
+
+    return row.read<int>('impact');
+  }
+
   /// Sums income and expense for transactions dated `from <= date < to`
   /// (half-open range).
   ///

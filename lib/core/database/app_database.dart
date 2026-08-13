@@ -4,6 +4,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../features/accounts/data/account_table.dart';
+import '../../features/accounts/data/credit_card_details_table.dart';
 import '../../features/accounts/domain/account_status.dart';
 import '../../features/accounts/domain/account_type.dart';
 import '../../features/budgets/data/budget_table.dart';
@@ -43,6 +44,7 @@ part 'app_database.g.dart';
     TransactionTemplates,
     RecurringTransactions,
     SavedQueries,
+    CreditCardDetails,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -59,7 +61,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -115,6 +117,10 @@ class AppDatabase extends _$AppDatabase {
         // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
         await m.createTable(savedQueries);
       }
+      if (from < 10) {
+        // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
+        await m.createTable(creditCardDetails);
+      }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
     beforeOpen: (details) async {
@@ -168,6 +174,11 @@ class AppDatabase extends _$AppDatabase {
       // Same safety net for the v9 saved queries table.
       if (details.versionNow >= 9 && !details.wasCreated) {
         await _ensureSavedQueriesTable();
+      }
+
+      // Same safety net for the v10 credit card details table.
+      if (details.versionNow >= 10 && !details.wasCreated) {
+        await _ensureCreditCardDetailsTable();
       }
     },
   );
@@ -316,5 +327,14 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _ensureSavedQueriesTable() async {
     final migrator = Migrator(this);
     await migrator.createTable(savedQueries);
+  }
+
+  /// Safety net for a v10 database whose credit card details table is
+  /// missing.
+  ///
+  /// Same rationale as [_ensureTransactionsTable].
+  Future<void> _ensureCreditCardDetailsTable() async {
+    final migrator = Migrator(this);
+    await migrator.createTable(creditCardDetails);
   }
 }

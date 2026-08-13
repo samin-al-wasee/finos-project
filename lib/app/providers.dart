@@ -4,7 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/database/app_database.dart';
 import '../features/accounts/application/account_controller.dart';
+import '../features/accounts/application/credit_card_controller.dart';
 import '../features/accounts/data/account_dao.dart';
+import '../features/accounts/data/credit_card_dao.dart';
+import '../features/accounts/domain/credit_card_cycle.dart';
 import '../features/backup/application/backup_service.dart';
 import '../features/backup/application/csv_export_service.dart';
 import '../features/backup/data/backup_file_store.dart';
@@ -397,6 +400,59 @@ final loanMovementsProvider =
       await ref.watch(transactionsStreamProvider.future);
       return ref.watch(transactionDaoProvider).forLoan(loanId);
     });
+
+// ------------------------------------------------------------------
+// Credit cards
+// ------------------------------------------------------------------
+
+/// Data-access object for credit card billing details.
+final creditCardDaoProvider = Provider<CreditCardDao>((ref) {
+  return CreditCardDao(ref.watch(appDatabaseProvider));
+});
+
+/// Application service for a credit-card account's billing details.
+final creditCardControllerProvider = Provider<CreditCardController>((ref) {
+  return CreditCardController(
+    ref.watch(appDatabaseProvider),
+    ref.watch(accountControllerProvider),
+    ref.watch(creditCardDaoProvider),
+    ref.watch(transactionDaoProvider),
+  );
+});
+
+/// Reactive billing details for one account, or `null` while it has none.
+final creditCardDetailsProvider =
+    StreamProvider.family<CreditCardDetailsRow?, String>((ref, accountId) {
+      return _guardOpenTimeout(
+        ref.watch(creditCardDaoProvider).watchByAccountId(accountId),
+      );
+    });
+
+/// Derived statement-cycle figures for one credit-card account, for the
+/// details screen.
+///
+/// Watches the transaction stream, so recording a transaction immediately
+/// updates available credit. Everything here is derived on every read rather
+/// than stored (ADR-005, mirroring ADR-004 for loans), so it cannot drift
+/// from the transactions behind it. Returns `null` when the account has no
+/// billing details.
+final creditCardCycleProvider = FutureProvider.family<CreditCardCycle?, String>(
+  (ref, accountId) async {
+    final details = await ref.watch(
+      creditCardDetailsProvider(accountId).future,
+    );
+    if (details == null) return null;
+
+    await ref.watch(transactionsStreamProvider.future);
+    final accounts = await ref.watch(accountsStreamProvider.future);
+    for (final row in accounts) {
+      if (row.id == accountId) {
+        return ref.watch(creditCardControllerProvider).cycleFor(row);
+      }
+    }
+    return null;
+  },
+);
 
 // ------------------------------------------------------------------
 // Reports

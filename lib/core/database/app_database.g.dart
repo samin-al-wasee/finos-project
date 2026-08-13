@@ -5408,6 +5408,503 @@ class SavedQueriesCompanion extends UpdateCompanion<SavedQueryRow> {
   }
 }
 
+class $CreditCardDetailsTable extends CreditCardDetails
+    with TableInfo<$CreditCardDetailsTable, CreditCardDetailsRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CreditCardDetailsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'UNIQUE REFERENCES financial_accounts (id)',
+    ),
+  );
+  static const VerificationMeta _creditLimitMinorMeta = const VerificationMeta(
+    'creditLimitMinor',
+  );
+  @override
+  late final GeneratedColumn<int> creditLimitMinor = GeneratedColumn<int>(
+    'credit_limit_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statementDayMeta = const VerificationMeta(
+    'statementDay',
+  );
+  @override
+  late final GeneratedColumn<int> statementDay = GeneratedColumn<int>(
+    'statement_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _paymentDueOffsetDaysMeta =
+      const VerificationMeta('paymentDueOffsetDays');
+  @override
+  late final GeneratedColumn<int> paymentDueOffsetDays = GeneratedColumn<int>(
+    'payment_due_offset_days',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    accountId,
+    creditLimitMinor,
+    statementDay,
+    paymentDueOffsetDays,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'credit_card_details';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CreditCardDetailsRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('credit_limit_minor')) {
+      context.handle(
+        _creditLimitMinorMeta,
+        creditLimitMinor.isAcceptableOrUnknown(
+          data['credit_limit_minor']!,
+          _creditLimitMinorMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_creditLimitMinorMeta);
+    }
+    if (data.containsKey('statement_day')) {
+      context.handle(
+        _statementDayMeta,
+        statementDay.isAcceptableOrUnknown(
+          data['statement_day']!,
+          _statementDayMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_statementDayMeta);
+    }
+    if (data.containsKey('payment_due_offset_days')) {
+      context.handle(
+        _paymentDueOffsetDaysMeta,
+        paymentDueOffsetDays.isAcceptableOrUnknown(
+          data['payment_due_offset_days']!,
+          _paymentDueOffsetDaysMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_paymentDueOffsetDaysMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CreditCardDetailsRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CreditCardDetailsRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      creditLimitMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}credit_limit_minor'],
+      )!,
+      statementDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}statement_day'],
+      )!,
+      paymentDueOffsetDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}payment_due_offset_days'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CreditCardDetailsTable createAlias(String alias) {
+    return $CreditCardDetailsTable(attachedDatabase, alias);
+  }
+}
+
+class CreditCardDetailsRow extends DataClass
+    implements Insertable<CreditCardDetailsRow> {
+  /// Stable, globally unique identifier (UUID/ULID) — docs/DATA_MODEL.md §3.
+  final String id;
+
+  /// The account this billing detail belongs to. Unique: a credit-card
+  /// account has exactly one details row.
+  final String accountId;
+
+  /// The card's credit limit, in integer minor units; always > 0.
+  final int creditLimitMinor;
+
+  /// Day of the month (1–31) the statement closes. Clamped to the last valid
+  /// day of shorter months when deriving an actual date
+  /// (`statementDateOnOrBefore`).
+  final int statementDay;
+
+  /// How many days after the statement closes payment is due. An offset
+  /// rather than a second day-of-month, so the due date is unambiguous
+  /// regardless of how it compares to [statementDay] (ADR-005).
+  final int paymentDueOffsetDays;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const CreditCardDetailsRow({
+    required this.id,
+    required this.accountId,
+    required this.creditLimitMinor,
+    required this.statementDay,
+    required this.paymentDueOffsetDays,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['account_id'] = Variable<String>(accountId);
+    map['credit_limit_minor'] = Variable<int>(creditLimitMinor);
+    map['statement_day'] = Variable<int>(statementDay);
+    map['payment_due_offset_days'] = Variable<int>(paymentDueOffsetDays);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  CreditCardDetailsCompanion toCompanion(bool nullToAbsent) {
+    return CreditCardDetailsCompanion(
+      id: Value(id),
+      accountId: Value(accountId),
+      creditLimitMinor: Value(creditLimitMinor),
+      statementDay: Value(statementDay),
+      paymentDueOffsetDays: Value(paymentDueOffsetDays),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory CreditCardDetailsRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CreditCardDetailsRow(
+      id: serializer.fromJson<String>(json['id']),
+      accountId: serializer.fromJson<String>(json['accountId']),
+      creditLimitMinor: serializer.fromJson<int>(json['creditLimitMinor']),
+      statementDay: serializer.fromJson<int>(json['statementDay']),
+      paymentDueOffsetDays: serializer.fromJson<int>(
+        json['paymentDueOffsetDays'],
+      ),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'accountId': serializer.toJson<String>(accountId),
+      'creditLimitMinor': serializer.toJson<int>(creditLimitMinor),
+      'statementDay': serializer.toJson<int>(statementDay),
+      'paymentDueOffsetDays': serializer.toJson<int>(paymentDueOffsetDays),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  CreditCardDetailsRow copyWith({
+    String? id,
+    String? accountId,
+    int? creditLimitMinor,
+    int? statementDay,
+    int? paymentDueOffsetDays,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => CreditCardDetailsRow(
+    id: id ?? this.id,
+    accountId: accountId ?? this.accountId,
+    creditLimitMinor: creditLimitMinor ?? this.creditLimitMinor,
+    statementDay: statementDay ?? this.statementDay,
+    paymentDueOffsetDays: paymentDueOffsetDays ?? this.paymentDueOffsetDays,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  CreditCardDetailsRow copyWithCompanion(CreditCardDetailsCompanion data) {
+    return CreditCardDetailsRow(
+      id: data.id.present ? data.id.value : this.id,
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      creditLimitMinor: data.creditLimitMinor.present
+          ? data.creditLimitMinor.value
+          : this.creditLimitMinor,
+      statementDay: data.statementDay.present
+          ? data.statementDay.value
+          : this.statementDay,
+      paymentDueOffsetDays: data.paymentDueOffsetDays.present
+          ? data.paymentDueOffsetDays.value
+          : this.paymentDueOffsetDays,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CreditCardDetailsRow(')
+          ..write('id: $id, ')
+          ..write('accountId: $accountId, ')
+          ..write('creditLimitMinor: $creditLimitMinor, ')
+          ..write('statementDay: $statementDay, ')
+          ..write('paymentDueOffsetDays: $paymentDueOffsetDays, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    accountId,
+    creditLimitMinor,
+    statementDay,
+    paymentDueOffsetDays,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CreditCardDetailsRow &&
+          other.id == this.id &&
+          other.accountId == this.accountId &&
+          other.creditLimitMinor == this.creditLimitMinor &&
+          other.statementDay == this.statementDay &&
+          other.paymentDueOffsetDays == this.paymentDueOffsetDays &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class CreditCardDetailsCompanion extends UpdateCompanion<CreditCardDetailsRow> {
+  final Value<String> id;
+  final Value<String> accountId;
+  final Value<int> creditLimitMinor;
+  final Value<int> statementDay;
+  final Value<int> paymentDueOffsetDays;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const CreditCardDetailsCompanion({
+    this.id = const Value.absent(),
+    this.accountId = const Value.absent(),
+    this.creditLimitMinor = const Value.absent(),
+    this.statementDay = const Value.absent(),
+    this.paymentDueOffsetDays = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CreditCardDetailsCompanion.insert({
+    required String id,
+    required String accountId,
+    required int creditLimitMinor,
+    required int statementDay,
+    required int paymentDueOffsetDays,
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       accountId = Value(accountId),
+       creditLimitMinor = Value(creditLimitMinor),
+       statementDay = Value(statementDay),
+       paymentDueOffsetDays = Value(paymentDueOffsetDays);
+  static Insertable<CreditCardDetailsRow> custom({
+    Expression<String>? id,
+    Expression<String>? accountId,
+    Expression<int>? creditLimitMinor,
+    Expression<int>? statementDay,
+    Expression<int>? paymentDueOffsetDays,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (accountId != null) 'account_id': accountId,
+      if (creditLimitMinor != null) 'credit_limit_minor': creditLimitMinor,
+      if (statementDay != null) 'statement_day': statementDay,
+      if (paymentDueOffsetDays != null)
+        'payment_due_offset_days': paymentDueOffsetDays,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CreditCardDetailsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? accountId,
+    Value<int>? creditLimitMinor,
+    Value<int>? statementDay,
+    Value<int>? paymentDueOffsetDays,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return CreditCardDetailsCompanion(
+      id: id ?? this.id,
+      accountId: accountId ?? this.accountId,
+      creditLimitMinor: creditLimitMinor ?? this.creditLimitMinor,
+      statementDay: statementDay ?? this.statementDay,
+      paymentDueOffsetDays: paymentDueOffsetDays ?? this.paymentDueOffsetDays,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (creditLimitMinor.present) {
+      map['credit_limit_minor'] = Variable<int>(creditLimitMinor.value);
+    }
+    if (statementDay.present) {
+      map['statement_day'] = Variable<int>(statementDay.value);
+    }
+    if (paymentDueOffsetDays.present) {
+      map['payment_due_offset_days'] = Variable<int>(
+        paymentDueOffsetDays.value,
+      );
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CreditCardDetailsCompanion(')
+          ..write('id: $id, ')
+          ..write('accountId: $accountId, ')
+          ..write('creditLimitMinor: $creditLimitMinor, ')
+          ..write('statementDay: $statementDay, ')
+          ..write('paymentDueOffsetDays: $paymentDueOffsetDays, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5423,6 +5920,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $RecurringTransactionsTable recurringTransactions =
       $RecurringTransactionsTable(this);
   late final $SavedQueriesTable savedQueries = $SavedQueriesTable(this);
+  late final $CreditCardDetailsTable creditCardDetails =
+      $CreditCardDetailsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5437,6 +5936,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     transactionTemplates,
     recurringTransactions,
     savedQueries,
+    creditCardDetails,
   ];
 }
 
@@ -5491,6 +5991,30 @@ final class $$FinancialAccountsTableReferences
     );
 
     final cache = $_typedResult.readTableOrNull(_loansRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $CreditCardDetailsTable,
+    List<CreditCardDetailsRow>
+  >
+  _creditCardDetailsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.creditCardDetails,
+        aliasName: 'financial_accounts__id__credit_card_details__account_id',
+      );
+
+  $$CreditCardDetailsTableProcessedTableManager get creditCardDetailsRefs {
+    final manager = $$CreditCardDetailsTableTableManager(
+      $_db,
+      $_db.creditCardDetails,
+    ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _creditCardDetailsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -5564,6 +6088,31 @@ class $$FinancialAccountsTableFilterComposer
           }) => $$LoansTableFilterComposer(
             $db: $db,
             $table: $db.loans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> creditCardDetailsRefs(
+    Expression<bool> Function($$CreditCardDetailsTableFilterComposer f) f,
+  ) {
+    final $$CreditCardDetailsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.creditCardDetails,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CreditCardDetailsTableFilterComposer(
+            $db: $db,
+            $table: $db.creditCardDetails,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5683,6 +6232,32 @@ class $$FinancialAccountsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> creditCardDetailsRefs<T extends Object>(
+    Expression<T> Function($$CreditCardDetailsTableAnnotationComposer a) f,
+  ) {
+    final $$CreditCardDetailsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.creditCardDetails,
+          getReferencedColumn: (t) => t.accountId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$CreditCardDetailsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.creditCardDetails,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$FinancialAccountsTableTableManager
@@ -5698,7 +6273,7 @@ class $$FinancialAccountsTableTableManager
           $$FinancialAccountsTableUpdateCompanionBuilder,
           (FinancialAccountRow, $$FinancialAccountsTableReferences),
           FinancialAccountRow,
-          PrefetchHooks Function({bool loansRefs})
+          PrefetchHooks Function({bool loansRefs, bool creditCardDetailsRefs})
         > {
   $$FinancialAccountsTableTableManager(
     _$AppDatabase db,
@@ -5768,38 +6343,63 @@ class $$FinancialAccountsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({loansRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (loansRefs) db.loans],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (loansRefs)
-                    await $_getPrefetchedData<
-                      FinancialAccountRow,
-                      $FinancialAccountsTable,
-                      LoanRow
-                    >(
-                      currentTable: table,
-                      referencedTable: $$FinancialAccountsTableReferences
-                          ._loansRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$FinancialAccountsTableReferences(
-                            db,
-                            table,
-                            p0,
-                          ).loansRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where(
-                            (e) => e.disbursementAccountId == item.id,
-                          ),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({loansRefs = false, creditCardDetailsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (loansRefs) db.loans,
+                    if (creditCardDetailsRefs) db.creditCardDetails,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (loansRefs)
+                        await $_getPrefetchedData<
+                          FinancialAccountRow,
+                          $FinancialAccountsTable,
+                          LoanRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$FinancialAccountsTableReferences
+                              ._loansRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$FinancialAccountsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).loansRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.disbursementAccountId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (creditCardDetailsRefs)
+                        await $_getPrefetchedData<
+                          FinancialAccountRow,
+                          $FinancialAccountsTable,
+                          CreditCardDetailsRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$FinancialAccountsTableReferences
+                              ._creditCardDetailsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$FinancialAccountsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).creditCardDetailsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.accountId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -5816,7 +6416,7 @@ typedef $$FinancialAccountsTableProcessedTableManager =
       $$FinancialAccountsTableUpdateCompanionBuilder,
       (FinancialAccountRow, $$FinancialAccountsTableReferences),
       FinancialAccountRow,
-      PrefetchHooks Function({bool loansRefs})
+      PrefetchHooks Function({bool loansRefs, bool creditCardDetailsRefs})
     >;
 typedef $$CategoriesTableCreateCompanionBuilder =
     CategoriesCompanion Function({
@@ -9941,6 +10541,385 @@ typedef $$SavedQueriesTableProcessedTableManager =
       SavedQueryRow,
       PrefetchHooks Function()
     >;
+typedef $$CreditCardDetailsTableCreateCompanionBuilder =
+    CreditCardDetailsCompanion Function({
+      required String id,
+      required String accountId,
+      required int creditLimitMinor,
+      required int statementDay,
+      required int paymentDueOffsetDays,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$CreditCardDetailsTableUpdateCompanionBuilder =
+    CreditCardDetailsCompanion Function({
+      Value<String> id,
+      Value<String> accountId,
+      Value<int> creditLimitMinor,
+      Value<int> statementDay,
+      Value<int> paymentDueOffsetDays,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$CreditCardDetailsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $CreditCardDetailsTable,
+          CreditCardDetailsRow
+        > {
+  $$CreditCardDetailsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $FinancialAccountsTable _accountIdTable(_$AppDatabase db) => db
+      .financialAccounts
+      .createAlias('credit_card_details__account_id__financial_accounts__id');
+
+  $$FinancialAccountsTableProcessedTableManager get accountId {
+    final $_column = $_itemColumn<String>('account_id')!;
+
+    final manager = $$FinancialAccountsTableTableManager(
+      $_db,
+      $_db.financialAccounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_accountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CreditCardDetailsTableFilterComposer
+    extends Composer<_$AppDatabase, $CreditCardDetailsTable> {
+  $$CreditCardDetailsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get creditLimitMinor => $composableBuilder(
+    column: $table.creditLimitMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get statementDay => $composableBuilder(
+    column: $table.statementDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get paymentDueOffsetDays => $composableBuilder(
+    column: $table.paymentDueOffsetDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$FinancialAccountsTableFilterComposer get accountId {
+    final $$FinancialAccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.financialAccounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FinancialAccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.financialAccounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CreditCardDetailsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CreditCardDetailsTable> {
+  $$CreditCardDetailsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get creditLimitMinor => $composableBuilder(
+    column: $table.creditLimitMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get statementDay => $composableBuilder(
+    column: $table.statementDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get paymentDueOffsetDays => $composableBuilder(
+    column: $table.paymentDueOffsetDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$FinancialAccountsTableOrderingComposer get accountId {
+    final $$FinancialAccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.financialAccounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FinancialAccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.financialAccounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CreditCardDetailsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CreditCardDetailsTable> {
+  $$CreditCardDetailsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get creditLimitMinor => $composableBuilder(
+    column: $table.creditLimitMinor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get statementDay => $composableBuilder(
+    column: $table.statementDay,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get paymentDueOffsetDays => $composableBuilder(
+    column: $table.paymentDueOffsetDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$FinancialAccountsTableAnnotationComposer get accountId {
+    final $$FinancialAccountsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.accountId,
+          referencedTable: $db.financialAccounts,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$FinancialAccountsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.financialAccounts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$CreditCardDetailsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CreditCardDetailsTable,
+          CreditCardDetailsRow,
+          $$CreditCardDetailsTableFilterComposer,
+          $$CreditCardDetailsTableOrderingComposer,
+          $$CreditCardDetailsTableAnnotationComposer,
+          $$CreditCardDetailsTableCreateCompanionBuilder,
+          $$CreditCardDetailsTableUpdateCompanionBuilder,
+          (CreditCardDetailsRow, $$CreditCardDetailsTableReferences),
+          CreditCardDetailsRow,
+          PrefetchHooks Function({bool accountId})
+        > {
+  $$CreditCardDetailsTableTableManager(
+    _$AppDatabase db,
+    $CreditCardDetailsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CreditCardDetailsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CreditCardDetailsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CreditCardDetailsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> accountId = const Value.absent(),
+                Value<int> creditLimitMinor = const Value.absent(),
+                Value<int> statementDay = const Value.absent(),
+                Value<int> paymentDueOffsetDays = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CreditCardDetailsCompanion(
+                id: id,
+                accountId: accountId,
+                creditLimitMinor: creditLimitMinor,
+                statementDay: statementDay,
+                paymentDueOffsetDays: paymentDueOffsetDays,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String accountId,
+                required int creditLimitMinor,
+                required int statementDay,
+                required int paymentDueOffsetDays,
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CreditCardDetailsCompanion.insert(
+                id: id,
+                accountId: accountId,
+                creditLimitMinor: creditLimitMinor,
+                statementDay: statementDay,
+                paymentDueOffsetDays: paymentDueOffsetDays,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CreditCardDetailsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({accountId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (accountId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.accountId,
+                                referencedTable:
+                                    $$CreditCardDetailsTableReferences
+                                        ._accountIdTable(db),
+                                referencedColumn:
+                                    $$CreditCardDetailsTableReferences
+                                        ._accountIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CreditCardDetailsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CreditCardDetailsTable,
+      CreditCardDetailsRow,
+      $$CreditCardDetailsTableFilterComposer,
+      $$CreditCardDetailsTableOrderingComposer,
+      $$CreditCardDetailsTableAnnotationComposer,
+      $$CreditCardDetailsTableCreateCompanionBuilder,
+      $$CreditCardDetailsTableUpdateCompanionBuilder,
+      (CreditCardDetailsRow, $$CreditCardDetailsTableReferences),
+      CreditCardDetailsRow,
+      PrefetchHooks Function({bool accountId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -9963,4 +10942,6 @@ class $AppDatabaseManager {
       $$RecurringTransactionsTableTableManager(_db, _db.recurringTransactions);
   $$SavedQueriesTableTableManager get savedQueries =>
       $$SavedQueriesTableTableManager(_db, _db.savedQueries);
+  $$CreditCardDetailsTableTableManager get creditCardDetails =>
+      $$CreditCardDetailsTableTableManager(_db, _db.creditCardDetails);
 }

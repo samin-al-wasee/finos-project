@@ -291,14 +291,11 @@ Income
 
 The exact calculation depends on account type and transaction semantics.
 
-Credit cards and liability accounts may require different presentation semantics.
-
-Credit-card-specific fields (credit limit, billing/statement date, payment due
-date, statement balance) are not part of V1 — a credit card is currently
-balanced exactly like any other account. This is tracked as future work in
-docs/ROADMAP.md §8.6 ("Credit Card Accounts") and is not authorized for
-implementation until the roadmap moves it into the current phase (AGENTS.md
-§34).
+A credit-card account's balance is computed exactly the same way as any
+other account's — the formula above does not change for it. Its billing
+cycle (credit limit, statement/due dates, available credit, statement
+balance) is a layer derived on top of this same balance, not a different
+balance formula; see §58 (Credit Card Accounts) and ADR-005.
 
 ---
 
@@ -1873,7 +1870,58 @@ serialized form.
 
 ---
 
-# 58. Data Model Evolution Rules
+# 58. Credit Card Accounts
+
+`CreditCardDetails` holds the billing information for an account of type
+`CREDIT_CARD` (docs/ROADMAP.md §8.6, ADR-005), one-to-one with
+`financial_accounts` via a unique `account_id` — the same shape §29–§33's
+`Loan` takes relative to an account, not nullable columns on
+`financial_accounts` itself.
+
+```text
+CreditCardDetails
+  id
+  account_id              (unique, references FinancialAccount)
+  credit_limit_minor
+  statement_day            (1–31, day of month the statement closes)
+  payment_due_offset_days  (days after the statement closes payment is due)
+  created_at
+  updated_at
+```
+
+`payment_due_offset_days` is an offset rather than a second day-of-month:
+two independent day-of-month fields are ambiguous about which month the due
+date falls in once the due day is numerically less than the statement day,
+while an offset (`statement date + N days`) is unambiguous regardless.
+
+Nothing about the current billing cycle is stored here — all of it is
+derived data (§45) computed at read time from these three fields plus the
+account's transactions:
+
+```text
+outstanding        = max(0, −current balance)
+available credit   = max(0, credit limit − outstanding)
+previous statement = the most recent statement_day on or before today,
+                      clamped to the last valid day of shorter months
+statement balance   = max(0, −(balance as of the previous statement date))
+payment due date    = previous statement date + payment_due_offset_days
+```
+
+This mirrors how a loan's outstanding amount (§45) and a budget's spend (§24)
+are both recomputed on every read rather than cached, so none of these
+figures can disagree with the transactions behind them. "Balance as of a
+past date" is the same account-balance formula (§10) bounded above by a
+cutoff date, rather than a new calculation.
+
+Whether an account is a credit card is fixed at creation: an account created
+as another type cannot later gain billing details by editing it, and a
+credit-card account's type cannot be edited away from `CREDIT_CARD` (ADR-005
+§5). V1 scope is limited to the fields above — interest, minimum payment,
+rewards, and multi-cycle statement history are not modelled.
+
+---
+
+# 59. Data Model Evolution Rules
 
 Any future change to the data model should answer:
 
@@ -1889,7 +1937,7 @@ Any future change to the data model should answer:
 
 ---
 
-# 59. Final Data Model Principle
+# 60. Final Data Model Principle
 
 The FinOS data model should follow one central principle:
 

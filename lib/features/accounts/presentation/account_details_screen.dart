@@ -9,6 +9,8 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../application/account_controller.dart';
 import '../domain/account_status.dart';
+import '../domain/account_type.dart';
+import '../domain/credit_card_cycle.dart';
 import 'account_form_screen.dart';
 import 'account_type_label.dart';
 
@@ -134,6 +136,10 @@ class _DetailsBody extends ConsumerWidget {
             ],
           ),
         ),
+        if (account.type == AccountType.creditCard) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _CreditCardCard(accountId: account.id, currency: account.currency),
+        ],
         const SizedBox(height: AppSpacing.xxl),
         OutlinedButton.icon(
           onPressed: () async {
@@ -206,6 +212,101 @@ class _DetailsBody extends ConsumerWidget {
         context,
       ).showSnackBar(const SnackBar(content: Text('Account restored')));
     }
+  }
+}
+
+/// The credit-card statement-cycle card, for accounts of that type.
+///
+/// A thin wrapper so the async load has somewhere to show its own
+/// loading/error state without disturbing the rest of [_DetailsBody], which
+/// otherwise renders synchronously from the already-loaded accounts stream.
+class _CreditCardCard extends ConsumerWidget {
+  const _CreditCardCard({required this.accountId, required this.currency});
+
+  final String accountId;
+  final String currency;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cycle = ref.watch(creditCardCycleProvider(accountId));
+    return cycle.when(
+      data: (value) => value == null
+          ? const SizedBox.shrink()
+          : _CreditCardCycleCard(cycle: value, currency: currency),
+      loading: () => const Card(
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.lg),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ),
+      error: (error, _) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Text('Could not load credit card details: $error'),
+        ),
+      ),
+    );
+  }
+}
+
+class _CreditCardCycleCard extends StatelessWidget {
+  const _CreditCardCycleCard({required this.cycle, required this.currency});
+
+  final CreditCardCycle cycle;
+  final String currency;
+
+  @override
+  Widget build(BuildContext context) {
+    String money(int minor) =>
+        formatMinorUnits(minor, symbol: currencySymbol(currency));
+
+    return Card(
+      child: Column(
+        children: [
+          _DetailRow(
+            label: 'Credit limit',
+            value: money(cycle.creditLimitMinor),
+          ),
+          const Divider(
+            height: 1,
+            indent: AppSpacing.lg,
+            endIndent: AppSpacing.lg,
+          ),
+          _DetailRow(
+            label: 'Available credit',
+            value: money(cycle.availableCreditMinor),
+          ),
+          const Divider(
+            height: 1,
+            indent: AppSpacing.lg,
+            endIndent: AppSpacing.lg,
+          ),
+          _DetailRow(
+            label: 'Current balance owed',
+            value: money(cycle.outstandingMinor),
+          ),
+          const Divider(
+            height: 1,
+            indent: AppSpacing.lg,
+            endIndent: AppSpacing.lg,
+          ),
+          _DetailRow(
+            label:
+                'Previous statement (${_formatDate(cycle.previousStatementDate)})',
+            value: money(cycle.previousStatementDebtMinor),
+          ),
+          const Divider(
+            height: 1,
+            indent: AppSpacing.lg,
+            endIndent: AppSpacing.lg,
+          ),
+          _DetailRow(
+            label: 'Payment due',
+            value: _formatDate(cycle.paymentDueDate),
+          ),
+        ],
+      ),
+    );
   }
 }
 

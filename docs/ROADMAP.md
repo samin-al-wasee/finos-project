@@ -581,10 +581,19 @@ during July
 
 ## 8.6 Credit Card Accounts
 
-> **Status:** Not built. `AccountType.creditCard` exists only as a label —
-> credit cards are currently stored and balanced exactly like a bank account
-> (docs/DATA_MODEL.md §10 already flags that "credit cards and liability
-> accounts may require different presentation semantics" as an open question).
+> **Status:** Implemented, ahead of this phase's normal sequence, with
+> explicit authorization (see docs/ARCHITECTURE.md §40, ADR-005) — the user
+> picked this directly from the remaining open Phase 2 items. Credit limit,
+> billing/statement day, payment-due offset, available credit, and the most
+> recently closed statement's balance are all built; everything about the
+> current cycle is derived from the account's transactions at read time,
+> never stored, the same rule ADR-004 applies to a loan's outstanding
+> amount. Deliberately not built: interest/APR, minimum payment, rewards,
+> multi-cycle statement history beyond the current and immediately preceding
+> cycle, and any liability-aware treatment in the dashboard's net worth
+> total — a credit card's balance is summed into it exactly like any other
+> account's. Also deliberately fixed: whether an account is a credit card is
+> set at creation and cannot be changed by editing it afterward (ADR-005).
 
 A credit card is not a plain cash account: it needs its own cycle.
 
