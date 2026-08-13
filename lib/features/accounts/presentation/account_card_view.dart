@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/page_indicator.dart';
 import '../../transactions/domain/transaction_filter.dart';
 import '../../transactions/presentation/transaction_tile.dart';
 import 'account_details_screen.dart';
@@ -87,7 +88,7 @@ class _AccountCardViewState extends ConsumerState<AccountCardView> {
         ),
         if (rows.length > 1) ...[
           const SizedBox(height: AppSpacing.sm),
-          _PageIndicator(count: rows.length, selectedIndex: selectedIndex),
+          PageIndicator(count: rows.length, selectedIndex: selectedIndex),
         ],
         const SizedBox(height: AppSpacing.sm),
         Expanded(child: _AccountFeed(accountId: rows[selectedIndex].id)),
@@ -156,37 +157,6 @@ class _AccountCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Small dot row showing which page (account) is currently selected.
-class _PageIndicator extends StatelessWidget {
-  const _PageIndicator({required this.count, required this.selectedIndex});
-
-  final int count;
-  final int selectedIndex;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<FinosColors>()!;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (var i = 0; i < count; i++)
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: i == selectedIndex
-                  ? Theme.of(context).colorScheme.primary
-                  : colors.border,
-            ),
-          ),
-      ],
     );
   }
 }

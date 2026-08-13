@@ -756,6 +756,25 @@ template or applying a saved filter (§8.2, §8.5).
 
 ---
 
+## 8.10 Loans Card View
+
+> **Status:** Implemented, the same pattern as §8.9 applied to Loans. An
+> `AppBar` toggle switches between the existing list and a swipeable
+> single-relationship card, one `LoanGroup` per page, ordered "I Owe" before
+> "Owed to Me" — the same order the list already uses, so the direction
+> split (docs/UI_DESIGN.md §21) is never mixed even though it's one
+> sequence rather than two separate tabs; each card also carries an
+> explicit direction icon and label. Below the current card, a live feed
+> shows that loan's repayment activity via the existing `loanMovementsProvider`
+> (`TransactionDao.forLoan`) — already scoped to one loan, so unlike Accounts
+> this needed no new filtering step. Tapping a card opens the existing
+> `LoanDetailsScreen` unchanged — record payment/receipt and extend stay
+> there. The toggle is hidden when there are no active loans; the small dot
+> page-indicator was promoted out of the Accounts card view into a shared
+> `core/widgets/page_indicator.dart` rather than duplicated.
+
+---
+
 # 9. Phase 3 — Personal Finance Hub
 
 ## Goal

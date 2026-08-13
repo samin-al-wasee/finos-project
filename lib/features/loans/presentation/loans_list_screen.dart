@@ -10,9 +10,15 @@ import '../../../core/widgets/empty_state.dart';
 import '../domain/loan_direction.dart';
 import '../domain/loan_group.dart';
 import '../domain/loan_progress.dart';
+import 'loan_card_view.dart';
 import 'loan_details_screen.dart';
 import 'loan_form_screen.dart';
 import 'loan_labels.dart';
+
+/// Whether the Loans tab shows every relationship as a plain list, or one at
+/// a time as a swipeable card with its own repayment feed below. Card view is
+/// additive — list stays the default.
+enum _ViewMode { list, card }
 
 /// Loans tab (FR-06, docs/UI_DESIGN.md §21).
 ///
@@ -24,15 +30,41 @@ import 'loan_labels.dart';
 /// loan that has been extended, or linked to on creation, renders as one tile
 /// alongside the loans it is linked with, rather than as separate unrelated
 /// entries.
-class LoansListScreen extends ConsumerWidget {
+class LoansListScreen extends ConsumerStatefulWidget {
   const LoansListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LoansListScreen> createState() => _LoansListScreenState();
+}
+
+class _LoansListScreenState extends ConsumerState<LoansListScreen> {
+  _ViewMode _viewMode = _ViewMode.list;
+
+  @override
+  Widget build(BuildContext context) {
     final groups = ref.watch(loanGroupsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Loans')),
+      appBar: AppBar(
+        title: const Text('Loans'),
+        actions: [
+          groups.maybeWhen(
+            data: (rows) {
+              final hasActive = rows.any((g) => g.active.isNotEmpty);
+              if (!hasActive) return const SizedBox.shrink();
+              final isCard = _viewMode == _ViewMode.card;
+              return IconButton(
+                icon: Icon(isCard ? Icons.view_list : Icons.view_carousel),
+                tooltip: isCard ? 'List view' : 'Card view',
+                onPressed: () => setState(
+                  () => _viewMode = isCard ? _ViewMode.list : _ViewMode.card,
+                ),
+              );
+            },
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'fab-loans',
         onPressed: () => openLoanForm(context),
@@ -53,7 +85,7 @@ class LoansListScreen extends ConsumerWidget {
                   label: const Text('Add loan'),
                 ),
               )
-            : _LoanList(groups: rows),
+            : _buildBody(rows),
         error: (error, _) => EmptyState(
           icon: Icons.error_outline,
           title: 'Something went wrong',
@@ -72,6 +104,22 @@ class LoansListScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildBody(List<LoanGroup> groups) {
+    if (_viewMode == _ViewMode.card) {
+      // "I Owe" before "Owed to Me" — the same order the list builds below,
+      // so card view never mixes the two directions (docs/UI_DESIGN.md §21).
+      final ordered = [
+        for (final direction in [LoanDirection.borrowed, LoanDirection.lent])
+          for (final group in groups.where(
+            (g) => g.active.isNotEmpty && g.direction == direction,
+          ))
+            group,
+      ];
+      if (ordered.isNotEmpty) return LoanCardView(groups: ordered);
+    }
+    return _LoanList(groups: groups);
   }
 }
 
