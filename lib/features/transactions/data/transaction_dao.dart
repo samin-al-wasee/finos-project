@@ -231,6 +231,80 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return row.read<int>('spent');
   }
 
+  /// Sums expenses across [categoryIds] dated `from <= date < to` (half-open
+  /// range) — the multi-category generalisation of [expenseTotalForCategory]
+  /// (docs/ROADMAP.md §8.3, docs/adr/007-flexible-budget-scope.md). One
+  /// `IN (...)` query, not N calls to [expenseTotalForCategory] summed in
+  /// Dart.
+  ///
+  /// Returns 0 when [categoryIds] is empty or none of them have expenses in
+  /// the range.
+  Future<int> expenseTotalForCategories(
+    Iterable<String> categoryIds,
+    DateTime from,
+    DateTime to,
+  ) async {
+    final ids = categoryIds.toList();
+    if (ids.isEmpty) return 0;
+
+    final placeholders = List.filled(ids.length, '?').join(', ');
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(amount_minor), 0) AS spent
+      FROM transactions
+      WHERE type = '${_storage(TransactionType.expense)}'
+        AND category_id IN ($placeholders)
+        AND date >= ? AND date < ?
+      ''',
+      variables: [
+        for (final id in ids) Variable(id),
+        Variable(from),
+        Variable(to),
+      ],
+    ).getSingle();
+
+    return row.read<int>('spent');
+  }
+
+  /// Sums uncategorised expenses (`category_id IS NULL`) dated
+  /// `from <= date < to` — the catch-all scope
+  /// (docs/adr/007-flexible-budget-scope.md).
+  ///
+  /// Returns 0 when there are no uncategorised expenses in the range.
+  Future<int> expenseTotalUncategorized(DateTime from, DateTime to) async {
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(amount_minor), 0) AS spent
+      FROM transactions
+      WHERE type = '${_storage(TransactionType.expense)}'
+        AND category_id IS NULL
+        AND date >= ? AND date < ?
+      ''',
+      variables: [Variable(from), Variable(to)],
+    ).getSingle();
+
+    return row.read<int>('spent');
+  }
+
+  /// Sums every expense dated `from <= date < to`, regardless of category —
+  /// the whole-account/whole-portfolio scope
+  /// (docs/adr/007-flexible-budget-scope.md).
+  ///
+  /// Returns 0 when there are no expenses in the range.
+  Future<int> expenseTotalAll(DateTime from, DateTime to) async {
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(amount_minor), 0) AS spent
+      FROM transactions
+      WHERE type = '${_storage(TransactionType.expense)}'
+        AND date >= ? AND date < ?
+      ''',
+      variables: [Variable(from), Variable(to)],
+    ).getSingle();
+
+    return row.read<int>('spent');
+  }
+
   /// Sums expenses grouped by category, dated `from <= date < to`.
   ///
   /// Mirrors [expenseTotalForCategory] but for every category at once, for the

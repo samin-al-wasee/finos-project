@@ -196,13 +196,24 @@ Users shall be able to create budgets.
 
 Budgets may be associated with transaction categories and a defined time period.
 
-V1 requires exactly one category per budget. Multi-category budgets,
-category-less budgets, and whole-account budgets are explicitly deferred to
-Phase 2 — "Smart Finance" (docs/ROADMAP.md §8.3, "Flexible budget scope") and
-are not part of the current V1 core scope. This paragraph describes the
-intended shape of that future work so it can be planned ahead of time; it is
-not an active implementation requirement until the roadmap moves it into the
-current phase.
+A budget's scope is one of four shapes (docs/ROADMAP.md §8.3, "Flexible
+budget scope"; docs/adr/007-flexible-budget-scope.md):
+
+* **Single category** — one limit for one expense category (the original V1
+  shape).
+* **Multiple categories** — one limit shared across a chosen set of
+  categories (e.g. a single "Going Out" limit covering Dining +
+  Entertainment), at least two categories.
+* **Uncategorised spending** — a catch-all limit for expenses with no
+  category.
+* **Whole account** — a limit tied to no category at all; every expense
+  counts against it.
+
+A category may be covered by at most one ACTIVE budget per period, regardless
+of scope type — a multi-category budget and a single-category budget cannot
+both claim the same category in the same period, and a whole-account budget
+excludes every other budget in its period value. A budget's scope is fixed at
+creation, exactly like its category was fixed under the original V1 rule.
 
 Users shall be able to:
 

@@ -473,26 +473,37 @@ Potential additions:
 
 ### Flexible budget scope
 
-> **Status:** Not built. V1 requires exactly one expense category per budget
-> (docs/DATA_MODEL.md §22); this is a deliberate V1 boundary, not an oversight
-> (docs/REQUIREMENTS.md FR-04).
+> **Status:** Built ([ADR-007](adr/007-flexible-budget-scope.md)). A budget's
+> scope is now one of four shapes, not just a single category; see below for
+> what each means and how the open question below was resolved.
 
-A budget is currently scoped to exactly one category. Users may instead want:
+A budget's scope is one of four shapes:
 
-* **Multi-category budgets** — one limit shared across a chosen set of
-  categories (e.g. a single "Going Out" limit covering Dining + Entertainment).
-* **Category-less budgets** — a catch-all limit for uncategorised expenses.
-* **Whole-account or whole-portfolio budgets** — a limit that isn't tied to any
-  category at all, e.g. "spend no more than X this month, period."
+* **Single category** (`SINGLE_CATEGORY`) — the original V1 shape: one limit
+  for one expense category.
+* **Multi-category budgets** (`MULTI_CATEGORY`) — one limit shared across a
+  chosen set of categories (e.g. a single "Going Out" limit covering Dining +
+  Entertainment), at least two categories.
+* **Category-less budgets** (`UNCATEGORIZED`) — a catch-all limit for
+  uncategorised expenses.
+* **Whole-account or whole-portfolio budgets** (`WHOLE_ACCOUNT`) — a limit
+  that isn't tied to any category at all, e.g. "spend no more than X this
+  month, period."
 
-This is a bigger change than the other items in this section: it moves
-`category_id` from a required scalar foreign key to something that can mean
-"many," "none," or "everything," and it must preserve the existing invariant
-that spending is never attributed to two competing active budgets at once
-(docs/DATA_MODEL.md §22). It needs a design decision (parallel to
-[ADR-004](adr/004-loan-accounting.md)) before implementation — in particular,
-whether a category can belong to a multi-category budget while also having its
-own single-category budget in the same period.
+This moved `category_id` from a required scalar foreign key to something
+that can mean "many," "none," or "everything" (nullable, plus a new
+`scope_type` column and a `budget_categories` join table for the
+multi-category case), and it preserves the existing invariant that spending
+is never attributed to two competing active budgets at once
+(docs/DATA_MODEL.md §22) by generalising it to a set-overlap rule. The design
+decision this needed (parallel to [ADR-004](adr/004-loan-accounting.md)) is
+recorded in [ADR-007](adr/007-flexible-budget-scope.md); its answer to the
+open question — whether a category can belong to a multi-category budget
+while also having its own single-category budget in the same period — is
+**no**: that is a genuine overlap, not an allowed relationship. A
+`WHOLE_ACCOUNT` budget consequently excludes every other active budget in its
+period value, so a user wanting both a whole-account ceiling and per-category
+budgets needs to give the ceiling a different `period` value.
 
 ---
 

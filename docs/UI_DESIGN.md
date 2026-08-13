@@ -583,6 +583,25 @@ The user should be able to quickly identify:
 * Budgets approaching their limit
 * Exceeded budgets
 
+### V1 implementation
+
+A budget's scope is one of four shapes (ADR-007), and every card/header that
+used to show a category name and icon now shows the scope instead, via
+`budgetScopeLabel`/`budgetScopeIcon`: the category's own name and icon for a
+single-category budget, a generic icon and "N categories" count for a
+multi-category budget (never an icon stack), "Uncategorised" for a
+category-less budget, and "Whole account" for a whole-account budget. The
+budget details screen additionally shows one `Chip` per member category,
+wrapped beneath the header, whenever a budget covers more than one category.
+
+The add/edit form gains a scope-type selector (single category / multiple
+categories / uncategorised spending / whole account), shown only when
+creating — scope, like category before it, is fixed at creation. Choosing
+"multiple categories" swaps the single category dropdown for a checklist of
+active expense categories requiring at least two selections; choosing
+either category-less option replaces the picker with one line of
+explanatory text instead.
+
 ---
 
 # 20. Budget States

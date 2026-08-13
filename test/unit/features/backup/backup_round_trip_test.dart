@@ -9,6 +9,7 @@ import 'package:finos_app/features/backup/application/backup_service.dart';
 import 'package:finos_app/features/backup/domain/backup_envelope.dart';
 import 'package:finos_app/features/budgets/data/budget_dao.dart';
 import 'package:finos_app/features/budgets/domain/budget_period.dart';
+import 'package:finos_app/features/budgets/domain/budget_scope.dart';
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
 import 'package:finos_app/features/settings/data/settings_dao.dart';
@@ -104,7 +105,7 @@ void main() {
     await budgets.insertOne(
       BudgetsCompanion.insert(
         id: 'budget-food',
-        categoryId: 'test-food',
+        categoryId: const Value('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
         startDate: DateTime(2026, 8),
@@ -113,7 +114,7 @@ void main() {
     await budgets.insertOne(
       BudgetsCompanion.insert(
         id: 'budget-custom',
-        categoryId: 'test-food',
+        categoryId: const Value('test-food'),
         amountMinor: 250000,
         period: BudgetPeriod.custom,
         startDate: DateTime(2026, 8, 5),
@@ -271,6 +272,110 @@ void main() {
       expect(_withoutTimestamp(second), _withoutTimestamp(first));
     });
   });
+
+  group(
+    'flexible scope round trip (docs/adr/007-flexible-budget-scope.md)',
+    () {
+      test(
+        'restores a MULTI_CATEGORY budget with its member categories',
+        () async {
+          await categories.insertOne(
+            CategoriesCompanion.insert(
+              id: 'test-food',
+              name: 'Food',
+              type: CategoryType.expense,
+            ),
+          );
+          await categories.insertOne(
+            CategoriesCompanion.insert(
+              id: 'test-transport',
+              name: 'Transport',
+              type: CategoryType.expense,
+            ),
+          );
+          await budgets.insertOne(
+            BudgetsCompanion.insert(
+              id: 'budget-multi',
+              categoryId: const Value(null),
+              scopeType: const Value(BudgetScopeType.multiCategory),
+              amountMinor: 1000000,
+              period: BudgetPeriod.monthly,
+              startDate: DateTime(2026, 8),
+            ),
+          );
+          await budgets.setCategoriesFor('budget-multi', {
+            'test-food',
+            'test-transport',
+          });
+
+          await service.importBackup(await service.export());
+
+          final restored = await budgets.getById('budget-multi');
+          expect(restored!.categoryId, isNull);
+          expect(restored.scopeType, BudgetScopeType.multiCategory);
+          expect(await budgets.categoriesFor('budget-multi'), {
+            'test-food',
+            'test-transport',
+          });
+        },
+      );
+
+      test('restores a WHOLE_ACCOUNT budget with a null category', () async {
+        await budgets.insertOne(
+          BudgetsCompanion.insert(
+            id: 'budget-whole',
+            categoryId: const Value(null),
+            scopeType: const Value(BudgetScopeType.wholeAccount),
+            amountMinor: 500000,
+            period: BudgetPeriod.yearly,
+            startDate: DateTime(2026, 1),
+          ),
+        );
+
+        await service.importBackup(await service.export());
+
+        final restored = await budgets.getById('budget-whole');
+        expect(restored!.categoryId, isNull);
+        expect(restored.scopeType, BudgetScopeType.wholeAccount);
+      });
+
+      test('restores an UNCATEGORIZED budget with a null category', () async {
+        await budgets.insertOne(
+          BudgetsCompanion.insert(
+            id: 'budget-uncategorized',
+            categoryId: const Value(null),
+            scopeType: const Value(BudgetScopeType.uncategorized),
+            amountMinor: 250000,
+            period: BudgetPeriod.monthly,
+            startDate: DateTime(2026, 8),
+          ),
+        );
+
+        await service.importBackup(await service.export());
+
+        final restored = await budgets.getById('budget-uncategorized');
+        expect(restored!.categoryId, isNull);
+        expect(restored.scopeType, BudgetScopeType.uncategorized);
+      });
+
+      test(
+        'a SINGLE_CATEGORY-only backup writes no category_ids field, staying '
+        'byte-for-byte what it always was',
+        () async {
+          await seedEverything();
+          final json =
+              jsonDecode(await service.export()) as Map<String, Object?>;
+
+          final rows = (json[BackupFormat.budgetsKey] as List)
+              .cast<Map<String, Object?>>();
+          for (final row in rows) {
+            expect(row.containsKey('category_ids'), isFalse);
+            expect(row['scope_type'], 'SINGLE_CATEGORY');
+          }
+        },
+      );
+    },
+  );
 
   group('counts', () {
     test('reports what is currently stored', () async {

@@ -1,6 +1,7 @@
 import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/features/budgets/domain/budget_period.dart';
 import 'package:finos_app/features/budgets/domain/budget_progress.dart';
+import 'package:finos_app/features/budgets/domain/budget_scope.dart';
 import 'package:finos_app/features/budgets/domain/budget_status.dart';
 import 'package:finos_app/features/categories/domain/category_origin.dart';
 import 'package:finos_app/features/categories/domain/category_status.dart';
@@ -44,6 +45,7 @@ void main() {
       budget: BudgetRow(
         id: 'budget-food',
         categoryId: category.id,
+        scopeType: BudgetScopeType.singleCategory,
         amountMinor: limitMinor,
         currency: 'BDT',
         period: BudgetPeriod.monthly,
@@ -53,7 +55,8 @@ void main() {
         createdAt: timestamp,
         updatedAt: timestamp,
       ),
-      category: category,
+      scope: SingleCategoryScope(category.id),
+      categories: [category],
       window: window,
       spentMinor: spentMinor,
     );
@@ -140,6 +143,97 @@ void main() {
 
       expect(progress.isExceeded, isTrue);
       expect(progress.health, BudgetHealth.exceeded);
+    });
+  });
+
+  group('scope generalisation (docs/adr/007-flexible-budget-scope.md)', () {
+    final transport = CategoryRow(
+      id: 'cat-transport',
+      name: 'Transport',
+      type: CategoryType.expense,
+      origin: CategoryOrigin.system,
+      icon: 'directions_bus',
+      status: CategoryStatus.active,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    );
+
+    BudgetRow budgetRowWith(BudgetScopeType scopeType, {String? categoryId}) {
+      return BudgetRow(
+        id: 'budget-1',
+        categoryId: categoryId,
+        scopeType: scopeType,
+        amountMinor: 1000000,
+        currency: 'BDT',
+        period: BudgetPeriod.monthly,
+        startDate: DateTime(2026, 8, 1),
+        endDate: null,
+        status: BudgetStatus.active,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      );
+    }
+
+    /// Every derived getter behaves identically regardless of [scope] — they
+    /// only ever read `budget.amountMinor` and `spentMinor`
+    /// (docs/adr/007-flexible-budget-scope.md §4).
+    void expectIdenticalDerivedBehavior(BudgetProgress progress) {
+      expect(progress.limitMinor, 1000000);
+      expect(progress.remainingMinor, 530000);
+      expect(progress.usedFraction, closeTo(0.47, 0.0001));
+      expect(progress.isExceeded, isFalse);
+      expect(progress.health, BudgetHealth.underLimit);
+    }
+
+    test('SingleCategoryScope', () {
+      expectIdenticalDerivedBehavior(
+        BudgetProgress(
+          budget: budgetRowWith(
+            BudgetScopeType.singleCategory,
+            categoryId: category.id,
+          ),
+          scope: SingleCategoryScope(category.id),
+          categories: [category],
+          window: window,
+          spentMinor: 470000,
+        ),
+      );
+    });
+
+    test('MultiCategoryScope', () {
+      expectIdenticalDerivedBehavior(
+        BudgetProgress(
+          budget: budgetRowWith(BudgetScopeType.multiCategory),
+          scope: MultiCategoryScope({category.id, transport.id}),
+          categories: [category, transport],
+          window: window,
+          spentMinor: 470000,
+        ),
+      );
+    });
+
+    test('UncategorizedScope', () {
+      expectIdenticalDerivedBehavior(
+        BudgetProgress(
+          budget: budgetRowWith(BudgetScopeType.uncategorized),
+          scope: const UncategorizedScope(),
+          categories: const [],
+          window: window,
+          spentMinor: 470000,
+        ),
+      );
+    });
+
+    test('WholeAccountScope', () {
+      expectIdenticalDerivedBehavior(
+        BudgetProgress(
+          budget: budgetRowWith(BudgetScopeType.wholeAccount),
+          scope: const WholeAccountScope(),
+          categories: const [],
+          window: window,
+          spentMinor: 470000,
+        ),
+      );
     });
   });
 }

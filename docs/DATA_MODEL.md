@@ -617,22 +617,53 @@ Budget
 The `budgets` table (schema v4) follows this model directly, with these
 decisions:
 
-* `category_id` is **required** and must reference an active **expense**
-  category. Budgets cap spending, and only expenses are spending (§24), so an
-  income category could never consume a limit. Whole-account or category-less
-  budgets are not part of V1. Multi-category, category-less, and whole-account
-  budgets are tracked as future work in docs/ROADMAP.md §8.3 ("Flexible budget
-  scope") and are not authorized for implementation until the roadmap moves
-  them into the current phase (AGENTS.md §34).
 * `amount_minor` holds the limit in integer minor units (§4).
 * `status` stores only the lifecycle state `ACTIVE` / `ARCHIVED`. Budget
   performance is derived at read time, never stored (§25).
-* Only **one ACTIVE budget may exist per category and period**, so spending can
-  never be attributed to two competing limits at once. Archiving or deleting a
-  budget frees the slot.
 * The category is fixed once a budget is created. Changing it would silently
   reinterpret every past reading of that budget, so the application archives and
   recreates instead.
+
+### Flexible scope (schema v12, ADR-007)
+
+A budget's scope generalises from "exactly one category" to one of four
+shapes, via a new `scope_type` enum column
+(`SINGLE_CATEGORY` / `MULTI_CATEGORY` / `UNCATEGORIZED` / `WHOLE_ACCOUNT`,
+default `SINGLE_CATEGORY`):
+
+* **`SINGLE_CATEGORY`** — today's V1 behavior. `category_id` holds the one
+  category and must reference an active **expense** category. Budgets cap
+  spending, and only expenses are spending (§24), so an income category
+  could never consume a limit.
+* **`MULTI_CATEGORY`** — one limit shared across a chosen set of categories
+  (e.g. a single "Going Out" limit covering Dining + Entertainment).
+  `category_id` is `NULL`; the member categories (≥ 2, each an active expense
+  category) live in a new join table, `budget_categories(budget_id,
+  category_id)`.
+* **`UNCATEGORIZED`** — a catch-all limit for expenses with no category.
+  `category_id` is `NULL`, matching how a transaction's own `category_id IS
+  NULL` already means uncategorised.
+* **`WHOLE_ACCOUNT`** — a limit tied to no category at all; every expense
+  counts against it. `category_id` is `NULL`.
+
+`category_id` is therefore **nullable**, holding a value only for
+`SINGLE_CATEGORY`. Existing budgets need no data migration: the column
+default classifies every pre-existing row as `SINGLE_CATEGORY` the instant
+`scope_type` is added, with `category_id` untouched.
+
+The uniqueness rule generalises from category equality to **category-set
+overlap**: no two ACTIVE budgets in the same `period` value may have
+overlapping (intersecting) resolved category sets. This was already true for
+the one-category case; it now covers every scope-type pairing uniformly —
+including a category belonging to both a multi-category budget and its own
+single-category budget, which counts as an overlap, not an allowed
+relationship. `WHOLE_ACCOUNT`'s set is "everything," so it excludes any other
+active budget in the same period value; `UNCATEGORIZED`'s set is the single
+"no category" bucket, disjoint from every concrete category and from nothing
+else. Archiving or deleting a budget frees its slot, as before.
+
+Scope — like category before it — is fixed once a budget is created; there is
+no update path for it (§22 above, ADR-005 §5 for the credit-card precedent).
 
 ---
 
@@ -716,6 +747,26 @@ Uncategorised expenses consume no budget.
 
 Spending is recomputed from the transaction table on every read rather than
 cached on the budget row (§45), so the two can never disagree.
+
+### Per-scope-type consumption (schema v12, ADR-007)
+
+The rule above still holds for `SINGLE_CATEGORY` budgets exactly as written;
+the other three scope types generalise the `category_id` filter, each still
+scoped by `type = EXPENSE` and the same half-open window:
+
+```text
+SINGLE_CATEGORY    category_id = the budget's one category   (TransactionDao.expenseTotalForCategory)
+MULTI_CATEGORY     category_id IN (the budget's member categories)   (expenseTotalForCategories)
+UNCATEGORIZED      category_id IS NULL   (expenseTotalUncategorized)
+WHOLE_ACCOUNT      no category filter — every expense counts   (expenseTotalAll)
+```
+
+Every query is `derive at read time, never cache` — none of the three new
+methods introduces a stored/denormalised figure, consistent with §45 and
+ADR-005. A small dispatcher in the wiring layer
+(`lib/app/providers.dart`'s `_spentMinorForScope`) picks the right query for
+a given budget's resolved scope; domain code itself never depends on the
+DAO.
 
 ---
 
@@ -1596,6 +1647,16 @@ movement references its loan.
 * Rows mirror their table columns using `snake_case` keys. Amounts are the same
   integer minor units used in storage (§4) — a decimal amount is rejected on
   import, because it means precision was already lost upstream.
+* A budget row's `category_id` is optional (ADR-007): present only for
+  `SINGLE_CATEGORY`, `null` for the other three scope types. A budget also
+  carries `scope_type` — defaulting to `SINGLE_CATEGORY` when the field is
+  absent entirely, so a backup written before this feature existed still
+  restores unchanged — and, only when `scope_type` is `MULTI_CATEGORY`, a
+  `category_ids` array naming its member categories. A backup containing a
+  non-`SINGLE_CATEGORY` budget cannot be restored by a build that predates
+  ADR-007, the same asymmetric-compatibility shape ADR-004 accepted for
+  loans; the envelope version is not bumped for it, since single-category-only
+  backups remain fully compatible.
 * Dates are ISO-8601 **local wall-clock** strings with no timezone designator,
   and are parsed back as local. A calendar date therefore survives a round trip
   unchanged rather than shifting a day across timezones (§42).

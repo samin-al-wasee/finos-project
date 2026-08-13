@@ -2,7 +2,9 @@ import 'package:drift/drift.dart';
 
 import '../../../core/database/app_database.dart';
 import '../domain/budget_period.dart';
+import '../domain/budget_scope.dart';
 import '../domain/budget_status.dart';
+import 'budget_category_table.dart';
 import 'budget_table.dart';
 
 part 'budget_dao.g.dart';
@@ -12,9 +14,9 @@ part 'budget_dao.g.dart';
 /// Mirrors the [CategoryDao] pattern: streams, one-shot queries, CRUD, and
 /// lifecycle status updates. Budget *consumption* is not queried here — that
 /// reads the transactions table and lives in
-/// [TransactionDao.expenseTotalForCategory], keeping each table's queries in the
-/// feature that owns it.
-@DriftAccessor(tables: [Budgets])
+/// [TransactionDao.expenseTotalForCategory] and its scope-generalised
+/// siblings, keeping each table's queries in the feature that owns it.
+@DriftAccessor(tables: [Budgets, BudgetCategories])
 class BudgetDao extends DatabaseAccessor<AppDatabase> with _$BudgetDaoMixin {
   BudgetDao(super.db);
 
@@ -34,19 +36,66 @@ class BudgetDao extends DatabaseAccessor<AppDatabase> with _$BudgetDaoMixin {
   Future<BudgetRow?> getById(String id) =>
       (select(budgets)..where((t) => t.id.equals(id))).getSingleOrNull();
 
-  /// Returns the ACTIVE budget for [categoryId] with the given [period], or
-  /// `null` if there is none.
+  /// Every ACTIVE budget sharing [period], paired with its resolved category
+  /// set (docs/adr/007-flexible-budget-scope.md).
   ///
-  /// Used to enforce one active budget per category and period so that spending
-  /// can never be attributed to two competing limits at once.
-  Future<BudgetRow?> getActiveFor(String categoryId, BudgetPeriod period) {
-    return (select(budgets)..where(
-          (t) =>
-              t.categoryId.equals(categoryId) &
-              t.period.equalsValue(period) &
-              t.status.equalsValue(BudgetStatus.active),
-        ))
-        .getSingleOrNull();
+  /// The raw material for the scope-overlap check that replaces the old
+  /// category-equality uniqueness rule — no equality comparison happens here,
+  /// only fetching. The category set is only ever non-empty for a
+  /// `MULTI_CATEGORY` row; every other scope type resolves its own set from
+  /// [BudgetRow] alone ([resolveBudgetScope]), so fetching the join table for
+  /// them would just return nothing.
+  Future<List<(BudgetRow, Set<String>)>> getActiveForPeriod(
+    BudgetPeriod period,
+  ) async {
+    final rows =
+        await (select(budgets)..where(
+              (t) =>
+                  t.period.equalsValue(period) &
+                  t.status.equalsValue(BudgetStatus.active),
+            ))
+            .get();
+    return [
+      for (final row in rows)
+        (
+          row,
+          row.scopeType == BudgetScopeType.multiCategory
+              ? await categoriesFor(row.id)
+              : const <String>{},
+        ),
+    ];
+  }
+
+  /// The member categories of a `MULTI_CATEGORY` budget's join-table rows.
+  ///
+  /// Returns an empty set for any other scope type, since they never have
+  /// rows in `budget_categories`.
+  Future<Set<String>> categoriesFor(String budgetId) async {
+    final rows = await (select(
+      budgetCategories,
+    )..where((t) => t.budgetId.equals(budgetId))).get();
+    return rows.map((r) => r.categoryId).toSet();
+  }
+
+  /// Replaces [budgetId]'s member categories with [categoryIds].
+  ///
+  /// Runs as delete-then-insert inside one batch so the join table never
+  /// briefly holds a stale partial set. Only ever called for `MULTI_CATEGORY`
+  /// budgets — every other scope type never touches this table.
+  Future<void> setCategoriesFor(
+    String budgetId,
+    Set<String> categoryIds,
+  ) async {
+    await batch((b) {
+      b.deleteWhere(budgetCategories, (t) => t.budgetId.equals(budgetId));
+      b.insertAll(budgetCategories, [
+        for (final categoryId in categoryIds)
+          BudgetCategoriesCompanion.insert(
+            budgetId: budgetId,
+            categoryId: categoryId,
+          ),
+      ]);
+    });
   }
 
   /// Persists a new budget row.

@@ -584,7 +584,7 @@ Conceptually:
 
 ```text
 Budget
-├── category
+├── scope     (single category / multiple categories / uncategorised / whole account)
 ├── period
 ├── limit
 └── calculation rules
@@ -601,6 +601,27 @@ Remaining:         $150
 ```
 
 The application should avoid duplicating budget calculations across multiple screens.
+
+### V1 implementation
+
+`BudgetProgress` carries a resolved `scope: BudgetScope` (a sealed
+`SingleCategoryScope` / `MultiCategoryScope` / `UncategorizedScope` /
+`WholeAccountScope`) plus the `categories` it resolves to, rather than a
+single `category` field (ADR-007). Every screen still watches
+`BudgetProgress`/`budgetProgressProvider` as the one shared source, so the
+"avoid duplicating budget calculations" rule above continues to hold
+unchanged: the derived getters (`limitMinor`, `remainingMinor`,
+`usedFraction`, `health`, `isExceeded`) read only `budget.amountMinor` and
+`spentMinor`, regardless of scope type.
+
+The uniqueness rule that keeps spending from being attributed to two
+competing active budgets at once (docs/DATA_MODEL.md §22, generalised by
+ADR-007) is now **set-based** rather than an equality check: no two active
+budgets in the
+same `period` value may have overlapping resolved category sets
+(`budgetScopesOverlap`). A `WHOLE_ACCOUNT` scope overlaps everything; an
+`UncategorizedScope` overlaps only itself; two category-bearing scopes
+overlap exactly when their sets intersect.
 
 ---
 

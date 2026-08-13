@@ -1,6 +1,7 @@
 import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/features/budgets/domain/budget_period.dart';
 import 'package:finos_app/features/budgets/domain/budget_progress.dart';
+import 'package:finos_app/features/budgets/domain/budget_scope.dart';
 import 'package:finos_app/features/budgets/domain/budget_status.dart';
 import 'package:finos_app/features/categories/domain/category_origin.dart';
 import 'package:finos_app/features/categories/domain/category_status.dart';
@@ -38,6 +39,7 @@ void main() {
       budget: BudgetRow(
         id: id,
         categoryId: category.id,
+        scopeType: BudgetScopeType.singleCategory,
         amountMinor: limitMinor,
         currency: 'BDT',
         period: BudgetPeriod.monthly,
@@ -47,7 +49,37 @@ void main() {
         createdAt: timestamp,
         updatedAt: timestamp,
       ),
-      category: category,
+      scope: SingleCategoryScope(category.id),
+      categories: [category],
+      window: window,
+      spentMinor: spentMinor,
+    );
+  }
+
+  /// A budget built from a non-[SingleCategoryScope] scope, to prove the
+  /// sort/aggregate logic never touches `.category`/`.categories`
+  /// (docs/adr/007-flexible-budget-scope.md).
+  BudgetProgress wholeAccountProgressWith({
+    required String id,
+    required int limitMinor,
+    required int spentMinor,
+  }) {
+    return BudgetProgress(
+      budget: BudgetRow(
+        id: id,
+        categoryId: null,
+        scopeType: BudgetScopeType.wholeAccount,
+        amountMinor: limitMinor,
+        currency: 'BDT',
+        period: BudgetPeriod.monthly,
+        startDate: DateTime(2026, 8, 1),
+        endDate: null,
+        status: BudgetStatus.active,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      ),
+      scope: const WholeAccountScope(),
+      categories: const [],
       window: window,
       spentMinor: spentMinor,
     );
@@ -105,4 +137,28 @@ void main() {
 
     expect(result.map((p) => p.budget.id), ['more', 'less']);
   });
+
+  test(
+    'sorts a non-SingleCategoryScope budget by health/usedFraction alone',
+    () {
+      // Proves the sort/aggregate logic never touches
+      // `.category`/`.categories` (docs/adr/007-flexible-budget-scope.md) —
+      // only `.health`/`.usedFraction`/`.budget.status`, which are unchanged
+      // regardless of scope.
+      final wholeAccount = wholeAccountProgressWith(
+        id: 'whole',
+        limitMinor: 1000,
+        spentMinor: 1200,
+      );
+      final underLimit = progressWith(
+        id: 'under',
+        limitMinor: 1000,
+        spentMinor: 100,
+      );
+
+      final result = budgetsForPerformanceReport([underLimit, wholeAccount]);
+
+      expect(result.map((p) => p.budget.id), ['whole', 'under']);
+    },
+  );
 }

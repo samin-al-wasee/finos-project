@@ -7,6 +7,7 @@ import 'package:finos_app/features/accounts/domain/account_type.dart';
 import 'package:finos_app/features/backup/application/backup_service.dart';
 import 'package:finos_app/features/budgets/data/budget_dao.dart';
 import 'package:finos_app/features/budgets/domain/budget_period.dart';
+import 'package:finos_app/features/budgets/domain/budget_scope.dart';
 import 'package:finos_app/features/budgets/domain/budget_status.dart';
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_origin.dart';
@@ -74,7 +75,7 @@ void main() {
     await budgets.insertOne(
       BudgetsCompanion.insert(
         id: 'budget-old',
-        categoryId: 'cat-old',
+        categoryId: const Value('cat-old'),
         amountMinor: 500000,
         period: BudgetPeriod.monthly,
         startDate: DateTime(2026, 7),
@@ -125,6 +126,7 @@ void main() {
   BudgetRow budgetRow(String id, {required String categoryId}) => BudgetRow(
     id: id,
     categoryId: categoryId,
+    scopeType: BudgetScopeType.singleCategory,
     amountMinor: 200000,
     currency: 'BDT',
     period: BudgetPeriod.monthly,

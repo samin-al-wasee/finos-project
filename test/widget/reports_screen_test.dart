@@ -228,7 +228,7 @@ void main() {
     await budgets.insertOne(
       BudgetsCompanion.insert(
         id: 'budget-groceries',
-        categoryId: 'cat-groceries',
+        categoryId: const Value('cat-groceries'),
         amountMinor: 100000, // ৳1,000
         period: BudgetPeriod.monthly,
         startDate: thisMonth,
@@ -273,7 +273,7 @@ void main() {
     await budgets.insertOne(
       BudgetsCompanion.insert(
         id: 'budget-groceries',
-        categoryId: 'cat-groceries',
+        categoryId: const Value('cat-groceries'),
         amountMinor: 100000,
         period: BudgetPeriod.monthly,
         startDate: thisMonth,

@@ -583,7 +583,7 @@ class _BudgetPerformanceRow extends StatelessWidget {
               Row(
                 children: [
                   Icon(
-                    categoryIcon(progress.category.icon),
+                    budgetScopeIcon(progress),
                     size: 18,
                     color: colors.mutedText,
                   ),
@@ -593,7 +593,7 @@ class _BudgetPerformanceRow extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          progress.category.name,
+                          budgetScopeLabel(progress),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodyMedium,

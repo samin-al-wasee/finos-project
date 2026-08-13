@@ -399,7 +399,7 @@ void main() {
       await BudgetDao(database).insertOne(
         BudgetsCompanion.insert(
           id: 'budget-food',
-          categoryId: 'test-food',
+          categoryId: const Value('test-food'),
           amountMinor: 1000000,
           period: BudgetPeriod.monthly,
           startDate: DateTime(2026, 8),

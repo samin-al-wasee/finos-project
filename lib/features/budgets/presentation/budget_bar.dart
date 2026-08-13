@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../domain/budget_progress.dart';
+import 'budget_labels.dart';
 
 /// Maps derived budget health onto the semantic colour tokens.
 ///
@@ -48,7 +49,7 @@ class BudgetBar extends StatelessWidget {
               // The percentage announced to screen readers is derived from the
               // clamped value, so it caps at 100; the amount and health text
               // beside the bar carry the overspend.
-              semanticsLabel: '${progress.category.name} budget used',
+              semanticsLabel: '${budgetScopeLabel(progress)} budget used',
             ),
           ),
         ),

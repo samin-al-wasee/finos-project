@@ -402,7 +402,7 @@ void main() {
         BudgetsCompanion.insert(
           id: 'budget-1',
           // Built in, seeded on every fresh database.
-          categoryId: 'cat-food',
+          categoryId: const Value('cat-food'),
           amountMinor: limitMinor,
           period: BudgetPeriod.monthly,
           startDate: now,

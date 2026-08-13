@@ -3,6 +3,7 @@ import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/features/budgets/application/budget_controller.dart';
 import 'package:finos_app/features/budgets/data/budget_dao.dart';
 import 'package:finos_app/features/budgets/domain/budget_period.dart';
+import 'package:finos_app/features/budgets/domain/budget_scope.dart';
 import 'package:finos_app/features/budgets/domain/budget_status.dart';
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_status.dart';
@@ -52,6 +53,13 @@ void main() {
         status: Value(CategoryStatus.archived),
       ),
     );
+    await categories.insertOne(
+      CategoriesCompanion.insert(
+        id: 'test-entertainment',
+        name: 'Entertainment',
+        type: CategoryType.expense,
+      ),
+    );
   });
 
   tearDown(() async {
@@ -61,7 +69,7 @@ void main() {
   group('create', () {
     test('persists a budget and returns its generated id', () async {
       final id = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
         startDate: DateTime(2026, 8, 10, 14, 30),
@@ -81,7 +89,7 @@ void main() {
 
     test('defaults the start date to today', () async {
       final id = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
       );
@@ -96,7 +104,7 @@ void main() {
     test('rejects a zero limit', () async {
       expect(
         () => controller.create(
-          categoryId: 'test-food',
+          scope: const SingleCategoryScope('test-food'),
           amountMinor: 0,
           period: BudgetPeriod.monthly,
         ),
@@ -107,7 +115,7 @@ void main() {
     test('rejects a negative limit', () async {
       expect(
         () => controller.create(
-          categoryId: 'test-food',
+          scope: const SingleCategoryScope('test-food'),
           amountMinor: -5000,
           period: BudgetPeriod.monthly,
         ),
@@ -118,7 +126,7 @@ void main() {
     test('rejects a missing category', () async {
       expect(
         () => controller.create(
-          categoryId: 'cat-missing',
+          scope: const SingleCategoryScope('cat-missing'),
           amountMinor: 1000000,
           period: BudgetPeriod.monthly,
         ),
@@ -129,7 +137,7 @@ void main() {
     test('rejects an archived category', () async {
       expect(
         () => controller.create(
-          categoryId: 'test-archived',
+          scope: const SingleCategoryScope('test-archived'),
           amountMinor: 1000000,
           period: BudgetPeriod.monthly,
         ),
@@ -142,7 +150,7 @@ void main() {
       // category could never be measured against a limit.
       expect(
         () => controller.create(
-          categoryId: 'test-salary',
+          scope: const SingleCategoryScope('test-salary'),
           amountMinor: 1000000,
           period: BudgetPeriod.monthly,
         ),
@@ -153,7 +161,7 @@ void main() {
     test('rejects a custom period without an end date', () async {
       expect(
         () => controller.create(
-          categoryId: 'test-food',
+          scope: const SingleCategoryScope('test-food'),
           amountMinor: 1000000,
           period: BudgetPeriod.custom,
           startDate: DateTime(2026, 8, 1),
@@ -165,7 +173,7 @@ void main() {
     test('rejects a custom period ending before it starts', () async {
       expect(
         () => controller.create(
-          categoryId: 'test-food',
+          scope: const SingleCategoryScope('test-food'),
           amountMinor: 1000000,
           period: BudgetPeriod.custom,
           startDate: DateTime(2026, 8, 20),
@@ -177,7 +185,7 @@ void main() {
 
     test('accepts a single-day custom period', () async {
       final id = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.custom,
         startDate: DateTime(2026, 8, 10),
@@ -192,7 +200,7 @@ void main() {
       // Recurring windows come from the calendar, so a stray end date must not
       // be persisted where it would be silently ignored.
       final id = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
         endDate: DateTime(2026, 8, 31),
@@ -205,14 +213,14 @@ void main() {
   group('one active budget per category and period', () {
     test('rejects a duplicate active budget', () async {
       await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
       );
 
       expect(
         () => controller.create(
-          categoryId: 'test-food',
+          scope: const SingleCategoryScope('test-food'),
           amountMinor: 2000000,
           period: BudgetPeriod.monthly,
         ),
@@ -222,12 +230,12 @@ void main() {
 
     test('allows the same category with a different period', () async {
       await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
       );
       await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 250000,
         period: BudgetPeriod.weekly,
       );
@@ -237,12 +245,12 @@ void main() {
 
     test('allows a different category with the same period', () async {
       await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
       );
       await controller.create(
-        categoryId: 'test-transport',
+        scope: const SingleCategoryScope('test-transport'),
         amountMinor: 500000,
         period: BudgetPeriod.monthly,
       );
@@ -252,14 +260,14 @@ void main() {
 
     test('allows a new budget once the previous one is archived', () async {
       final first = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
       );
       await controller.archive(first);
 
       final second = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 2000000,
         period: BudgetPeriod.monthly,
       );
@@ -269,10 +277,224 @@ void main() {
     });
   });
 
+  group('flexible scope overlap (docs/adr/007-flexible-budget-scope.md)', () {
+    test('rejects a MULTI_CATEGORY budget overlapping an active '
+        'SINGLE_CATEGORY budget', () async {
+      await controller.create(
+        scope: const SingleCategoryScope('test-food'),
+        amountMinor: 1000000,
+        period: BudgetPeriod.monthly,
+      );
+
+      expect(
+        () => controller.create(
+          scope: const MultiCategoryScope({'test-food', 'test-transport'}),
+          amountMinor: 2000000,
+          period: BudgetPeriod.monthly,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test(
+      'allows a MULTI_CATEGORY budget with no overlapping category',
+      () async {
+        await controller.create(
+          scope: const SingleCategoryScope('test-food'),
+          amountMinor: 1000000,
+          period: BudgetPeriod.monthly,
+        );
+
+        await controller.create(
+          scope: const MultiCategoryScope({
+            'test-transport',
+            'test-entertainment',
+          }),
+          amountMinor: 2000000,
+          period: BudgetPeriod.monthly,
+        );
+
+        expect(await dao.getAll(), hasLength(2));
+      },
+    );
+
+    test(
+      'rejects a second active WHOLE_ACCOUNT budget in the same period',
+      () async {
+        await controller.create(
+          scope: const WholeAccountScope(),
+          amountMinor: 1000000,
+          period: BudgetPeriod.monthly,
+        );
+
+        expect(
+          () => controller.create(
+            scope: const WholeAccountScope(),
+            amountMinor: 2000000,
+            period: BudgetPeriod.monthly,
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    test('rejects WHOLE_ACCOUNT alongside any other active budget in the '
+        'same period', () async {
+      await controller.create(
+        scope: const SingleCategoryScope('test-food'),
+        amountMinor: 1000000,
+        period: BudgetPeriod.monthly,
+      );
+
+      expect(
+        () => controller.create(
+          scope: const WholeAccountScope(),
+          amountMinor: 2000000,
+          period: BudgetPeriod.monthly,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('allows WHOLE_ACCOUNT in a different period value', () async {
+      await controller.create(
+        scope: const SingleCategoryScope('test-food'),
+        amountMinor: 1000000,
+        period: BudgetPeriod.monthly,
+      );
+
+      await controller.create(
+        scope: const WholeAccountScope(),
+        amountMinor: 2000000,
+        period: BudgetPeriod.yearly,
+      );
+
+      expect(await dao.getAll(), hasLength(2));
+    });
+
+    test(
+      'rejects a second active UNCATEGORIZED budget in the same period',
+      () async {
+        await controller.create(
+          scope: const UncategorizedScope(),
+          amountMinor: 1000000,
+          period: BudgetPeriod.monthly,
+        );
+
+        expect(
+          () => controller.create(
+            scope: const UncategorizedScope(),
+            amountMinor: 2000000,
+            period: BudgetPeriod.monthly,
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    test(
+      'allows an UNCATEGORIZED budget alongside a SINGLE_CATEGORY budget',
+      () async {
+        await controller.create(
+          scope: const SingleCategoryScope('test-food'),
+          amountMinor: 1000000,
+          period: BudgetPeriod.monthly,
+        );
+
+        await controller.create(
+          scope: const UncategorizedScope(),
+          amountMinor: 2000000,
+          period: BudgetPeriod.monthly,
+        );
+
+        expect(await dao.getAll(), hasLength(2));
+      },
+    );
+
+    test(
+      'rejects a MULTI_CATEGORY scope with fewer than 2 categories',
+      () async {
+        expect(
+          () => controller.create(
+            scope: const MultiCategoryScope({'test-food'}),
+            amountMinor: 1000000,
+            period: BudgetPeriod.monthly,
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    test('persists every member category of a MULTI_CATEGORY budget', () async {
+      final id = await controller.create(
+        scope: const MultiCategoryScope({'test-food', 'test-transport'}),
+        amountMinor: 1000000,
+        period: BudgetPeriod.monthly,
+      );
+
+      final row = await dao.getById(id);
+      expect(row!.categoryId, isNull);
+      expect(row.scopeType, BudgetScopeType.multiCategory);
+      expect(await dao.categoriesFor(id), {'test-food', 'test-transport'});
+    });
+
+    test(
+      'rejects a MULTI_CATEGORY scope with one archived member category',
+      () async {
+        expect(
+          () => controller.create(
+            scope: const MultiCategoryScope({'test-food', 'test-archived'}),
+            amountMinor: 1000000,
+            period: BudgetPeriod.monthly,
+          ),
+          throwsStateError,
+        );
+      },
+    );
+
+    test(
+      'rejects a MULTI_CATEGORY scope with one income member category',
+      () async {
+        expect(
+          () => controller.create(
+            scope: const MultiCategoryScope({'test-food', 'test-salary'}),
+            amountMinor: 1000000,
+            period: BudgetPeriod.monthly,
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    test('persists an UNCATEGORIZED budget with a null category', () async {
+      final id = await controller.create(
+        scope: const UncategorizedScope(),
+        amountMinor: 1000000,
+        period: BudgetPeriod.monthly,
+      );
+
+      final row = await dao.getById(id);
+      expect(row!.categoryId, isNull);
+      expect(row.scopeType, BudgetScopeType.uncategorized);
+    });
+
+    test('persists a WHOLE_ACCOUNT budget with a null category', () async {
+      final id = await controller.create(
+        scope: const WholeAccountScope(),
+        amountMinor: 1000000,
+        period: BudgetPeriod.monthly,
+      );
+
+      final row = await dao.getById(id);
+      expect(row!.categoryId, isNull);
+      expect(row.scopeType, BudgetScopeType.wholeAccount);
+    });
+  });
+
   group('update', () {
     test('changes the limit and period', () async {
       final id = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
         startDate: DateTime(2026, 8, 1),
@@ -300,7 +522,7 @@ void main() {
 
     test('does not collide with itself on the uniqueness check', () async {
       final id = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
       );
@@ -319,12 +541,12 @@ void main() {
       'rejects switching onto a period another budget already covers',
       () async {
         final monthly = await controller.create(
-          categoryId: 'test-food',
+          scope: const SingleCategoryScope('test-food'),
           amountMinor: 1000000,
           period: BudgetPeriod.monthly,
         );
         await controller.create(
-          categoryId: 'test-food',
+          scope: const SingleCategoryScope('test-food'),
           amountMinor: 250000,
           period: BudgetPeriod.weekly,
         );
@@ -343,7 +565,7 @@ void main() {
 
     test('rejects a zero limit', () async {
       final id = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
       );
@@ -375,7 +597,7 @@ void main() {
   group('lifecycle', () {
     test('archive then restore returns a budget to active', () async {
       final id = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
       );
@@ -389,19 +611,53 @@ void main() {
 
     test('restore is blocked when an active budget took its place', () async {
       final first = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
       );
       await controller.archive(first);
       await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 2000000,
         period: BudgetPeriod.monthly,
       );
 
       expect(() => controller.restore(first), throwsArgumentError);
       expect((await dao.getById(first))!.status, BudgetStatus.archived);
+    });
+
+    test('restore re-checks overlap against the budget\'s own multi-category '
+        'scope', () async {
+      final multi = await controller.create(
+        scope: const MultiCategoryScope({'test-food', 'test-transport'}),
+        amountMinor: 1000000,
+        period: BudgetPeriod.monthly,
+      );
+      await controller.archive(multi);
+      // A new single-category budget now claims one of the multi-category
+      // budget's member categories in the same period.
+      await controller.create(
+        scope: const SingleCategoryScope('test-food'),
+        amountMinor: 2000000,
+        period: BudgetPeriod.monthly,
+      );
+
+      expect(() => controller.restore(multi), throwsArgumentError);
+      expect((await dao.getById(multi))!.status, BudgetStatus.archived);
+    });
+
+    test('restore succeeds when a multi-category budget\'s scope no longer '
+        'overlaps anything', () async {
+      final multi = await controller.create(
+        scope: const MultiCategoryScope({'test-food', 'test-transport'}),
+        amountMinor: 1000000,
+        period: BudgetPeriod.monthly,
+      );
+      await controller.archive(multi);
+
+      await controller.restore(multi);
+
+      expect((await dao.getById(multi))!.status, BudgetStatus.active);
     });
 
     test('restore throws for an unknown budget', () async {
@@ -414,7 +670,7 @@ void main() {
 
     test('delete removes the budget', () async {
       final id = await controller.create(
-        categoryId: 'test-food',
+        scope: const SingleCategoryScope('test-food'),
         amountMinor: 1000000,
         period: BudgetPeriod.monthly,
       );

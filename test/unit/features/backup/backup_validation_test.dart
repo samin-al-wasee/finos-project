@@ -4,6 +4,7 @@ import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/core/errors/app_exception.dart';
 import 'package:finos_app/features/backup/application/backup_service.dart';
 import 'package:finos_app/features/backup/domain/backup_envelope.dart';
+import 'package:finos_app/features/budgets/domain/budget_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Validation tests for importing a backup (AGENTS.md §14).
@@ -108,10 +109,14 @@ void main() {
     Object? categoryId = 'cat-1',
     Object? amountMinor = 1000,
     Object? period = 'MONTHLY',
+    Object? scopeType,
+    Object? categoryIds,
   }) {
     return {
       'id': id,
       'category_id': categoryId,
+      'scope_type': ?scopeType,
+      'category_ids': ?categoryIds,
       'amount_minor': amountMinor,
       'currency': 'BDT',
       'period': period,
@@ -379,6 +384,85 @@ void main() {
         document(budgets: [budget(categoryId: 'cat-ghost')]),
         'category that the backup does not contain',
       );
+    });
+
+    test('rejects a MULTI_CATEGORY budget whose category_ids includes a '
+        'category the backup does not contain', () {
+      expectRejected(
+        document(
+          categories: [category(id: 'cat-1')],
+          budgets: [
+            budget(
+              categoryId: null,
+              scopeType: 'MULTI_CATEGORY',
+              categoryIds: ['cat-1', 'cat-ghost'],
+            ),
+          ],
+        ),
+        'category that the backup does not contain',
+      );
+    });
+
+    test('rejects a MULTI_CATEGORY budget listing fewer than 2 categories', () {
+      expectRejected(
+        document(
+          categories: [category(id: 'cat-1')],
+          budgets: [
+            budget(
+              categoryId: null,
+              scopeType: 'MULTI_CATEGORY',
+              categoryIds: ['cat-1'],
+            ),
+          ],
+        ),
+        'fewer than 2',
+      );
+    });
+
+    test('accepts a MULTI_CATEGORY budget whose categories all resolve', () {
+      final parsed = service.parse(
+        document(
+          categories: [
+            category(id: 'cat-1'),
+            category(id: 'cat-2'),
+          ],
+          budgets: [
+            budget(
+              categoryId: null,
+              scopeType: 'MULTI_CATEGORY',
+              categoryIds: ['cat-1', 'cat-2'],
+            ),
+          ],
+        ),
+      );
+
+      expect(parsed.counts.budgets, 1);
+      expect(parsed.budgetCategoryIds['budget-1'], {'cat-1', 'cat-2'});
+    });
+
+    test('accepts an UNCATEGORIZED budget with no category_id at all', () {
+      final parsed = service.parse(
+        document(
+          budgets: [budget(categoryId: null, scopeType: 'UNCATEGORIZED')],
+        ),
+      );
+
+      expect(parsed.counts.budgets, 1);
+      expect(parsed.budgets.single.categoryId, isNull);
+    });
+
+    test('a budget with no scope_type field defaults to SINGLE_CATEGORY '
+        '(backward compatibility)', () {
+      // A backup written before this feature existed has no scope_type
+      // field at all (docs/adr/007-flexible-budget-scope.md).
+      final parsed = service.parse(
+        document(
+          categories: [category(id: 'cat-1')],
+          budgets: [budget(categoryId: 'cat-1')],
+        ),
+      );
+
+      expect(parsed.budgets.single.scopeType, BudgetScopeType.singleCategory);
     });
 
     test('accepts references that all resolve', () {

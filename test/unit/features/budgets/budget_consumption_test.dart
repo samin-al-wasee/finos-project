@@ -211,4 +211,222 @@ void main() {
       expect(await dao.expenseTotalForCategory('test-food', from, to), 0);
     });
   });
+
+  // The multi-category, uncategorized, and whole-account generalisations of
+  // expenseTotalForCategory (docs/adr/007-flexible-budget-scope.md). Same
+  // window/type rules; only the category filter changes shape.
+  group('expenseTotalForCategories', () {
+    test('is zero when none of the categories have transactions', () async {
+      expect(
+        await dao.expenseTotalForCategories(
+          ['test-food', 'test-transport'],
+          from,
+          to,
+        ),
+        0,
+      );
+    });
+
+    test('is zero for an empty category set', () async {
+      expect(await dao.expenseTotalForCategories([], from, to), 0);
+    });
+
+    test('sums expenses across every listed category — one IN query', () async {
+      await add('tx-food', date: DateTime(2026, 8, 3), amountMinor: 200000);
+      await add(
+        'tx-transport',
+        date: DateTime(2026, 8, 12),
+        amountMinor: 150000,
+        categoryId: 'test-transport',
+      );
+
+      expect(
+        await dao.expenseTotalForCategories(
+          ['test-food', 'test-transport'],
+          from,
+          to,
+        ),
+        350000,
+      );
+    });
+
+    test('ignores categories outside the listed set', () async {
+      await add('tx-food', date: DateTime(2026, 8, 3), amountMinor: 200000);
+      await add(
+        'tx-transport',
+        date: DateTime(2026, 8, 12),
+        amountMinor: 150000,
+        categoryId: 'test-transport',
+      );
+
+      expect(
+        await dao.expenseTotalForCategories(['test-food'], from, to),
+        200000,
+      );
+    });
+
+    test('excludes income and transfers', () async {
+      await add(
+        'tx-income',
+        date: DateTime(2026, 8, 5),
+        type: TransactionType.income,
+        amountMinor: 900000,
+        categoryId: 'test-salary',
+      );
+      await add('tx-food', date: DateTime(2026, 8, 6), amountMinor: 100000);
+
+      expect(
+        await dao.expenseTotalForCategories(
+          ['test-food', 'test-salary'],
+          from,
+          to,
+        ),
+        100000,
+      );
+    });
+
+    test('respects the half-open window', () async {
+      await add('tx-next', date: DateTime(2026, 9, 1), amountMinor: 100000);
+
+      expect(await dao.expenseTotalForCategories(['test-food'], from, to), 0);
+    });
+
+    test('a deleted expense stops counting', () async {
+      await add('tx-food', date: DateTime(2026, 8, 5), amountMinor: 100000);
+      expect(
+        await dao.expenseTotalForCategories(['test-food'], from, to),
+        100000,
+      );
+
+      await dao.deleteOne('tx-food');
+      expect(await dao.expenseTotalForCategories(['test-food'], from, to), 0);
+    });
+  });
+
+  group('expenseTotalUncategorized', () {
+    test('is zero when there are no uncategorised expenses', () async {
+      expect(await dao.expenseTotalUncategorized(from, to), 0);
+    });
+
+    test('sums only expenses with no category', () async {
+      await add('tx-food', date: DateTime(2026, 8, 5), amountMinor: 100000);
+      await add(
+        'tx-none-1',
+        date: DateTime(2026, 8, 6),
+        amountMinor: 300000,
+        categoryId: null,
+      );
+      await add(
+        'tx-none-2',
+        date: DateTime(2026, 8, 7),
+        amountMinor: 200000,
+        categoryId: null,
+      );
+
+      expect(await dao.expenseTotalUncategorized(from, to), 500000);
+    });
+
+    test('excludes uncategorised income and transfers', () async {
+      await add(
+        'tx-income',
+        date: DateTime(2026, 8, 5),
+        type: TransactionType.income,
+        amountMinor: 900000,
+        categoryId: null,
+      );
+      await add(
+        'tx-transfer',
+        date: DateTime(2026, 8, 6),
+        type: TransactionType.transfer,
+        amountMinor: 500000,
+        categoryId: null,
+        destinationAccountId: 'acct-cash',
+      );
+
+      expect(await dao.expenseTotalUncategorized(from, to), 0);
+    });
+
+    test('respects the half-open window', () async {
+      await add(
+        'tx-next',
+        date: DateTime(2026, 9, 1),
+        amountMinor: 100000,
+        categoryId: null,
+      );
+
+      expect(await dao.expenseTotalUncategorized(from, to), 0);
+    });
+
+    test('a deleted expense stops counting', () async {
+      await add(
+        'tx-none',
+        date: DateTime(2026, 8, 5),
+        amountMinor: 100000,
+        categoryId: null,
+      );
+      expect(await dao.expenseTotalUncategorized(from, to), 100000);
+
+      await dao.deleteOne('tx-none');
+      expect(await dao.expenseTotalUncategorized(from, to), 0);
+    });
+  });
+
+  group('expenseTotalAll', () {
+    test('is zero when there are no expenses', () async {
+      expect(await dao.expenseTotalAll(from, to), 0);
+    });
+
+    test('sums every expense regardless of category', () async {
+      await add('tx-food', date: DateTime(2026, 8, 3), amountMinor: 200000);
+      await add(
+        'tx-transport',
+        date: DateTime(2026, 8, 12),
+        amountMinor: 150000,
+        categoryId: 'test-transport',
+      );
+      await add(
+        'tx-none',
+        date: DateTime(2026, 8, 13),
+        amountMinor: 100000,
+        categoryId: null,
+      );
+
+      expect(await dao.expenseTotalAll(from, to), 450000);
+    });
+
+    test('excludes income and transfers', () async {
+      await add(
+        'tx-income',
+        date: DateTime(2026, 8, 5),
+        type: TransactionType.income,
+        amountMinor: 900000,
+        categoryId: 'test-salary',
+      );
+      await add(
+        'tx-transfer',
+        date: DateTime(2026, 8, 6),
+        type: TransactionType.transfer,
+        amountMinor: 500000,
+        categoryId: null,
+        destinationAccountId: 'acct-cash',
+      );
+      await add('tx-food', date: DateTime(2026, 8, 7), amountMinor: 100000);
+
+      expect(await dao.expenseTotalAll(from, to), 100000);
+    });
+
+    test('respects the half-open window', () async {
+      await add('tx-next', date: DateTime(2026, 9, 1), amountMinor: 100000);
+
+      expect(await dao.expenseTotalAll(from, to), 0);
+    });
+
+    test('a deleted expense stops counting', () async {
+      await add('tx-food', date: DateTime(2026, 8, 5), amountMinor: 100000);
+      expect(await dao.expenseTotalAll(from, to), 100000);
+
+      await dao.deleteOne('tx-food');
+      expect(await dao.expenseTotalAll(from, to), 0);
+    });
+  });
 }

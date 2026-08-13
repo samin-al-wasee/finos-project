@@ -11,6 +11,7 @@ This directory records significant architectural decisions for FinOS.
 | [004](004-loan-accounting.md) | Accepted | Loan accounting |
 | [005](005-credit-card-accounts.md) | Accepted | Credit card accounts |
 | [006](006-loan-relationships.md) | Accepted | Loan relationships |
+| [007](007-flexible-budget-scope.md) | Accepted | Flexible budget scope |
 
 ## Conventions
 

@@ -6,7 +6,6 @@ import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
-import '../../categories/presentation/category_icon.dart';
 import '../domain/budget_period.dart';
 import '../domain/budget_progress.dart';
 import 'budget_bar.dart';
@@ -87,14 +86,14 @@ class _DetailsBody extends StatelessWidget {
       children: [
         Row(
           children: [
-            CircleAvatar(child: Icon(categoryIcon(current.category.icon))),
+            CircleAvatar(child: Icon(budgetScopeIcon(current))),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    current.category.name,
+                    budgetScopeLabel(current),
                     style: theme.textTheme.titleLarge,
                   ),
                   Text(
@@ -108,6 +107,17 @@ class _DetailsBody extends StatelessWidget {
             ),
           ],
         ),
+        if (current.categories.length > 1) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final category in current.categories)
+                Chip(label: Text(category.name)),
+            ],
+          ),
+        ],
         const SizedBox(height: AppSpacing.lg),
         _PeriodTile(progress: current, symbol: symbol, isCurrent: true),
         const SizedBox(height: AppSpacing.xl),

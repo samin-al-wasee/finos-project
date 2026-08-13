@@ -15,6 +15,7 @@ import '../features/budgets/application/budget_controller.dart';
 import '../features/budgets/data/budget_dao.dart';
 import '../features/budgets/domain/budget_period.dart';
 import '../features/budgets/domain/budget_progress.dart';
+import '../features/budgets/domain/budget_scope.dart';
 import '../features/budgets/domain/budget_status.dart';
 import '../features/categories/application/category_controller.dart';
 import '../features/categories/data/category_dao.dart';
@@ -223,6 +224,67 @@ final budgetsStreamProvider = StreamProvider<List<BudgetRow>>((ref) {
   return _guardOpenTimeout(ref.watch(budgetDaoProvider).watchAll());
 });
 
+/// Resolves a budget's spend for [window], dispatching on its [BudgetScope]
+/// (docs/adr/007-flexible-budget-scope.md).
+///
+/// Lives here rather than in `domain/` because domain code must not depend
+/// on a DAO (docs/ARCHITECTURE.md §3.4, Dependency Direction). Kept as a
+/// standalone top-level function — rather than an unexported closure buried
+/// inside one provider — so it stays easy to close over as
+/// `(DateTime from, DateTime to) => _spentMinorForScope(dao, scope, DateRange(from, to))`
+/// from elsewhere (docs/ROADMAP.md §8.3, budget rollover).
+Future<int> _spentMinorForScope(
+  TransactionDao dao,
+  BudgetScope scope,
+  DateRange window,
+) {
+  return switch (scope) {
+    SingleCategoryScope(:final categoryId) => dao.expenseTotalForCategory(
+      categoryId,
+      window.from,
+      window.to,
+    ),
+    MultiCategoryScope(:final categoryIds) => dao.expenseTotalForCategories(
+      categoryIds,
+      window.from,
+      window.to,
+    ),
+    UncategorizedScope() => dao.expenseTotalUncategorized(
+      window.from,
+      window.to,
+    ),
+    WholeAccountScope() => dao.expenseTotalAll(window.from, window.to),
+  };
+}
+
+/// Resolves [budget]'s [BudgetScope] and the [CategoryRow]s it covers.
+///
+/// Fetches the join table via [BudgetDao.categoriesFor] only for
+/// `MULTI_CATEGORY` budgets; every other scope type resolves from the row
+/// alone. Categories missing from [categoriesById] (e.g. a deleted category —
+/// unreachable via the foreign key in practice) are silently dropped rather
+/// than thrown.
+Future<(BudgetScope, List<CategoryRow>)> _resolveScopeAndCategories(
+  BudgetDao dao,
+  BudgetRow budget,
+  Map<String, CategoryRow> categoriesById,
+) async {
+  final categoryIds = budget.scopeType == BudgetScopeType.multiCategory
+      ? await dao.categoriesFor(budget.id)
+      : const <String>{};
+  final scope = resolveBudgetScope(budget, categoryIds);
+  final categories = [
+    for (final id in switch (scope) {
+      SingleCategoryScope(:final categoryId) => [categoryId],
+      MultiCategoryScope(:final categoryIds) => categoryIds.toList(),
+      UncategorizedScope() => const <String>[],
+      WholeAccountScope() => const <String>[],
+    })
+      if (categoriesById[id] != null) categoriesById[id]!,
+  ];
+  return (scope, categories);
+}
+
 /// Budgets paired with the spending measured against them (FR-04).
 ///
 /// Watching `.future` on the budget, transaction, and category streams makes
@@ -231,24 +293,33 @@ final budgetsStreamProvider = StreamProvider<List<BudgetRow>>((ref) {
 /// transactions on every read rather than stored on the budget
 /// (docs/DATA_MODEL.md §45), which keeps the two from ever disagreeing.
 ///
-/// Budgets whose category is missing are skipped rather than throwing; the
-/// foreign key makes that unreachable in practice, but a budget list is not
-/// worth crashing over.
+/// A `SINGLE_CATEGORY` budget whose category is missing is skipped rather
+/// than throwing; the foreign key makes that unreachable in practice, but a
+/// budget list is not worth crashing over.
 final budgetProgressProvider = FutureProvider<List<BudgetProgress>>((
   ref,
 ) async {
   final budgets = await ref.watch(budgetsStreamProvider.future);
   final categories = await ref.watch(categoriesStreamProvider.future);
   await ref.watch(transactionsStreamProvider.future);
-  final dao = ref.watch(transactionDaoProvider);
+  final transactionDao = ref.watch(transactionDaoProvider);
+  final budgetDao = ref.watch(budgetDaoProvider);
 
   final categoriesById = {for (final c in categories) c.id: c};
   final now = DateTime.now();
 
   final progress = <BudgetProgress>[];
   for (final budget in budgets) {
-    final category = categoriesById[budget.categoryId];
-    if (category == null) continue;
+    if (budget.scopeType == BudgetScopeType.singleCategory &&
+        !categoriesById.containsKey(budget.categoryId)) {
+      continue;
+    }
+
+    final (scope, resolvedCategories) = await _resolveScopeAndCategories(
+      budgetDao,
+      budget,
+      categoriesById,
+    );
 
     final window = budgetWindow(
       budget.period,
@@ -259,13 +330,10 @@ final budgetProgressProvider = FutureProvider<List<BudgetProgress>>((
     progress.add(
       BudgetProgress(
         budget: budget,
-        category: category,
+        scope: scope,
+        categories: resolvedCategories,
         window: window,
-        spentMinor: await dao.expenseTotalForCategory(
-          budget.categoryId,
-          window.from,
-          window.to,
-        ),
+        spentMinor: await _spentMinorForScope(transactionDao, scope, window),
       ),
     );
   }
@@ -290,7 +358,8 @@ final budgetHistoryProvider =
       final budgets = await ref.watch(budgetsStreamProvider.future);
       final categories = await ref.watch(categoriesStreamProvider.future);
       await ref.watch(transactionsStreamProvider.future);
-      final dao = ref.watch(transactionDaoProvider);
+      final transactionDao = ref.watch(transactionDaoProvider);
+      final budgetDao = ref.watch(budgetDaoProvider);
 
       BudgetRow? budget;
       for (final b in budgets) {
@@ -303,14 +372,16 @@ final budgetHistoryProvider =
         return const [];
       }
 
-      CategoryRow? category;
-      for (final c in categories) {
-        if (c.id == budget.categoryId) {
-          category = c;
-          break;
-        }
+      final categoriesById = {for (final c in categories) c.id: c};
+      final (scope, resolvedCategories) = await _resolveScopeAndCategories(
+        budgetDao,
+        budget,
+        categoriesById,
+      );
+      if (budget.scopeType == BudgetScopeType.singleCategory &&
+          resolvedCategories.isEmpty) {
+        return const [];
       }
-      if (category == null) return const [];
 
       final startDay = dayStart(budget.startDate);
       final now = DateTime.now();
@@ -328,12 +399,13 @@ final budgetHistoryProvider =
         history.add(
           BudgetProgress(
             budget: budget,
-            category: category,
+            scope: scope,
+            categories: resolvedCategories,
             window: window,
-            spentMinor: await dao.expenseTotalForCategory(
-              budget.categoryId,
-              window.from,
-              window.to,
+            spentMinor: await _spentMinorForScope(
+              transactionDao,
+              scope,
+              window,
             ),
           ),
         );

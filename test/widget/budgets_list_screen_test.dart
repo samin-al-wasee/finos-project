@@ -74,7 +74,7 @@ void main() {
     await BudgetDao(database).insertOne(
       BudgetsCompanion.insert(
         id: id,
-        categoryId: categoryId,
+        categoryId: Value(categoryId),
         amountMinor: amountMinor,
         period: period,
         startDate: DateTime(now.year, now.month),

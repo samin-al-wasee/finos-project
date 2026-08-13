@@ -63,7 +63,7 @@ void main() {
     await BudgetDao(database).insertOne(
       BudgetsCompanion.insert(
         id: id,
-        categoryId: 'test-food',
+        categoryId: const Value('test-food'),
         amountMinor: 1000000,
         period: period,
         startDate: startDate ?? DateTime(2020),
@@ -159,7 +159,7 @@ void main() {
     await BudgetDao(database).insertOne(
       BudgetsCompanion.insert(
         id: 'budget-custom',
-        categoryId: 'test-food',
+        categoryId: const Value('test-food'),
         amountMinor: 500000,
         period: BudgetPeriod.custom,
         startDate: DateTime(2026, 1, 1),

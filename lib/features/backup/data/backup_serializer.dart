@@ -3,6 +3,7 @@ import '../../../core/errors/app_exception.dart';
 import '../../accounts/domain/account_status.dart';
 import '../../accounts/domain/account_type.dart';
 import '../../budgets/domain/budget_period.dart';
+import '../../budgets/domain/budget_scope.dart';
 import '../../budgets/domain/budget_status.dart';
 import '../../categories/domain/category_origin.dart';
 import '../../categories/domain/category_status.dart';
@@ -81,9 +82,19 @@ abstract final class BackupSerializer {
     'updated_at': _dateToJson(row.updatedAt),
   };
 
-  static Map<String, Object?> budgetToJson(BudgetRow row) => {
+  /// [categoryIds] is the budget's `budget_categories` join rows — only ever
+  /// non-empty for a `MULTI_CATEGORY` budget
+  /// (docs/adr/007-flexible-budget-scope.md) — and is written as a
+  /// `category_ids` array only when non-empty, so a `SINGLE_CATEGORY`-only
+  /// backup is byte-for-byte what it always was.
+  static Map<String, Object?> budgetToJson(
+    BudgetRow row, {
+    Set<String> categoryIds = const {},
+  }) => {
     'id': row.id,
     'category_id': row.categoryId,
+    'scope_type': const BudgetScopeTypeConverter().toSql(row.scopeType),
+    if (categoryIds.isNotEmpty) 'category_ids': categoryIds.toList()..sort(),
     'amount_minor': row.amountMinor,
     'currency': row.currency,
     'period': const BudgetPeriodConverter().toSql(row.period),
@@ -229,6 +240,13 @@ abstract final class BackupSerializer {
     );
   }
 
+  /// Reads a budget row. `scope_type` defaults to `SINGLE_CATEGORY` when
+  /// absent, mirroring the column's own default, so a backup written before
+  /// this feature existed — which has no `scope_type` field at all — still
+  /// restores unchanged (docs/adr/007-flexible-budget-scope.md).
+  /// `category_id` is optional for the same reason `budgetToJson` only
+  /// writes it as before: it is `NULL` for every scope type except
+  /// `SINGLE_CATEGORY`.
   static BudgetRow budgetFromJson(Map<String, Object?> json) {
     const where = 'budget';
     final amountMinor = _int(json, 'amount_minor', where);
@@ -239,10 +257,25 @@ abstract final class BackupSerializer {
         'limits must be greater than zero.',
       );
     }
+    final scopeType = json['scope_type'] == null
+        ? BudgetScopeType.singleCategory
+        : _enumValue(
+            json,
+            'scope_type',
+            where,
+            const BudgetScopeTypeConverter().fromSql,
+          );
+    if (scopeType == BudgetScopeType.singleCategory &&
+        json['category_id'] == null) {
+      throw ValidationException(
+        'A single-category budget in the backup has no category_id.',
+      );
+    }
     final endDateValue = json['end_date'];
     return BudgetRow(
       id: _id(json, where),
-      categoryId: _string(json, 'category_id', where),
+      categoryId: _optionalString(json, 'category_id', where),
+      scopeType: scopeType,
       amountMinor: amountMinor,
       currency: _currency(json, where),
       period: _enumValue(
@@ -262,6 +295,30 @@ abstract final class BackupSerializer {
       createdAt: _date(json, 'created_at', where),
       updatedAt: _date(json, 'updated_at', where),
     );
+  }
+
+  /// Reads a budget's `category_ids` array — only ever present for a
+  /// `MULTI_CATEGORY` budget. Returns an empty set when absent, since every
+  /// other scope type never has one.
+  static Set<String> budgetCategoryIdsFromJson(Map<String, Object?> json) {
+    const where = 'budget';
+    final value = json['category_ids'];
+    if (value == null) return const {};
+    if (value is! List) {
+      throw ValidationException(
+        _typeMessage(where, 'category_ids', 'a list', value),
+      );
+    }
+    final ids = <String>{};
+    for (final entry in value) {
+      if (entry is! String || entry.isEmpty) {
+        throw ValidationException(
+          'A $where in the backup has an invalid entry in category_ids.',
+        );
+      }
+      ids.add(entry);
+    }
+    return ids;
   }
 
   // ------------------------------------------------------------------

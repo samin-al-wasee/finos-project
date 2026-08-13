@@ -6,7 +6,6 @@ import '../../../core/formatting/money.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
-import '../../categories/presentation/category_icon.dart';
 import '../domain/budget_period.dart';
 import '../domain/budget_progress.dart';
 import '../domain/budget_status.dart';
@@ -178,14 +177,14 @@ class _BudgetCard extends ConsumerWidget {
       children: [
         Row(
           children: [
-            CircleAvatar(child: Icon(categoryIcon(progress.category.icon))),
+            CircleAvatar(child: Icon(budgetScopeIcon(progress))),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    progress.category.name,
+                    budgetScopeLabel(progress),
                     style: theme.textTheme.titleMedium,
                   ),
                   Text(

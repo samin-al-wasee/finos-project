@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/features/budgets/data/budget_dao.dart';
 import 'package:finos_app/features/budgets/domain/budget_period.dart';
+import 'package:finos_app/features/budgets/domain/budget_scope.dart';
 import 'package:finos_app/features/budgets/domain/budget_status.dart';
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
@@ -41,7 +42,8 @@ void main() {
 
   Future<void> insert(
     String id, {
-    String categoryId = 'test-food',
+    String? categoryId = 'test-food',
+    BudgetScopeType scopeType = BudgetScopeType.singleCategory,
     int amountMinor = 1000000,
     BudgetPeriod period = BudgetPeriod.monthly,
     DateTime? startDate,
@@ -51,7 +53,8 @@ void main() {
     await dao.insertOne(
       BudgetsCompanion.insert(
         id: id,
-        categoryId: categoryId,
+        categoryId: Value(categoryId),
+        scopeType: Value(scopeType),
         amountMinor: amountMinor,
         period: period,
         startDate: startDate ?? DateTime(2026, 8, 1),
@@ -68,6 +71,9 @@ void main() {
       final row = await dao.getById('budget-1');
       expect(row, isNotNull);
       expect(row!.categoryId, 'test-food');
+      // The column default classifies every budget as SINGLE_CATEGORY unless
+      // told otherwise (docs/adr/007-flexible-budget-scope.md).
+      expect(row.scopeType, BudgetScopeType.singleCategory);
       expect(row.amountMinor, 1000000);
       expect(row.period, BudgetPeriod.monthly);
       expect(row.currency, 'BDT');
@@ -75,6 +81,18 @@ void main() {
       expect(row.endDate, isNull);
       expect(row.createdAt, isNotNull);
       expect(row.updatedAt, isNotNull);
+    });
+
+    test('accepts a null category for a non-single-category scope', () async {
+      await insert(
+        'budget-whole',
+        categoryId: null,
+        scopeType: BudgetScopeType.wholeAccount,
+      );
+
+      final row = await dao.getById('budget-whole');
+      expect(row!.categoryId, isNull);
+      expect(row.scopeType, BudgetScopeType.wholeAccount);
     });
 
     test('returns null for an unknown id', () async {
@@ -134,33 +152,111 @@ void main() {
     });
   });
 
-  group('getActiveFor', () {
-    test('finds the active budget for a category and period', () async {
+  group('getActiveForPeriod', () {
+    test('finds every active budget in the period', () async {
       await insert('budget-1');
+      await insert('budget-2', categoryId: 'test-transport');
 
-      final row = await dao.getActiveFor('test-food', BudgetPeriod.monthly);
-      expect(row?.id, 'budget-1');
+      final rows = await dao.getActiveForPeriod(BudgetPeriod.monthly);
+      expect(rows.map((r) => r.$1.id).toSet(), {'budget-1', 'budget-2'});
     });
 
     test('ignores a different period', () async {
       await insert('budget-1');
 
-      expect(await dao.getActiveFor('test-food', BudgetPeriod.weekly), isNull);
-    });
-
-    test('ignores a different category', () async {
-      await insert('budget-1');
-
-      expect(
-        await dao.getActiveFor('test-transport', BudgetPeriod.monthly),
-        isNull,
-      );
+      expect(await dao.getActiveForPeriod(BudgetPeriod.weekly), isEmpty);
     });
 
     test('ignores archived budgets', () async {
       await insert('budget-1', status: BudgetStatus.archived);
 
-      expect(await dao.getActiveFor('test-food', BudgetPeriod.monthly), isNull);
+      expect(await dao.getActiveForPeriod(BudgetPeriod.monthly), isEmpty);
+    });
+
+    test(
+      'pairs a MULTI_CATEGORY budget with its joined category set',
+      () async {
+        await insert(
+          'budget-multi',
+          categoryId: null,
+          scopeType: BudgetScopeType.multiCategory,
+        );
+        await dao.setCategoriesFor('budget-multi', {
+          'test-food',
+          'test-transport',
+        });
+
+        final rows = await dao.getActiveForPeriod(BudgetPeriod.monthly);
+        expect(rows, hasLength(1));
+        expect(rows.single.$2, {'test-food', 'test-transport'});
+      },
+    );
+
+    test(
+      'returns an empty category set for every non-multi-category scope',
+      () async {
+        await insert('budget-single');
+        await insert(
+          'budget-uncategorized',
+          categoryId: null,
+          scopeType: BudgetScopeType.uncategorized,
+        );
+        await insert(
+          'budget-whole',
+          categoryId: null,
+          scopeType: BudgetScopeType.wholeAccount,
+        );
+
+        final rows = await dao.getActiveForPeriod(BudgetPeriod.monthly);
+        for (final (_, categoryIds) in rows) {
+          expect(categoryIds, isEmpty);
+        }
+      },
+    );
+  });
+
+  group('categoriesFor and setCategoriesFor', () {
+    test('round-trips a multi-category budget\'s member categories', () async {
+      await insert(
+        'budget-multi',
+        categoryId: null,
+        scopeType: BudgetScopeType.multiCategory,
+      );
+
+      await dao.setCategoriesFor('budget-multi', {
+        'test-food',
+        'test-transport',
+      });
+
+      expect(await dao.categoriesFor('budget-multi'), {
+        'test-food',
+        'test-transport',
+      });
+    });
+
+    test(
+      'returns an empty set for a budget with no joined categories',
+      () async {
+        await insert('budget-single');
+
+        expect(await dao.categoriesFor('budget-single'), isEmpty);
+      },
+    );
+
+    test('replaces the previous set rather than appending', () async {
+      await insert(
+        'budget-multi',
+        categoryId: null,
+        scopeType: BudgetScopeType.multiCategory,
+      );
+      await dao.setCategoriesFor('budget-multi', {
+        'test-food',
+        'test-transport',
+      });
+
+      await dao.setCategoriesFor('budget-multi', {'test-food'});
+
+      expect(await dao.categoriesFor('budget-multi'), {'test-food'});
     });
   });
 

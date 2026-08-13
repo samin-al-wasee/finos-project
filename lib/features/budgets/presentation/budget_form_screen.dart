@@ -12,16 +12,21 @@ import '../../categories/domain/category_type.dart';
 import '../application/budget_controller.dart';
 import '../domain/budget_draft.dart';
 import '../domain/budget_period.dart';
+import '../domain/budget_scope.dart';
 import 'budget_labels.dart';
 
 /// Add/edit form for a single budget (FR-04).
 ///
 /// When [initial] is provided the form pre-fills and saves via update; otherwise
-/// it creates a new budget. The category picker is hidden when editing because a
-/// budget's category is fixed at creation — changing it would silently
-/// reinterpret every past reading of the budget. [draft] does the same for
-/// quick entry (docs/ARCHITECTURE.md, "quick entry") — a one-off, unsaved
-/// seed, ignored when [initial] is set.
+/// it creates a new budget. The scope-type selector and category picker are
+/// hidden when editing because a budget's scope is fixed at creation —
+/// changing it would silently reinterpret every past reading of the budget
+/// (docs/adr/007-flexible-budget-scope.md, generalising the same rule that
+/// already fixed a `SINGLE_CATEGORY` budget's category). [draft] does the same
+/// for quick entry (docs/ARCHITECTURE.md, "quick entry") — a one-off, unsaved
+/// seed, ignored when [initial] is set. Quick entry has no natural grammar for
+/// "multiple categories," so a quick-entry-created budget is always
+/// [BudgetScopeType.singleCategory].
 class BudgetFormScreen extends ConsumerStatefulWidget {
   const BudgetFormScreen({super.key, this.initial, this.draft});
 
@@ -38,7 +43,9 @@ class BudgetFormScreen extends ConsumerStatefulWidget {
 class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _amountController;
+  late BudgetScopeType _scopeType;
   String? _categoryId;
+  final Set<String> _categoryIds = {};
   late BudgetPeriod _period;
   late DateTime _startDate;
   DateTime? _endDate;
@@ -59,6 +66,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
           ? ''
           : minorUnitsToInput(presetAmountMinor),
     );
+    _scopeType = initial?.scopeType ?? BudgetScopeType.singleCategory;
     _categoryId = initial?.categoryId ?? draft?.categoryId;
     _period = initial?.period ?? draft?.period ?? BudgetPeriod.monthly;
     _startDate = initial?.startDate ?? DateTime.now();
@@ -99,27 +107,47 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
-              // ── Category ────────────────────────────────────────────────
+              // ── Scope ───────────────────────────────────────────────────
               if (_isEditing)
-                _ReadOnlyCategory(categoryId: widget.initial!.categoryId)
-              else
-                DropdownButtonFormField<String>(
-                  initialValue: _categoryId,
+                _ReadOnlyScope(budgetId: widget.initial!.id)
+              else ...[
+                DropdownButtonFormField<BudgetScopeType>(
+                  initialValue: _scopeType,
                   decoration: const InputDecoration(
-                    labelText: 'Category',
+                    labelText: 'Scope',
                     border: OutlineInputBorder(),
                   ),
                   items: [
-                    for (final category in categories)
+                    for (final type in BudgetScopeType.values)
                       DropdownMenuItem(
-                        value: category.id,
-                        child: Text(category.name),
+                        value: type,
+                        child: Text(budgetScopeTypeLabel(type)),
                       ),
                   ],
-                  onChanged: (value) => setState(() => _categoryId = value),
-                  validator: (value) =>
-                      value == null ? 'Choose a category' : null,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _scopeType = value;
+                      if (value != BudgetScopeType.singleCategory) {
+                        _categoryId = null;
+                      }
+                      if (value != BudgetScopeType.multiCategory) {
+                        _categoryIds.clear();
+                      }
+                    });
+                  },
                 ),
+                const SizedBox(height: AppSpacing.lg),
+                _CategoryInput(
+                  scopeType: _scopeType,
+                  categories: categories,
+                  categoryId: _categoryId,
+                  categoryIds: _categoryIds,
+                  onCategoryChanged: (value) =>
+                      setState(() => _categoryId = value),
+                  onCategoryIdsChanged: () => setState(() {}),
+                ),
+              ],
 
               // ── Limit ───────────────────────────────────────────────────
               const SizedBox(height: AppSpacing.lg),
@@ -258,6 +286,19 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
 
   // ── Save ────────────────────────────────────────────────────────────────
 
+  BudgetScope _buildScope() {
+    switch (_scopeType) {
+      case BudgetScopeType.singleCategory:
+        return SingleCategoryScope(_categoryId!);
+      case BudgetScopeType.multiCategory:
+        return MultiCategoryScope(_categoryIds);
+      case BudgetScopeType.uncategorized:
+        return const UncategorizedScope();
+      case BudgetScopeType.wholeAccount:
+        return const WholeAccountScope();
+    }
+  }
+
   Future<void> _save(BudgetController controller) async {
     if (!_formKey.currentState!.validate()) return;
     if (_isCustom && _endDate == null) {
@@ -280,7 +321,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
         );
       } else {
         await controller.create(
-          categoryId: _categoryId!,
+          scope: _buildScope(),
           amountMinor: amountMinor,
           period: _period,
           startDate: _startDate,
@@ -302,31 +343,118 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
   }
 }
 
-/// Shows the fixed category of a budget being edited.
-class _ReadOnlyCategory extends ConsumerWidget {
-  const _ReadOnlyCategory({required this.categoryId});
+/// The category input, conditional on [scopeType] (docs/adr/007-flexible-budget-scope.md):
+/// a single dropdown, a multi-select checklist (≥ 2 required), or explanatory
+/// text for the two category-less scopes.
+class _CategoryInput extends StatelessWidget {
+  const _CategoryInput({
+    required this.scopeType,
+    required this.categories,
+    required this.categoryId,
+    required this.categoryIds,
+    required this.onCategoryChanged,
+    required this.onCategoryIdsChanged,
+  });
 
-  final String categoryId;
+  final BudgetScopeType scopeType;
+  final List<CategoryRow> categories;
+  final String? categoryId;
+  final Set<String> categoryIds;
+  final ValueChanged<String?> onCategoryChanged;
+
+  /// Called after [categoryIds] is mutated in place, so the parent can rebuild.
+  final VoidCallback onCategoryIdsChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (scopeType) {
+      case BudgetScopeType.singleCategory:
+        return DropdownButtonFormField<String>(
+          initialValue: categoryId,
+          decoration: const InputDecoration(
+            labelText: 'Category',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            for (final category in categories)
+              DropdownMenuItem(value: category.id, child: Text(category.name)),
+          ],
+          onChanged: onCategoryChanged,
+          validator: (value) => value == null ? 'Choose a category' : null,
+        );
+      case BudgetScopeType.multiCategory:
+        return FormField<Set<String>>(
+          initialValue: categoryIds,
+          validator: (value) => (value == null || value.length < 2)
+              ? 'Choose at least 2 categories'
+              : null,
+          builder: (field) {
+            return InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Categories',
+                border: const OutlineInputBorder(),
+                errorText: field.errorText,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final category in categories)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(category.name),
+                      value: categoryIds.contains(category.id),
+                      onChanged: (checked) {
+                        if (checked == true) {
+                          categoryIds.add(category.id);
+                        } else {
+                          categoryIds.remove(category.id);
+                        }
+                        field.didChange(categoryIds);
+                        onCategoryIdsChanged();
+                      },
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      case BudgetScopeType.uncategorized:
+        return const Text('This budget covers every expense with no category.');
+      case BudgetScopeType.wholeAccount:
+        return const Text(
+          'This budget covers every expense, in every category.',
+        );
+    }
+  }
+}
+
+/// Shows the fixed scope of a budget being edited.
+class _ReadOnlyScope extends ConsumerWidget {
+  const _ReadOnlyScope({required this.budgetId});
+
+  final String budgetId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final name = ref
-        .watch(categoriesStreamProvider)
+    final label = ref
+        .watch(budgetProgressProvider)
         .maybeWhen(
-          data: (rows) => rows
-              .where((c) => c.id == categoryId)
-              .map((c) => c.name)
-              .firstOrNull,
+          data: (rows) {
+            for (final row in rows) {
+              if (row.budget.id == budgetId) return budgetScopeLabel(row);
+            }
+            return null;
+          },
           orElse: () => null,
         );
 
     return InputDecorator(
       decoration: const InputDecoration(
-        labelText: 'Category',
+        labelText: 'Scope',
         border: OutlineInputBorder(),
-        helperText: 'A budget keeps the category it was created with',
+        helperText: 'A budget keeps the scope it was created with',
       ),
-      child: Text(name ?? '—'),
+      child: Text(label ?? '—'),
     );
   }
 }

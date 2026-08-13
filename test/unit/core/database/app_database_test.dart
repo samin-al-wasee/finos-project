@@ -8,7 +8,9 @@ import 'package:finos_app/features/accounts/domain/account_status.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
 import 'package:finos_app/features/budgets/data/budget_dao.dart';
 import 'package:finos_app/features/budgets/domain/budget_period.dart';
+import 'package:finos_app/features/budgets/domain/budget_scope.dart';
 import 'package:finos_app/features/budgets/domain/budget_status.dart';
+import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/loans/data/loan_dao.dart';
 import 'package:finos_app/features/loans/domain/loan_direction.dart';
 import 'package:finos_app/features/categories/domain/category_origin.dart';
@@ -36,8 +38,8 @@ void main() {
       await database.close();
     });
 
-    test('starts at schema version 11', () {
-      expect(database.schemaVersion, 11);
+    test('starts at schema version 12', () {
+      expect(database.schemaVersion, 12);
     });
 
     test('seeds the built-in categories on a fresh database', () async {
@@ -275,7 +277,7 @@ void main() {
       await dao.insertOne(
         BudgetsCompanion.insert(
           id: 'budget-001',
-          categoryId: 'cat-food',
+          categoryId: const Value('cat-food'),
           amountMinor: 1000000,
           period: BudgetPeriod.monthly,
           startDate: DateTime(2026, 8),
@@ -322,7 +324,7 @@ void main() {
       await dao.insertOne(
         BudgetsCompanion.insert(
           id: 'budget-safe',
-          categoryId: 'cat-transport',
+          categoryId: const Value('cat-transport'),
           amountMinor: 500000,
           period: BudgetPeriod.weekly,
           startDate: DateTime(2026, 8, 10),
@@ -891,6 +893,125 @@ void main() {
       final accounts = await reopened.select(reopened.financialAccounts).get();
       expect(accounts, isEmpty);
     });
+
+    test('migrates a v11 database, relaxing budgets.category_id and adding '
+        'scope_type', () async {
+      final dir = await Directory.systemTemp.createTemp('finos_v11_to_v12');
+      final file = File('${dir.path}/migration_v12.db');
+      addTearDown(() async {
+        await file.delete();
+        await dir.delete(recursive: true);
+      });
+
+      // Build a genuinely current database first so every table other than
+      // budgets already has its final (v12) shape, then hand-roll just
+      // budgets back to its pre-ADR-007 shape — NOT NULL category_id, no
+      // scope_type column — and stamp user_version back to 11, mirroring a
+      // real pre-upgrade database exactly.
+      final seed = AppDatabase(NativeDatabase(file));
+      await CategoryDao(seed).insertOne(
+        CategoriesCompanion.insert(
+          id: 'cat-legacy',
+          name: 'Legacy Food',
+          type: CategoryType.expense,
+        ),
+      );
+      await seed.close();
+
+      // A raw wrapper matching the file's already-stamped version (12) so
+      // opening it triggers neither onCreate nor onUpgrade — it is used
+      // only to issue the DDL that rewinds budgets to its pre-v12 shape.
+      final legacy = _RawDatabase(NativeDatabase(file));
+      await legacy.customStatement('DROP TABLE budgets');
+      await legacy.customStatement(_legacyBudgetsDdl);
+      await legacy.customStatement('''
+          INSERT INTO budgets
+            (id, category_id, amount_minor, currency, period, start_date,
+             status, created_at, updated_at)
+          VALUES
+            ('budget-legacy', 'cat-legacy', 1000000, 'BDT', 'MONTHLY',
+             1754000000, 'ACTIVE', 1754000000, 1754000000)
+        ''');
+      await legacy.customStatement('PRAGMA user_version = 11');
+      await legacy.close();
+
+      // Reopen as the current schema (v12). The TableMigration rebuild
+      // must relax category_id to nullable and add scope_type, defaulting
+      // every pre-existing row to SINGLE_CATEGORY with category_id
+      // untouched.
+      final migrated = AppDatabase(NativeDatabase(file));
+      addTearDown(migrated.close);
+
+      final dao = BudgetDao(migrated);
+      final existing = await dao.getById('budget-legacy');
+      expect(existing, isNotNull);
+      expect(existing!.categoryId, 'cat-legacy');
+      expect(existing.scopeType, BudgetScopeType.singleCategory);
+      expect(existing.amountMinor, 1000000);
+
+      // The proof the rebuild actually relaxed NOT NULL, not just that the
+      // old row still reads back: a MULTI_CATEGORY budget can now be
+      // inserted with a null category_id, which the pre-v12 schema would
+      // have rejected outright.
+      await dao.insertOne(
+        BudgetsCompanion.insert(
+          id: 'budget-multi',
+          categoryId: const Value(null),
+          scopeType: const Value(BudgetScopeType.multiCategory),
+          amountMinor: 500000,
+          period: BudgetPeriod.monthly,
+          startDate: DateTime(2026, 8, 1),
+        ),
+      );
+      final multi = await dao.getById('budget-multi');
+      expect(multi!.categoryId, isNull);
+      expect(multi.scopeType, BudgetScopeType.multiCategory);
+    });
+
+    test(
+      'recovers a v12 database whose budget_categories table is missing',
+      () async {
+        final dir = await Directory.systemTemp.createTemp(
+          'finos_missing_budget_categories',
+        );
+        final file = File('${dir.path}/missing_budget_categories.db');
+        addTearDown(() async {
+          await file.delete();
+          await dir.delete(recursive: true);
+        });
+
+        // Build a genuinely correct v12 database, then simulate an
+        // interrupted migration by dropping just the budget_categories table
+        // while user_version still claims v12.
+        final complete = AppDatabase(NativeDatabase(file));
+        await complete.customStatement('DROP TABLE budget_categories');
+        await complete.close();
+
+        final reopened = AppDatabase(NativeDatabase(file));
+        addTearDown(reopened.close);
+
+        await CategoryDao(reopened).insertOne(
+          CategoriesCompanion.insert(
+            id: 'cat-safe',
+            name: 'Safe Food',
+            type: CategoryType.expense,
+          ),
+        );
+        final dao = BudgetDao(reopened);
+        await dao.insertOne(
+          BudgetsCompanion.insert(
+            id: 'budget-multi-safe',
+            categoryId: const Value(null),
+            scopeType: const Value(BudgetScopeType.multiCategory),
+            amountMinor: 500000,
+            period: BudgetPeriod.monthly,
+            startDate: DateTime(2026, 8, 1),
+          ),
+        );
+        await dao.setCategoriesFor('budget-multi-safe', {'cat-safe'});
+        expect(await dao.categoriesFor('budget-multi-safe'), {'cat-safe'});
+      },
+    );
   });
 }
 
@@ -981,6 +1102,24 @@ class _LegacyDatabase extends GeneratedDatabase {
 
   @override
   int get schemaVersion => 1;
+
+  @override
+  Iterable<TableInfo<Table, dynamic>> get allTables =>
+      const <TableInfo<Table, dynamic>>[];
+}
+
+/// A raw DDL wrapper for a file already stamped at the *current* schema
+/// version (unlike [_LegacyDatabase], which mimics a pre-v1 file). Declaring
+/// the same [schemaVersion] as the real [AppDatabase] means opening this
+/// class triggers neither `onCreate` nor `onUpgrade` — it exists purely to
+/// issue [customStatement] DDL against an otherwise-complete database before
+/// rewinding one table back to an earlier shape and stamping `user_version`
+/// down to test a specific migration step in isolation.
+class _RawDatabase extends GeneratedDatabase {
+  _RawDatabase(super.e);
+
+  @override
+  int get schemaVersion => 12;
 
   @override
   Iterable<TableInfo<Table, dynamic>> get allTables =>

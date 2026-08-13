@@ -4,6 +4,8 @@ import 'package:drift/drift.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../budgets/data/budget_dao.dart';
+import '../../budgets/domain/budget_scope.dart';
 import '../data/backup_serializer.dart';
 import '../domain/backup_envelope.dart';
 
@@ -39,6 +41,7 @@ class BackupService {
     final loans = await _database.select(_database.loans).get();
     final transactions = await _database.select(_database.transactions).get();
     final budgets = await _database.select(_database.budgets).get();
+    final budgetDao = BudgetDao(_database);
 
     final document = <String, Object?>{
       BackupFormat.versionKey: BackupFormat.version,
@@ -54,9 +57,15 @@ class BackupService {
       BackupFormat.transactionsKey: transactions
           .map(BackupSerializer.transactionToJson)
           .toList(),
-      BackupFormat.budgetsKey: budgets
-          .map(BackupSerializer.budgetToJson)
-          .toList(),
+      BackupFormat.budgetsKey: [
+        for (final budget in budgets)
+          BackupSerializer.budgetToJson(
+            budget,
+            categoryIds: budget.scopeType == BudgetScopeType.multiCategory
+                ? await budgetDao.categoriesFor(budget.id)
+                : const {},
+          ),
+      ],
     };
 
     // Indented so a user who opens the file can actually read it.
@@ -122,11 +131,7 @@ class BackupService {
       BackupFormat.transactionsKey,
       BackupSerializer.transactionFromJson,
     );
-    final budgets = _readTable(
-      decoded,
-      BackupFormat.budgetsKey,
-      BackupSerializer.budgetFromJson,
-    );
+    final (budgets, budgetCategoryIds) = _readBudgets(decoded);
 
     _validateUniqueIds(accounts.map((a) => a.id), 'account');
     _validateUniqueIds(categories.map((c) => c.id), 'category');
@@ -140,6 +145,7 @@ class BackupService {
       loans: loans,
       transactions: transactions,
       budgets: budgets,
+      budgetCategoryIds: budgetCategoryIds,
     );
 
     return ParsedBackup(
@@ -148,7 +154,54 @@ class BackupService {
       loans: loans,
       transactions: transactions,
       budgets: budgets,
+      budgetCategoryIds: budgetCategoryIds,
     );
+  }
+
+  /// Reads the `budgets` table, pairing each row with its resolved
+  /// `category_ids` (only ever non-empty for a `MULTI_CATEGORY` budget).
+  ///
+  /// A bespoke reader rather than [_readTable], because a budget's member
+  /// categories live alongside it in the same JSON record, not in a separate
+  /// top-level table (docs/adr/007-flexible-budget-scope.md) — [_readTable]
+  /// only has room for one value per entry.
+  (List<BudgetRow>, Map<String, Set<String>>) _readBudgets(
+    Map<String, Object?> json,
+  ) {
+    final value = json[BackupFormat.budgetsKey];
+    // A missing table is treated as empty: a backup taken before a feature
+    // existed simply has nothing for it.
+    if (value == null) return (const [], const {});
+    if (value is! List) {
+      throw ValidationException(
+        'The "${BackupFormat.budgetsKey}" section of this backup is not a '
+        'list.',
+      );
+    }
+
+    final rows = <BudgetRow>[];
+    final categoryIds = <String, Set<String>>{};
+    for (var index = 0; index < value.length; index++) {
+      final entry = value[index];
+      if (entry is! Map<String, Object?>) {
+        throw ValidationException(
+          'Entry ${index + 1} in "${BackupFormat.budgetsKey}" is not a '
+          'record.',
+        );
+      }
+      try {
+        final row = BackupSerializer.budgetFromJson(entry);
+        rows.add(row);
+        final ids = BackupSerializer.budgetCategoryIdsFromJson(entry);
+        if (ids.isNotEmpty) categoryIds[row.id] = ids;
+      } on ValidationException catch (error) {
+        throw ValidationException(
+          '${error.message} (entry ${index + 1} in '
+          '"${BackupFormat.budgetsKey}")',
+        );
+      }
+    }
+    return (rows, categoryIds);
   }
 
   /// Replaces every financial record with the contents of [backup].
@@ -162,7 +215,9 @@ class BackupService {
     try {
       await _database.transaction(() async {
         // Children first. Transactions reference accounts, categories, and
-        // loans; loans reference accounts.
+        // loans; loans reference accounts; budget_categories references
+        // budgets and categories.
+        await _database.delete(_database.budgetCategories).go();
         await _database.delete(_database.transactions).go();
         await _database.delete(_database.budgets).go();
         await _database.delete(_database.loans).go();
@@ -181,12 +236,25 @@ class BackupService {
           ...backup.loans.where((l) => l.groupId != null),
         ];
 
+        // budget_categories is inserted last: it references both budgets and
+        // categories, so both must already exist
+        // (docs/adr/007-flexible-budget-scope.md).
+        final budgetCategoryRows = [
+          for (final entry in backup.budgetCategoryIds.entries)
+            for (final categoryId in entry.value)
+              BudgetCategoriesCompanion.insert(
+                budgetId: entry.key,
+                categoryId: categoryId,
+              ),
+        ];
+
         await _database.batch((b) {
           b.insertAll(_database.financialAccounts, backup.accounts);
           b.insertAll(_database.categories, backup.categories);
           b.insertAll(_database.loans, orderedLoans);
           b.insertAll(_database.transactions, backup.transactions);
           b.insertAll(_database.budgets, backup.budgets);
+          b.insertAll(_database.budgetCategories, budgetCategoryRows);
         });
       });
     } on AppException {
@@ -291,6 +359,7 @@ class BackupService {
     required List<LoanRow> loans,
     required List<TransactionRow> transactions,
     required List<BudgetRow> budgets,
+    required Map<String, Set<String>> budgetCategoryIds,
   }) {
     final accountIds = accounts.map((a) => a.id).toSet();
     final categoryIds = categories.map((c) => c.id).toSet();
@@ -339,12 +408,33 @@ class BackupService {
       }
     }
 
+    // A budget's referenced categories generalise from "its one category" to
+    // its *resolved* category set (docs/adr/007-flexible-budget-scope.md):
+    // empty for UNCATEGORIZED/WHOLE_ACCOUNT, one for SINGLE_CATEGORY, and
+    // whatever `category_ids` lists for MULTI_CATEGORY.
     for (final budget in budgets) {
-      if (!categoryIds.contains(budget.categoryId)) {
+      final resolved = switch (budget.scopeType) {
+        BudgetScopeType.singleCategory =>
+          budget.categoryId == null ? const <String>{} : {budget.categoryId!},
+        BudgetScopeType.multiCategory =>
+          budgetCategoryIds[budget.id] ?? const <String>{},
+        BudgetScopeType.uncategorized => const <String>{},
+        BudgetScopeType.wholeAccount => const <String>{},
+      };
+      if (budget.scopeType == BudgetScopeType.multiCategory &&
+          resolved.length < 2) {
         throw ValidationException(
-          'A budget in this backup refers to a category that the backup does '
-          'not contain (id "${budget.categoryId}").',
+          'A multi-category budget in this backup lists fewer than 2 '
+          'categories (id "${budget.id}").',
         );
+      }
+      for (final categoryId in resolved) {
+        if (!categoryIds.contains(categoryId)) {
+          throw ValidationException(
+            'A budget in this backup refers to a category that the backup '
+            'does not contain (id "$categoryId").',
+          );
+        }
       }
     }
   }
@@ -365,6 +455,7 @@ class ParsedBackup {
     required this.transactions,
     required this.budgets,
     this.loans = const [],
+    this.budgetCategoryIds = const {},
   });
 
   final List<FinancialAccountRow> accounts;
@@ -372,6 +463,11 @@ class ParsedBackup {
   final List<TransactionRow> transactions;
   final List<BudgetRow> budgets;
   final List<LoanRow> loans;
+
+  /// Each `MULTI_CATEGORY` budget's member categories, keyed by budget id
+  /// (docs/adr/007-flexible-budget-scope.md). Every other scope type is
+  /// absent from this map.
+  final Map<String, Set<String>> budgetCategoryIds;
 
   BackupCounts get counts => BackupCounts(
     accounts: accounts.length,

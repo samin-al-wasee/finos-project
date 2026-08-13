@@ -7,8 +7,10 @@ import '../../features/accounts/data/account_table.dart';
 import '../../features/accounts/data/credit_card_details_table.dart';
 import '../../features/accounts/domain/account_status.dart';
 import '../../features/accounts/domain/account_type.dart';
+import '../../features/budgets/data/budget_category_table.dart';
 import '../../features/budgets/data/budget_table.dart';
 import '../../features/budgets/domain/budget_period.dart';
+import '../../features/budgets/domain/budget_scope.dart';
 import '../../features/budgets/domain/budget_status.dart';
 import '../../features/categories/data/built_in_categories.dart';
 import '../../features/categories/data/category_table.dart';
@@ -45,6 +47,7 @@ part 'app_database.g.dart';
     RecurringTransactions,
     SavedQueries,
     CreditCardDetails,
+    BudgetCategories,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -61,7 +64,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -124,6 +127,32 @@ class AppDatabase extends _$AppDatabase {
       if (from < 11) {
         // Additive column, null for every existing row — no loan is linked yet.
         await _addLoanGroupIdColumnIfMissing();
+      }
+      if (from < 12) {
+        // Budgets: category_id becomes nullable (a MULTI_CATEGORY/
+        // UNCATEGORIZED/WHOLE_ACCOUNT budget has no single category to store
+        // there) and gains scope_type. SQLite has no ALTER COLUMN, so
+        // relaxing an existing NOT NULL constraint needs a full table rebuild
+        // rather than an additive ALTER TABLE. TableMigration performs that
+        // rebuild with drift's own DDL, copying every matching-named column
+        // across and applying scope_type's default for the one genuinely new
+        // column, so every existing budget becomes SINGLE_CATEGORY with its
+        // category_id untouched.
+        //
+        // TableMigration requires the table it rebuilds to already exist —
+        // it copies rows out of it by name. A database that claims v4+ but
+        // never actually got its budgets table (the interrupted-migration
+        // scenario the v4 beforeOpen safety net exists for) has nothing to
+        // copy from yet, so this step is skipped for it; the safety net
+        // creates the table from the current schema afterwards, which
+        // already includes scope_type and a nullable category_id.
+        if (await _tableExists('budgets')) {
+          await m.alterTable(
+            TableMigration(budgets, newColumns: [budgets.scopeType]),
+          );
+        }
+        // CREATE TABLE IF NOT EXISTS — safe even if the table partially exists.
+        await m.createTable(budgetCategories);
       }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
@@ -188,6 +217,16 @@ class AppDatabase extends _$AppDatabase {
       // Same safety net for the v11 loans.group_id column.
       if (details.versionNow >= 11 && !details.wasCreated) {
         await _addLoanGroupIdColumnIfMissing();
+      }
+
+      // Safety net for the v12 budget_categories table only. Deliberately no
+      // net for a half-rebuilt budgets table: a TableMigration rebuild is a
+      // multi-statement sequence (create-new, copy, drop-old, rename) with no
+      // equally cheap "did this fully complete?" check, so that residual risk
+      // is an accepted trade-off (docs/adr/007-flexible-budget-scope.md)
+      // rather than one this safety net can paper over.
+      if (details.versionNow >= 12 && !details.wasCreated) {
+        await _ensureBudgetCategoriesTable();
       }
     },
   );
@@ -370,5 +409,28 @@ class AppDatabase extends _$AppDatabase {
 
     debugPrint('[AppDatabase] loans.group_id missing — adding');
     await Migrator(this).addColumn(loans, loans.groupId);
+  }
+
+  /// Safety net for a v12 database whose budget_categories table is missing.
+  ///
+  /// Same rationale as [_ensureTransactionsTable]. This is the only safety
+  /// net v12 gets: the budgets table's own rebuild has no equivalent, cheap
+  /// "is it whole?" check (docs/adr/007-flexible-budget-scope.md).
+  Future<void> _ensureBudgetCategoriesTable() async {
+    final migrator = Migrator(this);
+    await migrator.createTable(budgetCategories);
+  }
+
+  /// Whether a table named [name] currently exists.
+  ///
+  /// Used to guard the v12 `TableMigration` rebuild of `budgets`: that
+  /// rebuild copies rows out of the existing table by name, so it must not
+  /// run against a database that claims a version at or after the table was
+  /// introduced but never actually got it (an interrupted migration — the
+  /// same scenario each version's own `_ensure*Table` safety net exists
+  /// for).
+  Future<bool> _tableExists(String name) async {
+    final rows = await customSelect('PRAGMA table_info($name)').get();
+    return rows.isNotEmpty;
   }
 }

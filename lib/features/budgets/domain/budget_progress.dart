@@ -1,5 +1,6 @@
 import '../../../core/database/app_database.dart';
 import 'budget_period.dart';
+import 'budget_scope.dart';
 
 /// How a budget is doing against its limit (docs/DATA_MODEL.md §25).
 ///
@@ -9,14 +10,15 @@ enum BudgetHealth { underLimit, nearLimit, exceeded }
 
 /// A budget together with the spending measured against it for one window.
 ///
-/// Spending is the sum of EXPENSE transactions in the budget's category that
+/// Spending is the sum of EXPENSE transactions inside the budget's scope that
 /// fall inside [window]. Income and transfers are excluded: a transfer moves the
 /// user's own money between accounts and is not spending
 /// (docs/DATA_MODEL.md §17, §24).
 class BudgetProgress {
   const BudgetProgress({
     required this.budget,
-    required this.category,
+    required this.scope,
+    required this.categories,
     required this.window,
     required this.spentMinor,
   });
@@ -24,8 +26,13 @@ class BudgetProgress {
   /// The stored budget record.
   final BudgetRow budget;
 
-  /// The category the budget applies to, resolved for display.
-  final CategoryRow category;
+  /// What this budget's limit applies to (docs/adr/007-flexible-budget-scope.md).
+  final BudgetScope scope;
+
+  /// The categories [scope] resolves to, for display — 0 ([UncategorizedScope],
+  /// [WholeAccountScope]), 1 ([SingleCategoryScope]), or many
+  /// ([MultiCategoryScope]).
+  final List<CategoryRow> categories;
 
   /// The calendar window spending was measured over.
   final DateRange window;

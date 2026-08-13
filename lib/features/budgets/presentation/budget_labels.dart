@@ -1,6 +1,10 @@
+import 'package:flutter/material.dart';
+
 import '../../../core/formatting/date.dart';
+import '../../categories/presentation/category_icon.dart';
 import '../domain/budget_period.dart';
 import '../domain/budget_progress.dart';
+import '../domain/budget_scope.dart';
 
 /// User-facing label for a [BudgetPeriod].
 ///
@@ -38,3 +42,38 @@ String budgetHealthLabel(BudgetHealth health) {
       return 'Over budget';
   }
 }
+
+/// User-facing label for a [BudgetScopeType].
+///
+/// Used by the create form's scope-type selector.
+String budgetScopeTypeLabel(BudgetScopeType type) {
+  switch (type) {
+    case BudgetScopeType.singleCategory:
+      return 'Single category';
+    case BudgetScopeType.multiCategory:
+      return 'Multiple categories';
+    case BudgetScopeType.uncategorized:
+      return 'Uncategorised spending';
+    case BudgetScopeType.wholeAccount:
+      return 'Whole account';
+  }
+}
+
+/// What a budget covers, for display in place of a single category name
+/// (docs/adr/007-flexible-budget-scope.md) — a category name for
+/// [SingleCategoryScope], a count for [MultiCategoryScope], or a fixed phrase
+/// for the two category-less scopes.
+String budgetScopeLabel(BudgetProgress progress) => switch (progress.scope) {
+  SingleCategoryScope() => progress.categories.single.name,
+  MultiCategoryScope() => '${progress.categories.length} categories',
+  UncategorizedScope() => 'Uncategorised',
+  WholeAccountScope() => 'Whole account',
+};
+
+/// The icon representing what a budget covers, mirroring [budgetScopeLabel].
+IconData budgetScopeIcon(BudgetProgress progress) => switch (progress.scope) {
+  SingleCategoryScope() => categoryIcon(progress.categories.single.icon),
+  MultiCategoryScope() => Icons.category_outlined,
+  UncategorizedScope() => Icons.help_outline,
+  WholeAccountScope() => Icons.account_balance_wallet_outlined,
+};
