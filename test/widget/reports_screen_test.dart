@@ -355,6 +355,43 @@ void main() {
     await database.close();
   });
 
+  testWidgets(
+    'shows an investment with an early withdrawal this period in '
+    'Investment Activity (docs/adr/010-investment-early-withdrawal.md)',
+    (tester) async {
+      final database = await pumpReports(tester);
+      final accounts = AccountDao(database);
+      final controller = InvestmentController(
+        database,
+        InvestmentDao(database),
+        TransactionDao(database),
+        accounts,
+      );
+
+      final id = await controller.create(
+        name: '1-year FDR',
+        instrumentType: InvestmentInstrumentType.fdr,
+        contributionMode: InvestmentContributionMode.lumpSum,
+        amountMinor: 500000, // ৳5,000
+        sourceAccountId: 'acct-1',
+        payoutAccountId: 'acct-1',
+        startDate: lastMonth,
+        maturityDate: DateTime(thisMonth.year + 1, thisMonth.month, 1),
+      );
+      await controller.confirmWithdrawal(
+        id,
+        amountMinor: 200000, // ৳2,000
+        date: thisMonth,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Investment Activity'), findsOneWidget);
+      expect(find.text('Withdrawn ৳2,000.00'), findsOneWidget);
+
+      await database.close();
+    },
+  );
+
   testWidgets('shows this month\'s total in the Monthly Spending trend', (
     tester,
   ) async {

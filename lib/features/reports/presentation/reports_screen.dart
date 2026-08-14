@@ -715,14 +715,15 @@ class _AccountCashFlowRow extends StatelessWidget {
 }
 
 /// One row in the Investment Activity section — one investment's
-/// contribution and payout for the selected period, plus the same two
-/// figures for the previous period as plain text.
+/// contribution, payout, and withdrawal for the selected period, plus the
+/// same figures for the previous period as plain text.
 ///
-/// Unlike [_AccountCashFlowRow], contribution and payout are two separate
-/// non-negative figures rather than one signed net: a contribution moving
-/// money in and a payout moving money out are both ordinary activity for the
-/// same investment in the same period, not opposing directions of a single
-/// flow, so there's nothing to net them into (docs/ROADMAP.md §8.4).
+/// Unlike [_AccountCashFlowRow], these are separate non-negative figures
+/// rather than one signed net: a contribution moving money in, a payout
+/// moving profit out, and a withdrawal returning principal early
+/// (docs/adr/010-investment-early-withdrawal.md) are all ordinary activity
+/// for the same investment in the same period, not opposing directions of a
+/// single flow, so there's nothing to net them into (docs/ROADMAP.md §8.4).
 class _InvestmentActivityRow extends StatelessWidget {
   const _InvestmentActivityRow({required this.activity});
 
@@ -749,34 +750,50 @@ class _InvestmentActivityRow extends StatelessWidget {
                 style: theme.textTheme.bodyMedium,
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  'Contributed ${formatMinorUnits(activity.totals.contributedMinor)}',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (activity.totals.payoutMinor != 0)
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
                   Text(
-                    'Payout ${formatMinorUnits(activity.totals.payoutMinor)}',
+                    'Contributed ${formatMinorUnits(activity.totals.contributedMinor)}',
+                    textAlign: TextAlign.end,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colors.income,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                Text(
-                  'Last period: '
-                  '${formatMinorUnits(activity.previousTotals.contributedMinor)} '
-                  'contributed, '
-                  '${formatMinorUnits(activity.previousTotals.payoutMinor)} '
-                  'payout',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.mutedText,
+                  if (activity.totals.payoutMinor != 0)
+                    Text(
+                      'Payout ${formatMinorUnits(activity.totals.payoutMinor)}',
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colors.income,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  if (activity.totals.withdrawnMinor != 0)
+                    Text(
+                      'Withdrawn '
+                      '${formatMinorUnits(activity.totals.withdrawnMinor)}',
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  Text(
+                    'Last period: '
+                    '${formatMinorUnits(activity.previousTotals.contributedMinor)} '
+                    'contributed, '
+                    '${formatMinorUnits(activity.previousTotals.payoutMinor)} '
+                    'payout, '
+                    '${formatMinorUnits(activity.previousTotals.withdrawnMinor)} '
+                    'withdrawn',
+                    textAlign: TextAlign.end,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.mutedText,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),

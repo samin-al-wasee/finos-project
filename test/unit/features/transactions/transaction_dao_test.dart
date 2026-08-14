@@ -422,6 +422,14 @@ void main() {
             date: DateTime(2026, 8, 12),
           );
           await seedTransaction(
+            'withdrawal-1',
+            accountId: source,
+            type: TransactionType.investmentWithdrawal,
+            amountMinor: 40000,
+            investmentId: 'inv-1',
+            date: DateTime(2026, 8, 15),
+          );
+          await seedTransaction(
             'outside-range',
             accountId: source,
             type: TransactionType.investmentContribution,
@@ -437,7 +445,9 @@ void main() {
 
           expect(result['inv-1']!.contributedMinor, 500000);
           expect(result['inv-1']!.payoutMinor, 12000);
+          expect(result['inv-1']!.withdrawnMinor, 40000);
           expect(result['inv-2']!.contributedMinor, 300000);
+          expect(result['inv-2']!.withdrawnMinor, 0);
           expect(result['inv-2']!.payoutMinor, 0);
         },
       );

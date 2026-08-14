@@ -17,6 +17,12 @@ import 'package:drift/drift.dart';
 /// fixed-term investments (docs/adr/009-investment-accounting.md): a
 /// contribution debits the investment's source account, a payout credits its
 /// payout account. Like loan movements, they are balance-sheet movements only.
+///
+/// [investmentWithdrawal] records an early return of principal — before
+/// maturity — rather than profit (docs/adr/010-investment-early-withdrawal.md).
+/// It credits the payout account exactly like [investmentPayout], but is a
+/// distinct type so a payout's date relative to maturity stays the only thing
+/// that decides profit-vs-principal (ADR-009 §2), never an inferred flag.
 enum TransactionType {
   income,
   expense,
@@ -25,6 +31,7 @@ enum TransactionType {
   loanPayment,
   investmentContribution,
   investmentPayout,
+  investmentWithdrawal,
 }
 
 /// Maps [TransactionType] to its canonical uppercase storage value in the
@@ -41,6 +48,7 @@ class TransactionTypeConverter extends TypeConverter<TransactionType, String> {
     TransactionType.loanPayment: 'LOAN_PAYMENT',
     TransactionType.investmentContribution: 'INVESTMENT_CONTRIBUTION',
     TransactionType.investmentPayout: 'INVESTMENT_PAYOUT',
+    TransactionType.investmentWithdrawal: 'INVESTMENT_WITHDRAWAL',
   };
 
   @override
@@ -76,4 +84,5 @@ bool isLoanTransaction(TransactionType type) =>
 /// activity.
 bool isInvestmentTransaction(TransactionType type) =>
     type == TransactionType.investmentContribution ||
-    type == TransactionType.investmentPayout;
+    type == TransactionType.investmentPayout ||
+    type == TransactionType.investmentWithdrawal;

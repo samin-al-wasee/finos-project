@@ -7,8 +7,10 @@ import 'transaction_type.dart';
 /// [TransactionType.loanPayment]: to a user filtering their history, a loan
 /// disbursement and a loan repayment are both "loan activity," not two
 /// unrelated types. [investment] is the same grouping for
-/// [TransactionType.investmentContribution]/[TransactionType.investmentPayout]
-/// (docs/adr/009-investment-accounting.md).
+/// [TransactionType.investmentContribution],
+/// [TransactionType.investmentPayout], and
+/// [TransactionType.investmentWithdrawal] (docs/adr/009-investment-accounting.md,
+/// docs/adr/010-investment-early-withdrawal.md).
 enum TransactionTypeFilter { income, expense, transfer, loan, investment }
 
 /// Maps a stored [TransactionType] to the [TransactionTypeFilter] it belongs to.
@@ -25,6 +27,7 @@ TransactionTypeFilter typeFilterFor(TransactionType type) {
       return TransactionTypeFilter.loan;
     case TransactionType.investmentContribution:
     case TransactionType.investmentPayout:
+    case TransactionType.investmentWithdrawal:
       return TransactionTypeFilter.investment;
   }
 }

@@ -14,6 +14,7 @@ import '../domain/investment_progress.dart';
 import 'investment_form_screen.dart';
 import 'investment_labels.dart';
 import 'investment_payout_dialog.dart';
+import 'investment_withdrawal_dialog.dart';
 
 /// Investment detail screen (docs/adr/009-investment-accounting.md).
 ///
@@ -100,6 +101,19 @@ class _Details extends ConsumerWidget {
           label: 'Paid out',
           value: formatMinorUnits(progress.payoutReceivedMinor, symbol: symbol),
         ),
+        if (progress.withdrawnMinor > 0) ...[
+          _AmountRow(
+            label: 'Withdrawn early',
+            value: formatMinorUnits(progress.withdrawnMinor, symbol: symbol),
+          ),
+          _AmountRow(
+            label: 'Remaining principal',
+            value: formatMinorUnits(
+              progress.remainingPrincipalMinor,
+              symbol: symbol,
+            ),
+          ),
+        ],
 
         Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -424,6 +438,8 @@ class _InvestmentMenu extends ConsumerWidget {
       onSelected: (value) => _handle(context, ref, value),
       itemBuilder: (context) => [
         const PopupMenuItem(value: 'edit', child: Text('Edit')),
+        if (progress.canWithdraw())
+          const PopupMenuItem(value: 'withdraw', child: Text('Withdraw')),
         if (progress.isArchived)
           const PopupMenuItem(value: 'restore', child: Text('Restore'))
         else
@@ -456,9 +472,9 @@ class _InvestmentMenu extends ConsumerWidget {
           title: const Text('Delete this investment?'),
           content: const Text(
             'This removes the investment and, for a lump-sum instrument, the '
-            'contribution that created it. Investments with a payout — or a '
-            'recurring instrument with any confirmed installment — cannot be '
-            'deleted; archive them instead.',
+            'contribution that created it. Investments with a payout or '
+            'withdrawal — or a recurring instrument with any confirmed '
+            'installment — cannot be deleted; archive them instead.',
           ),
           actions: [
             TextButton(
@@ -481,6 +497,34 @@ class _InvestmentMenu extends ConsumerWidget {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text('$e')));
+        }
+      }
+      return;
+    }
+
+    if (value == 'withdraw') {
+      final result = await InvestmentWithdrawalDialog.show(
+        context,
+        progress: progress,
+      );
+      if (result == null || !context.mounted) return;
+
+      try {
+        await controller.confirmWithdrawal(
+          progress.investment.id,
+          amountMinor: result.amountMinor,
+          date: result.date,
+        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Withdrawal recorded')));
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Could not record it: $e')));
         }
       }
       return;

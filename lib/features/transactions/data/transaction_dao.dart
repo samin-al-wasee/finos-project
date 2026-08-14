@@ -90,6 +90,8 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                THEN -amount_minor
           WHEN type = '${_storage(TransactionType.investmentPayout)}'
                THEN amount_minor
+          WHEN type = '${_storage(TransactionType.investmentWithdrawal)}'
+               THEN amount_minor
           ELSE 0
         END
       ), 0) AS impact
@@ -132,6 +134,8 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
           WHEN type = '${_storage(TransactionType.investmentContribution)}'
                THEN -amount_minor
           WHEN type = '${_storage(TransactionType.investmentPayout)}'
+               THEN amount_minor
+          WHEN type = '${_storage(TransactionType.investmentWithdrawal)}'
                THEN amount_minor
           ELSE 0
         END
@@ -369,6 +373,8 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                THEN -amount_minor
           WHEN type = '${_storage(TransactionType.investmentPayout)}'
                THEN amount_minor
+          WHEN type = '${_storage(TransactionType.investmentWithdrawal)}'
+               THEN amount_minor
           ELSE 0
         END
       ), 0) AS impact
@@ -444,11 +450,11 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return row.read<int>('total');
   }
 
-  /// Contribution and payout totals for every investment with activity dated
-  /// `from <= date < to`, keyed by investment id — the Investment Activity
-  /// report section's query (docs/ROADMAP.md §8.4). One grouped query rather
-  /// than N calls to [investmentMovementTotal], the same reasoning
-  /// [expenseTotalsByCategory] already applies to categories.
+  /// Contribution, payout, and withdrawal totals for every investment with
+  /// activity dated `from <= date < to`, keyed by investment id — the
+  /// Investment Activity report section's query (docs/ROADMAP.md §8.4). One
+  /// grouped query rather than N calls to [investmentMovementTotal], the same
+  /// reasoning [expenseTotalsByCategory] already applies to categories.
   Future<Map<String, InvestmentPeriodTotals>> investmentTotalsByInvestment(
     DateTime from,
     DateTime to,
@@ -463,7 +469,11 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       COALESCE(SUM(
         CASE WHEN type = '${_storage(TransactionType.investmentPayout)}'
              THEN amount_minor ELSE 0 END
-      ), 0) AS paidOut
+      ), 0) AS paidOut,
+      COALESCE(SUM(
+        CASE WHEN type = '${_storage(TransactionType.investmentWithdrawal)}'
+             THEN amount_minor ELSE 0 END
+      ), 0) AS withdrawn
       FROM transactions
       WHERE investment_id IS NOT NULL AND date >= ? AND date < ?
       GROUP BY investment_id
@@ -476,6 +486,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         row.read<String>('investmentId'): InvestmentPeriodTotals(
           contributedMinor: row.read<int>('contributed'),
           payoutMinor: row.read<int>('paidOut'),
+          withdrawnMinor: row.read<int>('withdrawn'),
         ),
     };
   }

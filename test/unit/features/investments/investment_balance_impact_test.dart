@@ -129,6 +129,52 @@ void main() {
     });
   });
 
+  group('an early withdrawal', () {
+    test(
+      'increases the payout account balance again, like a payout',
+      () async {
+        final id = await controller.create(
+          name: 'FDR',
+          instrumentType: InvestmentInstrumentType.fdr,
+          contributionMode: InvestmentContributionMode.lumpSum,
+          amountMinor: 2000000,
+          sourceAccountId: 'acct-bank',
+          payoutAccountId: 'acct-bank',
+          maturityDate: DateTime(2027, 1, 1),
+        );
+
+        await controller.confirmWithdrawal(id, amountMinor: 500000);
+
+        // ৳100,000 − ৳20,000 + ৳5,000
+        expect(await balanceOf('acct-bank'), 8500000);
+      },
+    );
+
+    test('to a different account only affects that account', () async {
+      await accounts.insertOne(
+        FinancialAccountsCompanion.insert(
+          id: 'acct-cash',
+          name: 'Cash',
+          type: AccountType.cash,
+        ),
+      );
+      final id = await controller.create(
+        name: 'FDR',
+        instrumentType: InvestmentInstrumentType.fdr,
+        contributionMode: InvestmentContributionMode.lumpSum,
+        amountMinor: 2000000,
+        sourceAccountId: 'acct-bank',
+        payoutAccountId: 'acct-cash',
+        maturityDate: DateTime(2027, 1, 1),
+      );
+
+      await controller.confirmWithdrawal(id, amountMinor: 500000);
+
+      expect(await balanceOf('acct-bank'), 8000000); // unchanged since funding
+      expect(await balanceOf('acct-cash'), 500000);
+    });
+  });
+
   group('a recurring contribution (DPS)', () {
     test('each confirmed installment reduces the source balance', () async {
       final id = await controller.create(
@@ -182,6 +228,21 @@ void main() {
         amountMinor: 2000000,
         date: DateTime(2027, 1, 1),
       );
+
+      expect(await transactions.totalBalanceImpact(), 0);
+    });
+
+    test('a withdrawal increases the total the user holds', () async {
+      final id = await controller.create(
+        name: 'FDR',
+        instrumentType: InvestmentInstrumentType.fdr,
+        contributionMode: InvestmentContributionMode.lumpSum,
+        amountMinor: 2000000,
+        sourceAccountId: 'acct-bank',
+        payoutAccountId: 'acct-bank',
+        maturityDate: DateTime(2027, 1, 1),
+      );
+      await controller.confirmWithdrawal(id, amountMinor: 2000000);
 
       expect(await transactions.totalBalanceImpact(), 0);
     });
@@ -258,6 +319,28 @@ void main() {
       await controller.confirmNextPayout(
         id,
         amountMinor: 2200000,
+        date: DateTime(2026, 8, 10),
+      );
+
+      final totals = await transactions.totalsForPeriod(from, to);
+      expect(totals.incomeMinor, 0);
+      expect(totals.expenseMinor, 0);
+    });
+
+    test('a withdrawal is not income', () async {
+      final id = await controller.create(
+        name: 'FDR',
+        instrumentType: InvestmentInstrumentType.fdr,
+        contributionMode: InvestmentContributionMode.lumpSum,
+        amountMinor: 2000000,
+        sourceAccountId: 'acct-bank',
+        payoutAccountId: 'acct-bank',
+        startDate: DateTime(2026, 1, 1),
+        maturityDate: DateTime(2027, 1, 1),
+      );
+      await controller.confirmWithdrawal(
+        id,
+        amountMinor: 500000,
         date: DateTime(2026, 8, 10),
       );
 
@@ -408,6 +491,12 @@ void main() {
         ),
         'INVESTMENT_PAYOUT',
       );
+      expect(
+        const TransactionTypeConverter().toSql(
+          TransactionType.investmentWithdrawal,
+        ),
+        'INVESTMENT_WITHDRAWAL',
+      );
 
       await controller.create(
         name: 'FDR',
@@ -422,6 +511,33 @@ void main() {
           .customSelect('SELECT type FROM transactions')
           .get();
       expect(raw.single.read<String>('type'), 'INVESTMENT_CONTRIBUTION');
+    });
+
+    test('a withdrawal round-trips with an underscore-separated value', () async {
+      final id = await controller.create(
+        name: 'FDR',
+        instrumentType: InvestmentInstrumentType.fdr,
+        contributionMode: InvestmentContributionMode.lumpSum,
+        amountMinor: 2000000,
+        sourceAccountId: 'acct-bank',
+        payoutAccountId: 'acct-bank',
+        maturityDate: DateTime(2027, 1, 1),
+      );
+      await controller.confirmWithdrawal(id, amountMinor: 500000);
+
+      final movements = await transactions.forInvestment(id);
+      final withdrawal = movements.firstWhere(
+        (m) => m.type == TransactionType.investmentWithdrawal,
+      );
+      expect(withdrawal.type, TransactionType.investmentWithdrawal);
+
+      final raw = await database
+          .customSelect(
+            'SELECT type FROM transactions WHERE id = ?',
+            variables: [Variable(withdrawal.id)],
+          )
+          .getSingle();
+      expect(raw.read<String>('type'), 'INVESTMENT_WITHDRAWAL');
     });
   });
 }

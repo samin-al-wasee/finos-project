@@ -186,6 +186,9 @@ class _Amount extends StatelessWidget {
       case TransactionType.investmentPayout:
         sign = '+';
         color = colors.transfer;
+      case TransactionType.investmentWithdrawal:
+        sign = '+';
+        color = colors.transfer;
     }
 
     return Text(

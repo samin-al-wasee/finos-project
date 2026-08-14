@@ -956,9 +956,22 @@ Progress
 > `accountCashFlowsForReport` already applies to accounts.
 >
 > Deliberately not built: any interest-rate field or calculated expected
-> payout (a real amount is always entered by the user when confirmed) and
-> early encashment/partial withdrawal — still a possible fast-follow.
-> **Stocks, Bonds, Mutual Funds,
+> payout (a real amount is always entered by the user when confirmed).
+>
+> **Update:** Early encashment/partial withdrawal is now built
+> ([ADR-010](adr/010-investment-early-withdrawal.md)), the last of the three
+> fast-follows named above. A new `INVESTMENT_WITHDRAWAL` transaction type
+> records principal returned before maturity — distinct from
+> `INVESTMENT_PAYOUT`, which stays profit-only. `InvestmentProgress` gained
+> `remainingPrincipalMinor` (contributed minus withdrawn, clamped at zero,
+> the same pattern `LoanProgress.outstandingMinor` uses) and
+> `isFullyWithdrawn` (the investment analogue of a fully-repaid loan) —
+> reaching it does not archive the investment automatically, mirroring how a
+> paid-off loan doesn't archive itself either. Net Worth (§9.1) and the
+> Investment Activity report section (§8.4) both updated to use/show it. A
+> withdrawal is only accepted before maturity — once matured, the existing
+> maturity-payout flow is the only way to record the final proceeds, so the
+> two mechanisms never overlap. **Stocks, Bonds, Mutual Funds,
 > ETFs, Crypto, and brokerage-style holdings below remain entirely
 > unbuilt** — the rest of
 > this section describes that unbuilt future scope.

@@ -36,11 +36,13 @@ void main() {
     InvestmentStatus status = InvestmentStatus.active,
     int contributedMinor = 0,
     int payoutMinor = 0,
+    int withdrawnMinor = 0,
   }) => InvestmentActivity(
     investment: investmentWith(id, status: status),
     totals: InvestmentPeriodTotals(
       contributedMinor: contributedMinor,
       payoutMinor: payoutMinor,
+      withdrawnMinor: withdrawnMinor,
     ),
     previousTotals: const InvestmentPeriodTotals(
       contributedMinor: 0,
@@ -79,6 +81,15 @@ void main() {
     final result = investmentActivityForReport([payoutOnly]);
 
     expect(result, [payoutOnly]);
+  });
+
+  test('keeps an investment with only a withdrawal '
+      '(docs/adr/010-investment-early-withdrawal.md)', () {
+    final withdrawalOnly = activityWith('withdrawal', withdrawnMinor: 3000);
+
+    final result = investmentActivityForReport([withdrawalOnly]);
+
+    expect(result, [withdrawalOnly]);
   });
 
   test('preserves input order', () {

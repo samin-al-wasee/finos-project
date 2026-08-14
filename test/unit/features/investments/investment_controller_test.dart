@@ -373,6 +373,121 @@ void main() {
     });
   });
 
+  group('confirmWithdrawal', () {
+    Future<String> createFdr() => controller.create(
+      name: '1-year FDR',
+      instrumentType: InvestmentInstrumentType.fdr,
+      contributionMode: InvestmentContributionMode.lumpSum,
+      amountMinor: 2000000,
+      sourceAccountId: 'acct-bank',
+      payoutAccountId: 'acct-bank',
+      startDate: DateTime(2026, 1, 1),
+      maturityDate: DateTime(2027, 1, 1),
+    );
+
+    test(
+      'records a withdrawal transaction and reduces remaining principal',
+      () async {
+        final id = await createFdr();
+
+        final txnId = await controller.confirmWithdrawal(
+          id,
+          amountMinor: 500000,
+          date: DateTime(2026, 6, 1),
+        );
+
+        final movements = await transactions.forInvestment(id);
+        final withdrawals = movements
+            .where((m) => m.type == TransactionType.investmentWithdrawal)
+            .toList();
+        expect(withdrawals, hasLength(1));
+        expect(withdrawals.single.id, txnId);
+        expect(withdrawals.single.amountMinor, 500000);
+        expect(withdrawals.single.date, DateTime(2026, 6, 1));
+        expect(withdrawals.single.accountId, 'acct-bank');
+
+        final row = (await investments.getById(id))!;
+        final progress = await controller.progressFor(row);
+        expect(progress.withdrawnMinor, 500000);
+        expect(progress.remainingPrincipalMinor, 1500000);
+        expect(progress.isFullyWithdrawn, isFalse);
+      },
+    );
+
+    test('withdrawing everything sets isFullyWithdrawn without changing '
+        'status', () async {
+      final id = await createFdr();
+
+      await controller.confirmWithdrawal(id, amountMinor: 2000000);
+
+      final row = (await investments.getById(id))!;
+      final progress = await controller.progressFor(row);
+      expect(progress.remainingPrincipalMinor, 0);
+      expect(progress.isFullyWithdrawn, isTrue);
+      expect(row.status, InvestmentStatus.active);
+    });
+
+    test('rejects a zero or negative amount', () async {
+      final id = await createFdr();
+
+      expect(
+        () => controller.confirmWithdrawal(id, amountMinor: 0),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects an amount larger than what remains', () async {
+      final id = await createFdr();
+      await controller.confirmWithdrawal(id, amountMinor: 500000);
+
+      expect(
+        () => controller.confirmWithdrawal(id, amountMinor: 1600000),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects a withdrawal once the investment has matured', () async {
+      final id = await controller.create(
+        name: '1-year FDR',
+        instrumentType: InvestmentInstrumentType.fdr,
+        contributionMode: InvestmentContributionMode.lumpSum,
+        amountMinor: 2000000,
+        sourceAccountId: 'acct-bank',
+        payoutAccountId: 'acct-bank',
+        startDate: DateTime(2020, 1, 1),
+        maturityDate: DateTime(2020, 6, 1), // long past — already matured
+      );
+
+      await expectLater(
+        () => controller.confirmWithdrawal(id, amountMinor: 100000),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message.toString(),
+            'message',
+            contains('maturity payout'),
+          ),
+        ),
+      );
+    });
+
+    test('rejects a withdrawal on an archived investment', () async {
+      final id = await createFdr();
+      await controller.archive(id);
+
+      expect(
+        () => controller.confirmWithdrawal(id, amountMinor: 100000),
+        throwsStateError,
+      );
+    });
+
+    test('throws for an unknown investment', () async {
+      expect(
+        () => controller.confirmWithdrawal('inv-ghost', amountMinor: 1000),
+        throwsStateError,
+      );
+    });
+  });
+
   group('update', () {
     test('changes the name only', () async {
       final id = await controller.create(
@@ -472,6 +587,36 @@ void main() {
           maturityDate: DateTime(2027, 1, 1),
         );
         await controller.confirmNextPayout(id, amountMinor: 100000);
+
+        await expectLater(
+          () => controller.delete(id),
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message.toString(),
+              'message',
+              contains('Archive it instead'),
+            ),
+          ),
+        );
+
+        expect(await investments.getById(id), isNotNull);
+      },
+    );
+
+    test(
+      'refuses to delete a lump-sum investment once a withdrawal is '
+      'recorded',
+      () async {
+        final id = await controller.create(
+          name: 'FDR',
+          instrumentType: InvestmentInstrumentType.fdr,
+          contributionMode: InvestmentContributionMode.lumpSum,
+          amountMinor: 5000000,
+          sourceAccountId: 'acct-bank',
+          payoutAccountId: 'acct-bank',
+          maturityDate: DateTime(2027, 1, 1),
+        );
+        await controller.confirmWithdrawal(id, amountMinor: 100000);
 
         await expectLater(
           () => controller.delete(id),

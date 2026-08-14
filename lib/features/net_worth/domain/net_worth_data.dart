@@ -60,15 +60,19 @@ class NetWorthData {
 /// when [LoanDirection.lent] (money owed to the user) or a liability when
 /// [LoanDirection.borrowed] (money the user owes).
 ///
-/// An investment contributes its full [InvestmentProgress.contributedMinor]
-/// as an asset — its locked principal — until [InvestmentProgress.isSettled]
-/// (its maturity payout has actually been recorded), at which point it
-/// contributes nothing. A *periodic* payout (e.g. Sanchayapatra's quarterly
-/// profit) never reduces this: it is new profit credited to the payout
-/// account, not a return of principal, and is already counted there via
-/// [balances] — so unlike [payoutReceivedMinor] as a whole, only the
-/// maturity settlement zeroes this out
-/// (docs/adr/009-investment-accounting.md).
+/// An investment contributes its [InvestmentProgress.remainingPrincipalMinor]
+/// as an asset — its locked principal, minus anything already withdrawn
+/// early (docs/adr/010-investment-early-withdrawal.md) — until
+/// [InvestmentProgress.isSettled] (its maturity payout has actually been
+/// recorded), at which point it contributes nothing. For every investment
+/// with no early withdrawal, `remainingPrincipalMinor` equals
+/// `contributedMinor`, so this is unchanged from before that ADR. A
+/// *periodic* payout (e.g. Sanchayapatra's quarterly profit) never reduces
+/// this: it is new profit credited to the payout account, not a return of
+/// principal, and is already counted there via [balances] — so unlike
+/// [payoutReceivedMinor] as a whole, only a withdrawal or the maturity
+/// settlement reduces this (docs/adr/009-investment-accounting.md,
+/// docs/adr/010-investment-early-withdrawal.md).
 NetWorthData computeNetWorth({
   required List<FinancialAccountRow> accounts,
   required Map<String, int> balances,
@@ -106,11 +110,11 @@ NetWorthData computeNetWorth({
 
   for (final progress in investments) {
     if (progress.isArchived || progress.isSettled) continue;
-    if (progress.contributedMinor <= 0) continue;
+    if (progress.remainingPrincipalMinor <= 0) continue;
     assets.add(
       NetWorthEntry(
         label: progress.investment.name,
-        amountMinor: progress.contributedMinor,
+        amountMinor: progress.remainingPrincipalMinor,
       ),
     );
   }

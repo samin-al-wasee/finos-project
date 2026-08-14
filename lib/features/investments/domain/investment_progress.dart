@@ -20,6 +20,7 @@ class InvestmentProgress {
     required this.investment,
     required this.contributedMinor,
     required this.payoutReceivedMinor,
+    this.withdrawnMinor = 0,
     this.latestPayoutDate,
   });
 
@@ -33,8 +34,47 @@ class InvestmentProgress {
   /// in integer minor units.
   final int payoutReceivedMinor;
 
+  /// Total principal returned early so far, via `INVESTMENT_WITHDRAWAL`
+  /// transactions (docs/adr/010-investment-early-withdrawal.md) — distinct
+  /// from [payoutReceivedMinor], which is profit.
+  final int withdrawnMinor;
+
   /// The date of the most recent payout transaction, if any.
   final DateTime? latestPayoutDate;
+
+  /// What's left of the contributed principal after early withdrawals.
+  ///
+  /// Clamped at zero for the same reason `LoanProgress.outstandingMinor` is:
+  /// a withdrawal can never be recorded for more than what's currently
+  /// remaining (enforced in `InvestmentController.confirmWithdrawal`), so a
+  /// negative value here would mean corrupt data, never a real credit.
+  int get remainingPrincipalMinor {
+    final remaining = contributedMinor - withdrawnMinor;
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  /// True once every bit of contributed principal has been withdrawn early —
+  /// the investment analogue of `LoanProgress.isPaid`. This does not affect
+  /// [investment]'s stored `status`: reaching it is a derived fact, not a
+  /// lifecycle transition (docs/adr/010-investment-early-withdrawal.md).
+  bool get isFullyWithdrawn =>
+      contributedMinor > 0 && remainingPrincipalMinor == 0;
+
+  /// The largest withdrawal that may still be recorded against this
+  /// investment. Over-withdrawal is rejected
+  /// (docs/adr/010-investment-early-withdrawal.md), so this is exactly the
+  /// remaining principal.
+  int get maxWithdrawalMinor => remainingPrincipalMinor;
+
+  /// Whether an early withdrawal may be recorded right now.
+  ///
+  /// A withdrawal is only for *before* maturity — once matured, the existing
+  /// maturity-payout flow ([isMaturityPayoutDue]) is how the final proceeds
+  /// are recorded instead, so the two mechanisms for returning principal
+  /// never overlap (docs/adr/010-investment-early-withdrawal.md). [now] is
+  /// injectable so tests are not tied to the clock.
+  bool canWithdraw({DateTime? now}) =>
+      !isArchived && !isMatured(now: now) && remainingPrincipalMinor > 0;
 
   /// Whether the investment is archived (a stored lifecycle state).
   bool get isArchived => investment.status == InvestmentStatus.archived;

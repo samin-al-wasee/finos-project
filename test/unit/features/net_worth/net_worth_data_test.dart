@@ -63,6 +63,7 @@ void main() {
     required String id,
     int contributedMinor = 100000,
     int payoutReceivedMinor = 0,
+    int withdrawnMinor = 0,
     DateTime? latestPayoutDate,
     InvestmentStatus status = InvestmentStatus.active,
     DateTime? maturityDate,
@@ -89,6 +90,7 @@ void main() {
     ),
     contributedMinor: contributedMinor,
     payoutReceivedMinor: payoutReceivedMinor,
+    withdrawnMinor: withdrawnMinor,
     latestPayoutDate: latestPayoutDate,
   );
 
@@ -347,6 +349,47 @@ void main() {
       expect(result.assets, [
         const NetWorthEntry(label: 'matured-fdr', amountMinor: 500000),
       ]);
+    });
+
+    test(
+      'a partial early withdrawal reduces the asset to the remaining '
+      'principal (docs/adr/010-investment-early-withdrawal.md)',
+      () {
+        final result = computeNetWorth(
+          accounts: const [],
+          balances: const {},
+          loans: const [],
+          investments: [
+            investment(
+              id: 'fdr',
+              contributedMinor: 500000,
+              withdrawnMinor: 200000,
+            ),
+          ],
+        );
+
+        expect(result.assets, [
+          const NetWorthEntry(label: 'fdr', amountMinor: 300000),
+        ]);
+      },
+    );
+
+    test('a fully withdrawn investment (before maturity) contributes '
+        'nothing, without needing to be settled or archived', () {
+      final result = computeNetWorth(
+        accounts: const [],
+        balances: const {},
+        loans: const [],
+        investments: [
+          investment(
+            id: 'fdr',
+            contributedMinor: 500000,
+            withdrawnMinor: 500000,
+          ),
+        ],
+      );
+
+      expect(result.assets, isEmpty);
     });
 
     test('mixed accounts, loans, and investments net out correctly', () {

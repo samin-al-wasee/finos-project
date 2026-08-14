@@ -87,6 +87,8 @@ class CsvExportService {
         return 'Investment Contribution';
       case TransactionType.investmentPayout:
         return 'Investment Payout';
+      case TransactionType.investmentWithdrawal:
+        return 'Investment Withdrawal';
     }
   }
 

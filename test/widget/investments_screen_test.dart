@@ -303,5 +303,132 @@ void main() {
 
       await database.close();
     });
+
+    testWidgets(
+      'withdrawing part of the principal shows the remaining amount',
+      (tester) async {
+        final database = await seedDatabase();
+        final id = await controllerFor(database).create(
+          name: '1-year FDR',
+          instrumentType: InvestmentInstrumentType.fdr,
+          contributionMode: InvestmentContributionMode.lumpSum,
+          amountMinor: 2000000,
+          sourceAccountId: 'acct-bank',
+          payoutAccountId: 'acct-bank',
+          maturityDate: DateTime.now().add(const Duration(days: 365)),
+        );
+        await pumpDetails(tester, database, id);
+
+        await tester.tap(find.byType(PopupMenuButton<String>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Withdraw'));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextFormField).first, '5000');
+        await tester.tap(find.widgetWithText(FilledButton, 'Withdraw').last);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Withdrawal recorded'), findsOneWidget);
+        expect(find.text('Withdrawn early'), findsOneWidget);
+        expect(find.text('Remaining principal'), findsOneWidget);
+        expect(find.textContaining('৳15,000'), findsWidgets);
+        expect(find.text('Active'), findsOneWidget);
+
+        await database.close();
+      },
+    );
+
+    testWidgets(
+      'withdrawing the full principal shows Fully withdrawn without '
+      'archiving',
+      (tester) async {
+        final database = await seedDatabase();
+        final id = await controllerFor(database).create(
+          name: '1-year FDR',
+          instrumentType: InvestmentInstrumentType.fdr,
+          contributionMode: InvestmentContributionMode.lumpSum,
+          amountMinor: 2000000,
+          sourceAccountId: 'acct-bank',
+          payoutAccountId: 'acct-bank',
+          maturityDate: DateTime.now().add(const Duration(days: 365)),
+        );
+        await pumpDetails(tester, database, id);
+
+        await tester.tap(find.byType(PopupMenuButton<String>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Withdraw'));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextFormField).first, '20000');
+        await tester.tap(find.widgetWithText(FilledButton, 'Withdraw').last);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Fully withdrawn'), findsOneWidget);
+
+        final progress = await controllerFor(
+          database,
+        ).progressFor((await InvestmentDao(database).getById(id))!);
+        expect(progress.isFullyWithdrawn, isTrue);
+        expect(progress.isArchived, isFalse);
+        // No more Withdraw action once nothing remains.
+        expect(find.text('Withdraw'), findsNothing);
+
+        await database.close();
+      },
+    );
+
+    testWidgets(
+      'rejects a withdrawal amount larger than what remains',
+      (tester) async {
+        final database = await seedDatabase();
+        final id = await controllerFor(database).create(
+          name: '1-year FDR',
+          instrumentType: InvestmentInstrumentType.fdr,
+          contributionMode: InvestmentContributionMode.lumpSum,
+          amountMinor: 2000000,
+          sourceAccountId: 'acct-bank',
+          payoutAccountId: 'acct-bank',
+          maturityDate: DateTime.now().add(const Duration(days: 365)),
+        );
+        await pumpDetails(tester, database, id);
+
+        await tester.tap(find.byType(PopupMenuButton<String>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Withdraw'));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextFormField).first, '99999');
+        await tester.tap(find.widgetWithText(FilledButton, 'Withdraw').last);
+        await tester.pumpAndSettle();
+
+        expect(find.text('That is more than what remains'), findsOneWidget);
+
+        await database.close();
+      },
+    );
+
+    testWidgets('no Withdraw action once the investment has matured', (
+      tester,
+    ) async {
+      final database = await seedDatabase();
+      final id = await controllerFor(database).create(
+        name: '1-year FDR',
+        instrumentType: InvestmentInstrumentType.fdr,
+        contributionMode: InvestmentContributionMode.lumpSum,
+        amountMinor: 2000000,
+        sourceAccountId: 'acct-bank',
+        payoutAccountId: 'acct-bank',
+        startDate: DateTime(2020, 1, 1),
+        maturityDate: DateTime(2020, 6, 1), // long past — already matured
+      );
+      await pumpDetails(tester, database, id);
+
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Withdraw'), findsNothing);
+
+      await database.close();
+    });
   });
 }

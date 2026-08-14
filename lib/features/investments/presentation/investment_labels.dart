@@ -6,5 +6,6 @@ String investmentStandingLabel(InvestmentProgress progress) {
   if (progress.isArchived) return 'Archived';
   if (progress.isSettled) return 'Settled';
   if (progress.isMaturityPayoutDue()) return 'Matured — payout due';
+  if (progress.isFullyWithdrawn) return 'Fully withdrawn';
   return 'Active';
 }

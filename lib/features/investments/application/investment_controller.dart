@@ -299,6 +299,69 @@ class InvestmentController {
     );
   }
 
+  /// Records an early withdrawal of principal, before maturity
+  /// (docs/adr/010-investment-early-withdrawal.md).
+  ///
+  /// Unlike [confirmNextPayout], there is no schedule to advance — a
+  /// withdrawal is an on-demand action, not a due occurrence. [amountMinor]
+  /// must be positive and may not exceed the investment's current
+  /// `remainingPrincipalMinor` (mirrors `LoanController.recordRepayment`'s
+  /// overpayment rejection). A matured investment is rejected: once matured,
+  /// [confirmNextPayout] is how the final proceeds are recorded instead, so
+  /// the two mechanisms for returning principal never overlap.
+  ///
+  /// Throws [ArgumentError] if [amountMinor] is not positive or exceeds what
+  /// remains, [StateError] if the investment does not exist or is archived
+  /// or already matured.
+  Future<String> confirmWithdrawal(
+    String id, {
+    required int amountMinor,
+    DateTime? date,
+  }) async {
+    if (amountMinor <= 0) {
+      throw ArgumentError('Amount must be greater than zero');
+    }
+
+    final investment = await _dao.getById(id);
+    if (investment == null) throw StateError('Investment not found: $id');
+    if (investment.status == InvestmentStatus.archived) {
+      throw StateError('This investment is archived');
+    }
+
+    final progress = await progressFor(investment);
+    if (progress.isMatured()) {
+      throw StateError(
+        'This investment has matured. Use the maturity payout instead.',
+      );
+    }
+    if (amountMinor > progress.remainingPrincipalMinor) {
+      throw ArgumentError(
+        'That is more than the '
+        '${_formatRemaining(progress.remainingPrincipalMinor)} still '
+        'remaining',
+      );
+    }
+
+    final withdrawalDate = dayStart(date ?? DateTime.now());
+    final transactionId = generateId();
+
+    await _transactions.insertOne(
+      TransactionsCompanion.insert(
+        id: transactionId,
+        type: TransactionType.investmentWithdrawal,
+        amountMinor: amountMinor,
+        currency: Value(investment.currency),
+        accountId: investment.payoutAccountId,
+        categoryId: const Value(null),
+        investmentId: Value(id),
+        date: withdrawalDate,
+        description: Value('Withdrawal · ${investment.name}'),
+      ),
+    );
+
+    return transactionId;
+  }
+
   /// Updates the editable fields of an investment.
   ///
   /// The instrument type, contribution mode, amount, accounts, and dates are
@@ -338,9 +401,10 @@ class InvestmentController {
   /// (`LoanController.delete`): it was created automatically by [create],
   /// not a separate confirmed action, so deleting the investment right after
   /// creating it by mistake must not require archiving instead. What *does*
-  /// block deletion is any payout (periodic profit or maturity proceeds), or
-  /// — for a recurring (DPS) investment — any contribution, because each one
-  /// there was a distinct action the user explicitly confirmed
+  /// block deletion is any payout (periodic profit or maturity proceeds) or
+  /// withdrawal (early principal, docs/adr/010-investment-early-withdrawal.md),
+  /// or — for a recurring (DPS) investment — any contribution, because each
+  /// one there was a distinct action the user explicitly confirmed
   /// (docs/adr/009-investment-accounting.md). Those are financial history;
   /// archiving is the correct way to retire the investment instead
   /// (docs/DATA_MODEL.md §47).
@@ -352,16 +416,20 @@ class InvestmentController {
       id,
       TransactionType.investmentPayout,
     );
+    final hasWithdrawal = await _transactions.hasInvestmentMovement(
+      id,
+      TransactionType.investmentWithdrawal,
+    );
     final hasConfirmedContribution =
         investment.contributionMode == InvestmentContributionMode.recurring &&
         await _transactions.hasInvestmentMovement(
           id,
           TransactionType.investmentContribution,
         );
-    if (hasPayout || hasConfirmedContribution) {
+    if (hasPayout || hasWithdrawal || hasConfirmedContribution) {
       throw ArgumentError(
-        'This investment has contributions or payouts recorded. Archive it '
-        'instead of deleting it.',
+        'This investment has contributions, payouts, or withdrawals '
+        'recorded. Archive it instead of deleting it.',
       );
     }
 
@@ -384,6 +452,10 @@ class InvestmentController {
       investment.id,
       TransactionType.investmentPayout,
     );
+    final withdrawnMinor = await _transactions.investmentMovementTotal(
+      investment.id,
+      TransactionType.investmentWithdrawal,
+    );
     final movements = await _transactions.forInvestment(investment.id);
     final payoutDates =
         movements
@@ -396,8 +468,17 @@ class InvestmentController {
       investment: investment,
       contributedMinor: contributedMinor,
       payoutReceivedMinor: payoutReceivedMinor,
+      withdrawnMinor: withdrawnMinor,
       latestPayoutDate: payoutDates.isEmpty ? null : payoutDates.last,
     );
+  }
+
+  // Minor units are formatted at the presentation boundary; the message only
+  // needs the magnitude, so this stays currency-symbol free (the same
+  // reasoning `LoanController._formatOutstanding` follows).
+  static String _formatRemaining(int remainingMinor) {
+    final major = remainingMinor / 100;
+    return major.toStringAsFixed(2);
   }
 
   Future<void> _requireActiveAccount(String accountId) async {

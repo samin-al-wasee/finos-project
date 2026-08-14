@@ -357,12 +357,16 @@ outstanding balance diverge from the movements it is derived from.
 
 ### V1 implementation — investment movements
 
-Two further types record cash moving because of a fixed-term investment
-(docs/adr/009-investment-accounting.md):
+Three further types record cash moving because of a fixed-term investment
+(docs/adr/009-investment-accounting.md,
+docs/adr/010-investment-early-withdrawal.md):
 
 ```text
 INVESTMENT_CONTRIBUTION   money leaving an account into the investment
 INVESTMENT_PAYOUT         money entering an account from the investment
+                          (profit, periodic or at maturity)
+INVESTMENT_WITHDRAWAL     money entering an account from the investment
+                          (principal, returned early — before maturity)
 ```
 
 Same rationale as the loan types above, applied to §58a's `Investments`
@@ -370,6 +374,12 @@ instead: the transactions table stays the single source of truth for
 balances, and direction is intrinsic to the type. They always carry a null
 `category_id` and a non-null `investment_id`, and they are created only
 through the investment feature.
+
+`INVESTMENT_WITHDRAWAL` credits the same account `INVESTMENT_PAYOUT` does,
+but is kept a distinct type rather than a flag on payout, so a payout's date
+relative to the instrument's maturity date stays the only thing that decides
+profit-vs-principal (ADR-009 §2) — never an inferred or stored flag that
+could disagree with it.
 
 ---
 
@@ -2098,37 +2108,52 @@ Investments
   updated_at
 ```
 
-Contributions and payouts are recorded as ordinary rows in `Transactions` via
-two new types and a nullable `investment_id`, the same pattern §29–§36's
-`Loan` uses:
+Contributions, payouts, and early withdrawals are recorded as ordinary rows
+in `Transactions` via three types and a nullable `investment_id`, the same
+pattern §29–§36's `Loan` uses:
 
 ```text
 INVESTMENT_CONTRIBUTION   money leaving an account into the investment
 INVESTMENT_PAYOUT         money entering an account from the investment
+                          (profit, periodic or at maturity)
+INVESTMENT_WITHDRAWAL     money entering an account from the investment
+                          (principal, returned early — before maturity;
+                          docs/adr/010-investment-early-withdrawal.md)
 ```
 
 A transaction's `account_id` is `source_account_id` for a contribution or
-`payout_account_id` for a payout. Like loan movements, these carry no
-category, so they cannot enter spending-by-category or budget consumption.
+`payout_account_id` for a payout or withdrawal. Like loan movements, these
+carry no category, so they cannot enter spending-by-category or budget
+consumption.
 
 Nothing about progress is stored — all of it is derived data (§45) computed
 at read time from the investment row plus its transactions:
 
 ```text
-contributed        = Σ(contribution transactions for the investment)
-payout received    = Σ(payout transactions for the investment)
-is matured          = now >= maturity_date
-is settled          = a payout transaction is dated on or after maturity_date
-maturity payout due = is matured AND NOT is settled
-net worth value     = is settled ? 0 : contributed
+contributed          = Σ(contribution transactions for the investment)
+payout received      = Σ(payout transactions for the investment)
+withdrawn             = Σ(withdrawal transactions for the investment)
+remaining principal   = max(0, contributed − withdrawn)
+is matured            = now >= maturity_date
+is settled            = a payout transaction is dated on or after maturity_date
+maturity payout due   = is matured AND NOT is settled
+is fully withdrawn    = contributed > 0 AND remaining principal = 0
+net worth value       = is settled ? 0 : remaining principal
 ```
 
 The net-worth value is deliberately **not** `contributed − payout received`:
 a *periodic* payout (e.g. Sanchayapatra's quarterly profit) is new profit
 already reflected in the payout account's own balance, not a return of
-principal, so it must not reduce the locked principal shown here — only the
-maturity settlement, which actually returns the principal, zeroes this out
-(docs/adr/009-investment-accounting.md §4).
+principal, so it must not reduce the locked principal shown here — only a
+withdrawal or the maturity settlement, which actually return principal,
+reduce it (docs/adr/009-investment-accounting.md §4,
+docs/adr/010-investment-early-withdrawal.md).
+
+An early withdrawal may only be recorded before maturity, and never for more
+than `remaining principal` (over-withdrawal is rejected, mirroring §36's
+loan-overpayment rule). Reaching `is fully withdrawn` does not change
+`status` — it stays `ACTIVE` until the user explicitly archives it, the same
+as a fully-repaid loan (§39).
 
 Only `ACTIVE`/`ARCHIVED` are stored. There is no stored `MATURED` status —
 unlike a loan's `PAID`/`OVERDUE` (§33, §39), which this mirrors, "matured"
@@ -2144,8 +2169,9 @@ schedules rather than a parallel type, extended with one new value,
 
 V1 scope is limited to the fields above — no interest-rate field, no
 calculated expected payout amounts (a real amount is always entered by the
-user when confirmed), no early encashment/partial withdrawal, and no
-brokerage-style holdings.
+user when confirmed), and no brokerage-style holdings. Early
+encashment/partial withdrawal is built (above); stocks, ETFs, mutual funds,
+and crypto remain unbuilt.
 
 ---
 

@@ -399,6 +399,7 @@ class _RuleCard extends ConsumerWidget {
         return 'Loan';
       case TransactionType.investmentContribution:
       case TransactionType.investmentPayout:
+      case TransactionType.investmentWithdrawal:
         return 'Investment';
     }
   }

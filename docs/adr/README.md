@@ -13,6 +13,8 @@ This directory records significant architectural decisions for FinOS.
 | [006](006-loan-relationships.md) | Accepted | Loan relationships |
 | [007](007-flexible-budget-scope.md) | Accepted | Flexible budget scope |
 | [008](008-budget-rollover.md) | Accepted | Budget rollover |
+| [009](009-investment-accounting.md) | Accepted | Investment accounting (fixed-term instruments) |
+| [010](010-investment-early-withdrawal.md) | Accepted | Investment early withdrawal |
 
 ## Conventions
 
