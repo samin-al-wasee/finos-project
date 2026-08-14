@@ -1431,9 +1431,9 @@ The release checklist should eventually be automated through CI/CD.
 
 ## Android APK builds
 
-`.github/workflows/android-apk.yml` builds a debug-signed Android APK on
-demand. It is manual only (`workflow_dispatch`) and runnable from any branch —
-pick the branch under "Use workflow from" in the Actions UI, or:
+`.github/workflows/android-apk.yml` builds Android artifacts on demand. It is
+manual only (`workflow_dispatch`) and runnable from any branch — pick the
+branch under "Use workflow from" in the Actions UI, or:
 
 ```bash
 gh workflow run android-apk.yml --ref <branch>
@@ -1443,13 +1443,59 @@ The version name reflects the branch it ran from (§40, "Release Branches"):
 `X.Y.Z-debug` from `main` or any other branch, `X.Y.Z-preview` from `preview`,
 `X.Y.Z-release` from `release`. The base `X.Y.Z` comes from `pubspec.yaml`;
 the build number defaults to the workflow run number and can be overridden
-per run. The finished APK is attached to the run as a downloadable artifact.
+per run.
 
-`preview` and `release` builds compile in Flutter release mode; everything
-else builds in debug mode. All of them are still signed with the debug key —
-see the `TODO` in `android/app/build.gradle.kts`. That must be replaced with a
-real release keystore (stored as a GitHub Actions secret, never committed)
-before any Play Store or public distribution.
+`preview` and `release` builds compile in Flutter release mode (obfuscated,
+with `--split-debug-info` symbols uploaded separately) and produce two
+artifacts: an `.aab` App Bundle for Play Console upload, and per-ABI split
+`.apk`s for direct/manual sharing. `main`/other branches build an unoptimized
+debug APK only. Release builds also enable R8 minification and resource
+shrinking (`android/app/build.gradle.kts`).
+
+## ⚠️ Pending manual setup: release signing
+
+**Status: not yet configured.** Every build is currently signed with the
+Android debug key. This is fine for internal testing, but:
+
+* it cannot be uploaded to Play Console, and
+* it means there is currently no stable signing identity across builds, so
+  installing an update over an existing install may fail or silently produce
+  an unsigned/mismatched result.
+
+The workflow already detects this at build time and prints a visible
+`::warning::` in the job log ("No ANDROID_KEYSTORE_BASE64 secret configured
+— falling back to the debug key") whenever a preview/release run is missing
+the real keystore — check the Actions run summary for that warning if a
+build seems off.
+
+To finish setup (human action required — a JDK/`keytool` and GitHub repo
+admin access are needed, which an AI agent typically does not have):
+
+1. Generate an upload keystore (see `android/key.properties.example` for the
+   fields it maps to):
+   ```bash
+   keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+   ```
+2. Back up the `.jks` file and its passwords somewhere durable (password
+   manager) — losing it before enrolling in Play App Signing means the app
+   can never be updated again under that identity.
+3. Add four GitHub Actions repo secrets (Settings → Secrets and variables →
+   Actions):
+   * `ANDROID_KEYSTORE_BASE64` — `base64 -w0 upload-keystore.jks`
+   * `ANDROID_KEYSTORE_PASSWORD`
+   * `ANDROID_KEY_ALIAS` (`upload`, if using the command above)
+   * `ANDROID_KEY_PASSWORD`
+4. For local release builds, copy `android/key.properties.example` to
+   `android/key.properties` (gitignored) and fill in the same values with an
+   absolute `storeFile` path.
+5. When registering the app in Play Console, opt into **Play App Signing**
+   so Google escrows the real signing key and the local upload key stays
+   recoverable if lost.
+
+Once the secrets exist, `android/app/build.gradle.kts` picks them up
+automatically — no further code changes are needed. An agent resuming this
+task should check whether this section has been marked done before assuming
+signing is still outstanding.
 
 ## Not yet implemented
 

@@ -1,4 +1,4 @@
-package com.example.finos_app
+package com.saminalwasee.finos
 
 import io.flutter.embedding.android.FlutterActivity
 
