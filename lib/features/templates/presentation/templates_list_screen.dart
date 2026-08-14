@@ -195,6 +195,9 @@ class _TemplateCard extends ConsumerWidget {
       case TransactionType.loanReceipt:
       case TransactionType.loanPayment:
         return 'Loan';
+      case TransactionType.investmentContribution:
+      case TransactionType.investmentPayout:
+        return 'Investment';
     }
   }
 }

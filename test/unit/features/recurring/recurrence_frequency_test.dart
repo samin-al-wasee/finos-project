@@ -52,6 +52,30 @@ void main() {
       );
     });
 
+    test('quarterly advances by three calendar months, same day', () {
+      expect(
+        nextOccurrence(DateTime(2026, 8, 15), RecurrenceFrequency.quarterly),
+        DateTime(2026, 11, 15),
+      );
+    });
+
+    test(
+      'quarterly clamps the 31st into a shorter month (Jan 31 -> Apr 30)',
+      () {
+        expect(
+          nextOccurrence(DateTime(2026, 1, 31), RecurrenceFrequency.quarterly),
+          DateTime(2026, 4, 30),
+        );
+      },
+    );
+
+    test('quarterly rolls across a year boundary', () {
+      expect(
+        nextOccurrence(DateTime(2026, 11, 5), RecurrenceFrequency.quarterly),
+        DateTime(2027, 2, 5),
+      );
+    });
+
     test('yearly advances by one calendar year, same day', () {
       expect(
         nextOccurrence(DateTime(2026, 8, 15), RecurrenceFrequency.yearly),
@@ -82,6 +106,10 @@ void main() {
       expect(recurrenceFrequencyLabel(RecurrenceFrequency.daily), 'Daily');
       expect(recurrenceFrequencyLabel(RecurrenceFrequency.weekly), 'Weekly');
       expect(recurrenceFrequencyLabel(RecurrenceFrequency.monthly), 'Monthly');
+      expect(
+        recurrenceFrequencyLabel(RecurrenceFrequency.quarterly),
+        'Quarterly',
+      );
       expect(recurrenceFrequencyLabel(RecurrenceFrequency.yearly), 'Yearly');
     });
   });

@@ -8,10 +8,15 @@ import '../../budgets/domain/budget_period.dart' show dayStart;
 /// N-day/week/month interval) is deliberately not included — it needs its own
 /// "every N ___" field and is a refinement on top of this, not required for
 /// the feature to be useful.
-enum RecurrenceFrequency { daily, weekly, monthly, yearly }
+///
+/// [quarterly] was added for the Investments feature (docs/adr/009), whose
+/// fixed-term instruments (e.g. Sanchayapatra) commonly pay profit every
+/// three months — reused here rather than forked so both features share the
+/// same tested date math.
+enum RecurrenceFrequency { daily, weekly, monthly, quarterly, yearly }
 
 /// Maps [RecurrenceFrequency] to its canonical uppercase storage value in the
-/// database (`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`).
+/// database (`DAILY`, `WEEKLY`, `MONTHLY`, `QUARTERLY`, `YEARLY`).
 class RecurrenceFrequencyConverter
     extends TypeConverter<RecurrenceFrequency, String> {
   const RecurrenceFrequencyConverter();
@@ -20,6 +25,7 @@ class RecurrenceFrequencyConverter
     RecurrenceFrequency.daily: 'DAILY',
     RecurrenceFrequency.weekly: 'WEEKLY',
     RecurrenceFrequency.monthly: 'MONTHLY',
+    RecurrenceFrequency.quarterly: 'QUARTERLY',
     RecurrenceFrequency.yearly: 'YEARLY',
   };
 
@@ -51,6 +57,8 @@ DateTime nextOccurrence(DateTime from, RecurrenceFrequency frequency) {
       return DateTime(day.year, day.month, day.day + 7);
     case RecurrenceFrequency.monthly:
       return _addMonthsClamped(day, 1);
+    case RecurrenceFrequency.quarterly:
+      return _addMonthsClamped(day, 3);
     case RecurrenceFrequency.yearly:
       return _addMonthsClamped(day, 12);
   }
@@ -78,6 +86,8 @@ String recurrenceFrequencyLabel(RecurrenceFrequency frequency) {
       return 'Weekly';
     case RecurrenceFrequency.monthly:
       return 'Monthly';
+    case RecurrenceFrequency.quarterly:
+      return 'Quarterly';
     case RecurrenceFrequency.yearly:
       return 'Yearly';
   }

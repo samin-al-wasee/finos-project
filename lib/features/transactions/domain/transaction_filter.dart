@@ -6,8 +6,10 @@ import 'transaction_type.dart';
 /// [loan] covers both [TransactionType.loanReceipt] and
 /// [TransactionType.loanPayment]: to a user filtering their history, a loan
 /// disbursement and a loan repayment are both "loan activity," not two
-/// unrelated types.
-enum TransactionTypeFilter { income, expense, transfer, loan }
+/// unrelated types. [investment] is the same grouping for
+/// [TransactionType.investmentContribution]/[TransactionType.investmentPayout]
+/// (docs/adr/009-investment-accounting.md).
+enum TransactionTypeFilter { income, expense, transfer, loan, investment }
 
 /// Maps a stored [TransactionType] to the [TransactionTypeFilter] it belongs to.
 TransactionTypeFilter typeFilterFor(TransactionType type) {
@@ -21,6 +23,9 @@ TransactionTypeFilter typeFilterFor(TransactionType type) {
     case TransactionType.loanReceipt:
     case TransactionType.loanPayment:
       return TransactionTypeFilter.loan;
+    case TransactionType.investmentContribution:
+    case TransactionType.investmentPayout:
+      return TransactionTypeFilter.investment;
   }
 }
 

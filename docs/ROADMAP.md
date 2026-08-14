@@ -851,9 +851,17 @@ This is where the application begins moving toward the long-term product vision.
 > `accountBalancesProvider` and `loanProgressProvider` — no new DAO methods,
 > no schema changes, nothing stored. An overdrawn non-credit account shows
 > as a negative asset entry rather than being reclassified as a liability —
-> a deliberate simplification. Investments and Cash/Bank/Receivables beyond
-> what Accounts and Loans already model are not built; this is exactly the
-> "Assets − Liabilities" figure below, no more.
+> a deliberate simplification.
+>
+> **Update:** `computeNetWorth` now also folds in `investmentProgressProvider`
+> (§9.3, [ADR-009](adr/009-investment-accounting.md)): an active, unsettled
+> investment contributes its full contributed principal as an asset — never
+> `contributed − payout received`, since a periodic profit payout (e.g.
+> Sanchayapatra's quarterly profit) is new income already reflected in its
+> own payout account, not a return of principal. Brokerage-style holdings
+> and Cash/Bank/Receivables beyond what Accounts, Loans, and now Investments
+> already model are still not built; this is exactly the "Assets −
+> Liabilities" figure below, no more.
 
 Introduce:
 
@@ -907,6 +915,27 @@ Progress
 ---
 
 # 9.3 Investment Tracking
+
+> **Status:** The "Fixed Deposits" slice is implemented, at the user's
+> explicit request, ahead of this phase's normal sequence — see
+> [ADR-009](adr/009-investment-accounting.md). Scope is FDR (Fixed Deposit
+> Receipt), DPS (Deposit Pension Scheme), and Sanchayapatra (national
+> savings certificate): a lump-sum or recurring-monthly principal, an
+> optional periodic profit payout (e.g. Sanchayapatra's quarterly profit),
+> and a required maturity date. Reached from Settings, alongside Templates
+> and Recurring Transactions — a CRUD feature like those, not a read-only
+> aggregate like Reports/Net Worth. Contributions and payouts are ordinary
+> transactions (two new types, `INVESTMENT_CONTRIBUTION`/`INVESTMENT_PAYOUT`)
+> the same way loan movements are (ADR-004), never created automatically —
+> the user always confirms or skips a due one, the same rule Recurring
+> Transactions (§8.1) follows. Net Worth (§9.1) now includes an active
+> investment's contributed principal as an asset. Deliberately not built:
+> any interest-rate field or calculated expected payout (a real amount is
+> always entered by the user when confirmed), early encashment/partial
+> withdrawal, a Dashboard summary card, and Reports integration — all
+> possible fast-follows. **Stocks, Bonds, Mutual Funds, ETFs, Crypto, and
+> brokerage-style holdings below remain entirely unbuilt** — the rest of
+> this section describes that unbuilt future scope.
 
 Introduce investment accounts and holdings.
 

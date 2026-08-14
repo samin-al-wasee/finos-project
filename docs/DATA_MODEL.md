@@ -355,6 +355,22 @@ and a non-null `loan_id`, and they are created only through the loan feature —
 user cannot enter one directly, because editing one by hand would let a loan's
 outstanding balance diverge from the movements it is derived from.
 
+### V1 implementation — investment movements
+
+Two further types record cash moving because of a fixed-term investment
+(docs/adr/009-investment-accounting.md):
+
+```text
+INVESTMENT_CONTRIBUTION   money leaving an account into the investment
+INVESTMENT_PAYOUT         money entering an account from the investment
+```
+
+Same rationale as the loan types above, applied to §58a's `Investments`
+instead: the transactions table stays the single source of truth for
+balances, and direction is intrinsic to the type. They always carry a null
+`category_id` and a non-null `investment_id`, and they are created only
+through the investment feature.
+
 ---
 
 # 13. Income
@@ -904,6 +920,12 @@ CUSTOM
 `CUSTOM` (an arbitrary N-day/week/month interval) is deliberately not built —
 it needs its own "every N ___" field and is a refinement on top of the four
 fixed frequencies, not required for the feature to be useful.
+
+A fifth value, `QUARTERLY`, was added for the Investments feature
+(docs/adr/009-investment-accounting.md §3), whose fixed-term instruments
+(e.g. Sanchayapatra) commonly pay profit every three months — reused here
+rather than forked into a separate type so both features share the same
+tested date math.
 
 The recurrence engine calculates the next occurrence deterministically via
 `nextOccurrence()`, which clamps day-of-month rather than overflowing (e.g. a
@@ -1833,9 +1855,9 @@ default_currency   ISO 4217 code from the V1 currency list
 
 # 52. Investment Extensibility
 
-Investment functionality is not part of V1.
-
-However, the data model should avoid assumptions that would make future investment functionality impossible.
+This section is reserved for a possible **future** brokerage/trading phase
+(stocks, ETFs, mutual funds, crypto) and is deliberately untouched by §58a
+below, which covers a different, already-implemented shape.
 
 Future entities may include:
 
@@ -1849,7 +1871,10 @@ PriceSnapshot
 Dividend
 ```
 
-These should not be added to V1 merely for future-proofing.
+None of these apply to a fixed-term deposit — there is no security, market
+price, or holding to track — so §58a's `Investments` table is a distinct
+schema, not a partial implementation of this sketch. These entities should
+not be added merely for future-proofing.
 
 ---
 
@@ -2036,6 +2061,91 @@ as another type cannot later gain billing details by editing it, and a
 credit-card account's type cannot be edited away from `CREDIT_CARD` (ADR-005
 §5). V1 scope is limited to the fields above — interest, minimum payment,
 rewards, and multi-cycle statement history are not modelled.
+
+---
+
+# 58a. Investments (Fixed-Term Instruments)
+
+`Investments` holds fixed-term deposit instruments — FDR, DPS, Sanchayapatra,
+and similar (docs/ROADMAP.md §9.3, docs/adr/009-investment-accounting.md).
+Distinct from §52's brokerage-shaped sketch: none of that sketch's
+security/price/holding concepts apply to a locked-term deposit.
+
+```text
+Investments
+  id
+  name
+  instrument_type          (FDR | DPS | SANCHAYAPATRA | OTHER — descriptive only)
+  contribution_mode        (LUMP_SUM | RECURRING)
+  amount_minor             (lump-sum principal, or the fixed monthly
+                             installment for RECURRING)
+  currency
+  source_account_id        (references FinancialAccount — contributions
+                             debit this account)
+  payout_account_id        (references FinancialAccount — payouts credit
+                             this account; may differ from source)
+  start_date
+  maturity_date             (required — every instrument in scope is fixed-term)
+  payout_frequency          (AT_MATURITY, or a RecurrenceFrequency value —
+                              MONTHLY | QUARTERLY | YEARLY — for periodic
+                              profit before maturity)
+  next_contribution_due     (nullable — only meaningful when
+                              contribution_mode = RECURRING)
+  next_payout_due           (nullable — only meaningful when
+                              payout_frequency is periodic)
+  status                    (ACTIVE | ARCHIVED — see below)
+  created_at
+  updated_at
+```
+
+Contributions and payouts are recorded as ordinary rows in `Transactions` via
+two new types and a nullable `investment_id`, the same pattern §29–§36's
+`Loan` uses:
+
+```text
+INVESTMENT_CONTRIBUTION   money leaving an account into the investment
+INVESTMENT_PAYOUT         money entering an account from the investment
+```
+
+A transaction's `account_id` is `source_account_id` for a contribution or
+`payout_account_id` for a payout. Like loan movements, these carry no
+category, so they cannot enter spending-by-category or budget consumption.
+
+Nothing about progress is stored — all of it is derived data (§45) computed
+at read time from the investment row plus its transactions:
+
+```text
+contributed        = Σ(contribution transactions for the investment)
+payout received    = Σ(payout transactions for the investment)
+is matured          = now >= maturity_date
+is settled          = a payout transaction is dated on or after maturity_date
+maturity payout due = is matured AND NOT is settled
+net worth value     = is settled ? 0 : contributed
+```
+
+The net-worth value is deliberately **not** `contributed − payout received`:
+a *periodic* payout (e.g. Sanchayapatra's quarterly profit) is new profit
+already reflected in the payout account's own balance, not a return of
+principal, so it must not reduce the locked principal shown here — only the
+maturity settlement, which actually returns the principal, zeroes this out
+(docs/adr/009-investment-accounting.md §4).
+
+Only `ACTIVE`/`ARCHIVED` are stored. There is no stored `MATURED` status —
+unlike a loan's `PAID`/`OVERDUE` (§33, §39), which this mirrors, "matured"
+and "settled" above are always derived, so correcting a maturity payout
+entered in error is deleting that transaction, never undoing a status.
+
+Confirming a due contribution or payout never happens automatically — the
+same rule Recurring Transactions follow (docs/ARCHITECTURE.md §20): a
+schedule field only tracks what is due, and only explicit confirmation
+creates a transaction. `RecurrenceFrequency` (§27) is reused for both
+schedules rather than a parallel type, extended with one new value,
+`QUARTERLY`.
+
+V1 scope is limited to the fields above — no interest-rate field, no
+calculated expected payout amounts (a real amount is always entered by the
+user when confirmed), no early encashment/partial withdrawal, and no
+brokerage-style holdings.
 
 ---
 

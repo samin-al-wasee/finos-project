@@ -83,6 +83,10 @@ class CsvExportService {
         return 'Loan Receipt';
       case TransactionType.loanPayment:
         return 'Loan Payment';
+      case TransactionType.investmentContribution:
+        return 'Investment Contribution';
+      case TransactionType.investmentPayout:
+        return 'Investment Payout';
     }
   }
 

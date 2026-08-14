@@ -55,16 +55,22 @@ class TransactionTile extends StatelessWidget {
 
     final isTransfer = type == TransactionType.transfer;
     final isLoan = isLoanTransaction(type);
+    final isInvestment = isInvestmentTransaction(type);
 
-    // Loan movements carry a description written by the loan feature (e.g.
-    // "Lent to John" or "Repayment · Bank Loan"), so the title reads correctly
-    // without threading loan names through every caller of this tile.
+    // Loan and investment movements carry a description written by their own
+    // feature (e.g. "Lent to John" or "Contribution · 5-year Sanchayapatra"),
+    // so the title reads correctly without threading those names through
+    // every caller of this tile.
     final String title;
     if (isTransfer) {
       title = 'Transfer · $accountName → $destinationAccountName';
     } else if (isLoan) {
       title = transaction.description.isEmpty
           ? 'Loan'
+          : transaction.description;
+    } else if (isInvestment) {
+      title = transaction.description.isEmpty
+          ? 'Investment'
           : transaction.description;
     } else if (categoryName?.isNotEmpty ?? false) {
       title = categoryName!;
@@ -80,6 +86,8 @@ class TransactionTile extends StatelessWidget {
       leadingIcon = Icons.swap_horiz;
     } else if (isLoan) {
       leadingIcon = Icons.handshake_outlined;
+    } else if (isInvestment) {
+      leadingIcon = Icons.savings_outlined;
     } else {
       leadingIcon = categoryIcon(categoryIconKey ?? 'label');
     }
@@ -169,6 +177,14 @@ class _Amount extends StatelessWidget {
         color = colors.transfer;
       case TransactionType.loanPayment:
         sign = '-';
+        color = colors.transfer;
+      // Same reasoning as loan movements: a balance-sheet event with a real
+      // sign, borrowing the transfer colour rather than income/expense's.
+      case TransactionType.investmentContribution:
+        sign = '-';
+        color = colors.transfer;
+      case TransactionType.investmentPayout:
+        sign = '+';
         color = colors.transfer;
     }
 

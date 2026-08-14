@@ -794,6 +794,8 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
         return 'Transfer';
       case TransactionTypeFilter.loan:
         return 'Loan';
+      case TransactionTypeFilter.investment:
+        return 'Investment';
     }
   }
 }

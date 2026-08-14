@@ -66,7 +66,9 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   /// Income and incoming transfers add to the balance; expenses and outgoing
   /// transfers subtract from it. Loan receipts add and loan payments subtract:
   /// money genuinely moves through the account when a loan is made or repaid
-  /// (ADR-004). Returns 0 for an account with no transactions.
+  /// (ADR-004). Investment contributions subtract and investment payouts add,
+  /// for the same reason (docs/adr/009-investment-accounting.md). Returns 0
+  /// for an account with no transactions.
   ///
   /// This is a derived value (docs/DATA_MODEL.md §45) computed from the
   /// transaction table rather than stored alongside the account.
@@ -83,6 +85,10 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                AND destination_account_id = ? THEN amount_minor
           WHEN type = '${_storage(TransactionType.loanReceipt)}' THEN amount_minor
           WHEN type = '${_storage(TransactionType.loanPayment)}' THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.investmentContribution)}'
+               THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.investmentPayout)}'
+               THEN amount_minor
           ELSE 0
         END
       ), 0) AS impact
@@ -122,6 +128,10 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                AND destination_account_id = ? THEN amount_minor
           WHEN type = '${_storage(TransactionType.loanReceipt)}' THEN amount_minor
           WHEN type = '${_storage(TransactionType.loanPayment)}' THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.investmentContribution)}'
+               THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.investmentPayout)}'
+               THEN amount_minor
           ELSE 0
         END
       ), 0) AS impact
@@ -336,11 +346,14 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   /// Transfers are omitted because they net to zero globally — the source loses
   /// exactly what the destination gains.
   ///
-  /// Loan movements are **not** omitted, and that asymmetry is the point: the
-  /// other side of a loan is a person or bank outside FinOS, so nothing cancels
-  /// them out. Lending money genuinely reduces the total the user holds, and
-  /// borrowing genuinely increases it (ADR-004). Leaving them out would quietly
-  /// overstate the portfolio total by every rupee ever lent.
+  /// Loan and investment movements are **not** omitted, and that asymmetry is
+  /// the point: the other side of a loan or an investment is a person, bank,
+  /// or the government, outside FinOS, so nothing cancels them out. Lending
+  /// money (or contributing to a fixed-term investment) genuinely reduces the
+  /// total the user holds, and a repayment (or an investment payout)
+  /// genuinely increases it (ADR-004, docs/adr/009-investment-accounting.md).
+  /// Leaving them out would quietly overstate the total by every rupee ever
+  /// lent or locked away in an investment.
   ///
   /// Returns 0 for an empty table.
   Future<int> totalBalanceImpact() async {
@@ -351,6 +364,10 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
           WHEN type = '${_storage(TransactionType.expense)}' THEN -amount_minor
           WHEN type = '${_storage(TransactionType.loanReceipt)}' THEN amount_minor
           WHEN type = '${_storage(TransactionType.loanPayment)}' THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.investmentContribution)}'
+               THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.investmentPayout)}'
+               THEN amount_minor
           ELSE 0
         END
       ), 0) AS impact
@@ -403,5 +420,62 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   /// this inside the same transaction as the loan's own deletion.
   Future<void> deleteForLoan(String loanId) async {
     await (delete(transactions)..where((t) => t.loanId.equals(loanId))).go();
+  }
+
+  /// Sum of the investment movements of one [type] belonging to [investmentId].
+  ///
+  /// Used to derive an investment's contributed/paid-out totals — the same
+  /// role [loanMovementTotal] plays for a loan's outstanding balance
+  /// (docs/adr/009-investment-accounting.md).
+  Future<int> investmentMovementTotal(
+    String investmentId,
+    TransactionType type,
+  ) async {
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(amount_minor), 0) AS total
+      FROM transactions
+      WHERE investment_id = ? AND type = ?
+      ''',
+      variables: [Variable(investmentId), Variable(_storage(type))],
+    ).getSingle();
+
+    return row.read<int>('total');
+  }
+
+  /// Every transaction belonging to [investmentId], newest first.
+  Future<List<TransactionRow>> forInvestment(String investmentId) {
+    return (select(transactions)
+          ..where((t) => t.investmentId.equals(investmentId))
+          ..orderBy([(t) => OrderingTerm.desc(t.date)]))
+        .get();
+  }
+
+  /// Whether [investmentId] has any transaction of [type].
+  Future<bool> hasInvestmentMovement(
+    String investmentId,
+    TransactionType type,
+  ) async {
+    final rows =
+        await (select(transactions)
+              ..where(
+                (t) =>
+                    t.investmentId.equals(investmentId) &
+                    t.type.equalsValue(type),
+              )
+              ..limit(1))
+            .get();
+    return rows.isNotEmpty;
+  }
+
+  /// Deletes every transaction belonging to [investmentId].
+  ///
+  /// Used when an investment is deleted outright; the caller is responsible
+  /// for running this inside the same transaction as the investment's own
+  /// deletion.
+  Future<void> deleteForInvestment(String investmentId) async {
+    await (delete(
+      transactions,
+    )..where((t) => t.investmentId.equals(investmentId))).go();
   }
 }

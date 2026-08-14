@@ -1,6 +1,7 @@
 import '../../../core/database/app_database.dart';
 import '../../accounts/domain/account_status.dart';
 import '../../accounts/domain/account_type.dart';
+import '../../investments/domain/investment_progress.dart';
 import '../../loans/domain/loan_direction.dart';
 import '../../loans/domain/loan_progress.dart';
 
@@ -26,8 +27,8 @@ class NetWorthEntry {
 }
 
 /// A snapshot of what the user owns versus what they owe, derived entirely
-/// at read time from accounts and loans (docs/ROADMAP.md §9.1) — nothing
-/// here is stored.
+/// at read time from accounts, loans, and investments (docs/ROADMAP.md §9.1,
+/// docs/adr/009-investment-accounting.md) — nothing here is stored.
 class NetWorthData {
   const NetWorthData({required this.assets, required this.liabilities});
 
@@ -43,24 +44,36 @@ class NetWorthData {
 }
 
 /// Builds [NetWorthData] from already-loaded accounts, their live balances
-/// (from `accountBalancesProvider`), and loan progress (from
-/// `loanProgressProvider`) — no database access here, so this is directly
-/// unit-testable.
+/// (from `accountBalancesProvider`), loan progress (from
+/// `loanProgressProvider`), and investment progress (from
+/// `investmentProgressProvider`) — no database access here, so this is
+/// directly unit-testable.
 ///
-/// Only active accounts and non-archived loans count: archived items are
-/// settled or closed, not part of a current snapshot. A credit card
-/// contributes its owed amount (`max(0, -balance)`, the same sign
-/// convention `CreditCardCycle` documents) as a liability, never as a
-/// negative asset; every other account type contributes its balance as an
-/// asset as-is — an overdrawn non-credit account still shows as a negative
-/// asset entry rather than being reclassified, a deliberate simplification.
-/// A loan contributes its outstanding amount as an asset when
-/// [LoanDirection.lent] (money owed to the user) or a liability when
+/// Only active accounts, non-archived loans, and non-archived investments
+/// count: archived items are settled or closed, not part of a current
+/// snapshot. A credit card contributes its owed amount (`max(0, -balance)`,
+/// the same sign convention `CreditCardCycle` documents) as a liability,
+/// never as a negative asset; every other account type contributes its
+/// balance as an asset as-is — an overdrawn non-credit account still shows as
+/// a negative asset entry rather than being reclassified, a deliberate
+/// simplification. A loan contributes its outstanding amount as an asset
+/// when [LoanDirection.lent] (money owed to the user) or a liability when
 /// [LoanDirection.borrowed] (money the user owes).
+///
+/// An investment contributes its full [InvestmentProgress.contributedMinor]
+/// as an asset — its locked principal — until [InvestmentProgress.isSettled]
+/// (its maturity payout has actually been recorded), at which point it
+/// contributes nothing. A *periodic* payout (e.g. Sanchayapatra's quarterly
+/// profit) never reduces this: it is new profit credited to the payout
+/// account, not a return of principal, and is already counted there via
+/// [balances] — so unlike [payoutReceivedMinor] as a whole, only the
+/// maturity settlement zeroes this out
+/// (docs/adr/009-investment-accounting.md).
 NetWorthData computeNetWorth({
   required List<FinancialAccountRow> accounts,
   required Map<String, int> balances,
   required List<LoanProgress> loans,
+  List<InvestmentProgress> investments = const [],
 }) {
   final assets = <NetWorthEntry>[];
   final liabilities = <NetWorthEntry>[];
@@ -89,6 +102,17 @@ NetWorthData computeNetWorth({
     } else {
       liabilities.add(entry);
     }
+  }
+
+  for (final progress in investments) {
+    if (progress.isArchived || progress.isSettled) continue;
+    if (progress.contributedMinor <= 0) continue;
+    assets.add(
+      NetWorthEntry(
+        label: progress.investment.name,
+        amountMinor: progress.contributedMinor,
+      ),
+    );
   }
 
   return NetWorthData(assets: assets, liabilities: liabilities);

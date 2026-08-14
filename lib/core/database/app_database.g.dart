@@ -1846,6 +1846,1016 @@ class LoansCompanion extends UpdateCompanion<LoanRow> {
   }
 }
 
+class $InvestmentsTable extends Investments
+    with TableInfo<$InvestmentsTable, InvestmentRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $InvestmentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<InvestmentInstrumentType, String>
+  instrumentType =
+      GeneratedColumn<String>(
+        'instrument_type',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<InvestmentInstrumentType>(
+        $InvestmentsTable.$converterinstrumentType,
+      );
+  @override
+  late final GeneratedColumnWithTypeConverter<
+    InvestmentContributionMode,
+    String
+  >
+  contributionMode =
+      GeneratedColumn<String>(
+        'contribution_mode',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<InvestmentContributionMode>(
+        $InvestmentsTable.$convertercontributionMode,
+      );
+  static const VerificationMeta _amountMinorMeta = const VerificationMeta(
+    'amountMinor',
+  );
+  @override
+  late final GeneratedColumn<int> amountMinor = GeneratedColumn<int>(
+    'amount_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currencyMeta = const VerificationMeta(
+    'currency',
+  );
+  @override
+  late final GeneratedColumn<String> currency = GeneratedColumn<String>(
+    'currency',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 3,
+      maxTextLength: 3,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('BDT'),
+  );
+  static const VerificationMeta _sourceAccountIdMeta = const VerificationMeta(
+    'sourceAccountId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceAccountId = GeneratedColumn<String>(
+    'source_account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES financial_accounts (id)',
+    ),
+  );
+  static const VerificationMeta _payoutAccountIdMeta = const VerificationMeta(
+    'payoutAccountId',
+  );
+  @override
+  late final GeneratedColumn<String> payoutAccountId = GeneratedColumn<String>(
+    'payout_account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES financial_accounts (id)',
+    ),
+  );
+  static const VerificationMeta _startDateMeta = const VerificationMeta(
+    'startDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startDate = GeneratedColumn<DateTime>(
+    'start_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _maturityDateMeta = const VerificationMeta(
+    'maturityDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> maturityDate = GeneratedColumn<DateTime>(
+    'maturity_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<InvestmentPayoutFrequency, String>
+  payoutFrequency =
+      GeneratedColumn<String>(
+        'payout_frequency',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<InvestmentPayoutFrequency>(
+        $InvestmentsTable.$converterpayoutFrequency,
+      );
+  static const VerificationMeta _nextContributionDueMeta =
+      const VerificationMeta('nextContributionDue');
+  @override
+  late final GeneratedColumn<DateTime> nextContributionDue =
+      GeneratedColumn<DateTime>(
+        'next_contribution_due',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _nextPayoutDueMeta = const VerificationMeta(
+    'nextPayoutDue',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextPayoutDue =
+      GeneratedColumn<DateTime>(
+        'next_payout_due',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  @override
+  late final GeneratedColumnWithTypeConverter<InvestmentStatus, String> status =
+      GeneratedColumn<String>(
+        'status',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('ACTIVE'),
+      ).withConverter<InvestmentStatus>($InvestmentsTable.$converterstatus);
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    instrumentType,
+    contributionMode,
+    amountMinor,
+    currency,
+    sourceAccountId,
+    payoutAccountId,
+    startDate,
+    maturityDate,
+    payoutFrequency,
+    nextContributionDue,
+    nextPayoutDue,
+    status,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'investments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<InvestmentRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('amount_minor')) {
+      context.handle(
+        _amountMinorMeta,
+        amountMinor.isAcceptableOrUnknown(
+          data['amount_minor']!,
+          _amountMinorMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_amountMinorMeta);
+    }
+    if (data.containsKey('currency')) {
+      context.handle(
+        _currencyMeta,
+        currency.isAcceptableOrUnknown(data['currency']!, _currencyMeta),
+      );
+    }
+    if (data.containsKey('source_account_id')) {
+      context.handle(
+        _sourceAccountIdMeta,
+        sourceAccountId.isAcceptableOrUnknown(
+          data['source_account_id']!,
+          _sourceAccountIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceAccountIdMeta);
+    }
+    if (data.containsKey('payout_account_id')) {
+      context.handle(
+        _payoutAccountIdMeta,
+        payoutAccountId.isAcceptableOrUnknown(
+          data['payout_account_id']!,
+          _payoutAccountIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payoutAccountIdMeta);
+    }
+    if (data.containsKey('start_date')) {
+      context.handle(
+        _startDateMeta,
+        startDate.isAcceptableOrUnknown(data['start_date']!, _startDateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startDateMeta);
+    }
+    if (data.containsKey('maturity_date')) {
+      context.handle(
+        _maturityDateMeta,
+        maturityDate.isAcceptableOrUnknown(
+          data['maturity_date']!,
+          _maturityDateMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_maturityDateMeta);
+    }
+    if (data.containsKey('next_contribution_due')) {
+      context.handle(
+        _nextContributionDueMeta,
+        nextContributionDue.isAcceptableOrUnknown(
+          data['next_contribution_due']!,
+          _nextContributionDueMeta,
+        ),
+      );
+    }
+    if (data.containsKey('next_payout_due')) {
+      context.handle(
+        _nextPayoutDueMeta,
+        nextPayoutDue.isAcceptableOrUnknown(
+          data['next_payout_due']!,
+          _nextPayoutDueMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  InvestmentRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return InvestmentRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      instrumentType: $InvestmentsTable.$converterinstrumentType.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}instrument_type'],
+        )!,
+      ),
+      contributionMode: $InvestmentsTable.$convertercontributionMode.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}contribution_mode'],
+        )!,
+      ),
+      amountMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}amount_minor'],
+      )!,
+      currency: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}currency'],
+      )!,
+      sourceAccountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_account_id'],
+      )!,
+      payoutAccountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payout_account_id'],
+      )!,
+      startDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}start_date'],
+      )!,
+      maturityDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}maturity_date'],
+      )!,
+      payoutFrequency: $InvestmentsTable.$converterpayoutFrequency.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}payout_frequency'],
+        )!,
+      ),
+      nextContributionDue: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_contribution_due'],
+      ),
+      nextPayoutDue: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_payout_due'],
+      ),
+      status: $InvestmentsTable.$converterstatus.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}status'],
+        )!,
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $InvestmentsTable createAlias(String alias) {
+    return $InvestmentsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<InvestmentInstrumentType, String>
+  $converterinstrumentType = const InvestmentInstrumentTypeConverter();
+  static TypeConverter<InvestmentContributionMode, String>
+  $convertercontributionMode = const InvestmentContributionModeConverter();
+  static TypeConverter<InvestmentPayoutFrequency, String>
+  $converterpayoutFrequency = const InvestmentPayoutFrequencyConverter();
+  static TypeConverter<InvestmentStatus, String> $converterstatus =
+      const InvestmentStatusConverter();
+}
+
+class InvestmentRow extends DataClass implements Insertable<InvestmentRow> {
+  /// Stable, globally unique identifier (UUID/ULID) — docs/DATA_MODEL.md §3.
+  final String id;
+
+  /// User-chosen name, e.g. "5-year Sanchayapatra".
+  final String name;
+
+  /// Which kind of instrument this is — purely descriptive, does not affect
+  /// any calculation.
+  final InvestmentInstrumentType instrumentType;
+
+  /// Lump sum (FDR, Sanchayapatra) or recurring monthly deposits (DPS).
+  final InvestmentContributionMode contributionMode;
+
+  /// The lump-sum principal for [InvestmentContributionMode.lumpSum], or the
+  /// fixed monthly installment for [InvestmentContributionMode.recurring].
+  /// Always > 0 (docs/DATA_MODEL.md §46).
+  final int amountMinor;
+
+  /// ISO 4217 currency code — docs/DATA_MODEL.md §5.
+  final String currency;
+
+  /// The account contributions are debited from.
+  final String sourceAccountId;
+
+  /// The account payouts (periodic profit or maturity proceeds) are credited
+  /// to. May be the same account as [sourceAccountId] or a different one.
+  final String payoutAccountId;
+
+  /// The calendar date the instrument was opened.
+  final DateTime startDate;
+
+  /// The calendar date the instrument matures. Required — every instrument in
+  /// scope is fixed-term.
+  final DateTime maturityDate;
+
+  /// Whether — and how often — this instrument pays profit before maturity.
+  final InvestmentPayoutFrequency payoutFrequency;
+
+  /// The next contribution's due date. Only meaningful for
+  /// [InvestmentContributionMode.recurring]; null for a lump-sum instrument,
+  /// which has nothing left to contribute after creation.
+  final DateTime? nextContributionDue;
+
+  /// The next payout's due date. Only meaningful when [payoutFrequency] is
+  /// periodic (not "at maturity"); null otherwise.
+  final DateTime? nextPayoutDue;
+
+  /// Stored lifecycle state — see `InvestmentStatus`.
+  final InvestmentStatus status;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const InvestmentRow({
+    required this.id,
+    required this.name,
+    required this.instrumentType,
+    required this.contributionMode,
+    required this.amountMinor,
+    required this.currency,
+    required this.sourceAccountId,
+    required this.payoutAccountId,
+    required this.startDate,
+    required this.maturityDate,
+    required this.payoutFrequency,
+    this.nextContributionDue,
+    this.nextPayoutDue,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    {
+      map['instrument_type'] = Variable<String>(
+        $InvestmentsTable.$converterinstrumentType.toSql(instrumentType),
+      );
+    }
+    {
+      map['contribution_mode'] = Variable<String>(
+        $InvestmentsTable.$convertercontributionMode.toSql(contributionMode),
+      );
+    }
+    map['amount_minor'] = Variable<int>(amountMinor);
+    map['currency'] = Variable<String>(currency);
+    map['source_account_id'] = Variable<String>(sourceAccountId);
+    map['payout_account_id'] = Variable<String>(payoutAccountId);
+    map['start_date'] = Variable<DateTime>(startDate);
+    map['maturity_date'] = Variable<DateTime>(maturityDate);
+    {
+      map['payout_frequency'] = Variable<String>(
+        $InvestmentsTable.$converterpayoutFrequency.toSql(payoutFrequency),
+      );
+    }
+    if (!nullToAbsent || nextContributionDue != null) {
+      map['next_contribution_due'] = Variable<DateTime>(nextContributionDue);
+    }
+    if (!nullToAbsent || nextPayoutDue != null) {
+      map['next_payout_due'] = Variable<DateTime>(nextPayoutDue);
+    }
+    {
+      map['status'] = Variable<String>(
+        $InvestmentsTable.$converterstatus.toSql(status),
+      );
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  InvestmentsCompanion toCompanion(bool nullToAbsent) {
+    return InvestmentsCompanion(
+      id: Value(id),
+      name: Value(name),
+      instrumentType: Value(instrumentType),
+      contributionMode: Value(contributionMode),
+      amountMinor: Value(amountMinor),
+      currency: Value(currency),
+      sourceAccountId: Value(sourceAccountId),
+      payoutAccountId: Value(payoutAccountId),
+      startDate: Value(startDate),
+      maturityDate: Value(maturityDate),
+      payoutFrequency: Value(payoutFrequency),
+      nextContributionDue: nextContributionDue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextContributionDue),
+      nextPayoutDue: nextPayoutDue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextPayoutDue),
+      status: Value(status),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory InvestmentRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return InvestmentRow(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      instrumentType: serializer.fromJson<InvestmentInstrumentType>(
+        json['instrumentType'],
+      ),
+      contributionMode: serializer.fromJson<InvestmentContributionMode>(
+        json['contributionMode'],
+      ),
+      amountMinor: serializer.fromJson<int>(json['amountMinor']),
+      currency: serializer.fromJson<String>(json['currency']),
+      sourceAccountId: serializer.fromJson<String>(json['sourceAccountId']),
+      payoutAccountId: serializer.fromJson<String>(json['payoutAccountId']),
+      startDate: serializer.fromJson<DateTime>(json['startDate']),
+      maturityDate: serializer.fromJson<DateTime>(json['maturityDate']),
+      payoutFrequency: serializer.fromJson<InvestmentPayoutFrequency>(
+        json['payoutFrequency'],
+      ),
+      nextContributionDue: serializer.fromJson<DateTime?>(
+        json['nextContributionDue'],
+      ),
+      nextPayoutDue: serializer.fromJson<DateTime?>(json['nextPayoutDue']),
+      status: serializer.fromJson<InvestmentStatus>(json['status']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'instrumentType': serializer.toJson<InvestmentInstrumentType>(
+        instrumentType,
+      ),
+      'contributionMode': serializer.toJson<InvestmentContributionMode>(
+        contributionMode,
+      ),
+      'amountMinor': serializer.toJson<int>(amountMinor),
+      'currency': serializer.toJson<String>(currency),
+      'sourceAccountId': serializer.toJson<String>(sourceAccountId),
+      'payoutAccountId': serializer.toJson<String>(payoutAccountId),
+      'startDate': serializer.toJson<DateTime>(startDate),
+      'maturityDate': serializer.toJson<DateTime>(maturityDate),
+      'payoutFrequency': serializer.toJson<InvestmentPayoutFrequency>(
+        payoutFrequency,
+      ),
+      'nextContributionDue': serializer.toJson<DateTime?>(nextContributionDue),
+      'nextPayoutDue': serializer.toJson<DateTime?>(nextPayoutDue),
+      'status': serializer.toJson<InvestmentStatus>(status),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  InvestmentRow copyWith({
+    String? id,
+    String? name,
+    InvestmentInstrumentType? instrumentType,
+    InvestmentContributionMode? contributionMode,
+    int? amountMinor,
+    String? currency,
+    String? sourceAccountId,
+    String? payoutAccountId,
+    DateTime? startDate,
+    DateTime? maturityDate,
+    InvestmentPayoutFrequency? payoutFrequency,
+    Value<DateTime?> nextContributionDue = const Value.absent(),
+    Value<DateTime?> nextPayoutDue = const Value.absent(),
+    InvestmentStatus? status,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => InvestmentRow(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    instrumentType: instrumentType ?? this.instrumentType,
+    contributionMode: contributionMode ?? this.contributionMode,
+    amountMinor: amountMinor ?? this.amountMinor,
+    currency: currency ?? this.currency,
+    sourceAccountId: sourceAccountId ?? this.sourceAccountId,
+    payoutAccountId: payoutAccountId ?? this.payoutAccountId,
+    startDate: startDate ?? this.startDate,
+    maturityDate: maturityDate ?? this.maturityDate,
+    payoutFrequency: payoutFrequency ?? this.payoutFrequency,
+    nextContributionDue: nextContributionDue.present
+        ? nextContributionDue.value
+        : this.nextContributionDue,
+    nextPayoutDue: nextPayoutDue.present
+        ? nextPayoutDue.value
+        : this.nextPayoutDue,
+    status: status ?? this.status,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  InvestmentRow copyWithCompanion(InvestmentsCompanion data) {
+    return InvestmentRow(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      instrumentType: data.instrumentType.present
+          ? data.instrumentType.value
+          : this.instrumentType,
+      contributionMode: data.contributionMode.present
+          ? data.contributionMode.value
+          : this.contributionMode,
+      amountMinor: data.amountMinor.present
+          ? data.amountMinor.value
+          : this.amountMinor,
+      currency: data.currency.present ? data.currency.value : this.currency,
+      sourceAccountId: data.sourceAccountId.present
+          ? data.sourceAccountId.value
+          : this.sourceAccountId,
+      payoutAccountId: data.payoutAccountId.present
+          ? data.payoutAccountId.value
+          : this.payoutAccountId,
+      startDate: data.startDate.present ? data.startDate.value : this.startDate,
+      maturityDate: data.maturityDate.present
+          ? data.maturityDate.value
+          : this.maturityDate,
+      payoutFrequency: data.payoutFrequency.present
+          ? data.payoutFrequency.value
+          : this.payoutFrequency,
+      nextContributionDue: data.nextContributionDue.present
+          ? data.nextContributionDue.value
+          : this.nextContributionDue,
+      nextPayoutDue: data.nextPayoutDue.present
+          ? data.nextPayoutDue.value
+          : this.nextPayoutDue,
+      status: data.status.present ? data.status.value : this.status,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('InvestmentRow(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('instrumentType: $instrumentType, ')
+          ..write('contributionMode: $contributionMode, ')
+          ..write('amountMinor: $amountMinor, ')
+          ..write('currency: $currency, ')
+          ..write('sourceAccountId: $sourceAccountId, ')
+          ..write('payoutAccountId: $payoutAccountId, ')
+          ..write('startDate: $startDate, ')
+          ..write('maturityDate: $maturityDate, ')
+          ..write('payoutFrequency: $payoutFrequency, ')
+          ..write('nextContributionDue: $nextContributionDue, ')
+          ..write('nextPayoutDue: $nextPayoutDue, ')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    instrumentType,
+    contributionMode,
+    amountMinor,
+    currency,
+    sourceAccountId,
+    payoutAccountId,
+    startDate,
+    maturityDate,
+    payoutFrequency,
+    nextContributionDue,
+    nextPayoutDue,
+    status,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is InvestmentRow &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.instrumentType == this.instrumentType &&
+          other.contributionMode == this.contributionMode &&
+          other.amountMinor == this.amountMinor &&
+          other.currency == this.currency &&
+          other.sourceAccountId == this.sourceAccountId &&
+          other.payoutAccountId == this.payoutAccountId &&
+          other.startDate == this.startDate &&
+          other.maturityDate == this.maturityDate &&
+          other.payoutFrequency == this.payoutFrequency &&
+          other.nextContributionDue == this.nextContributionDue &&
+          other.nextPayoutDue == this.nextPayoutDue &&
+          other.status == this.status &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class InvestmentsCompanion extends UpdateCompanion<InvestmentRow> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<InvestmentInstrumentType> instrumentType;
+  final Value<InvestmentContributionMode> contributionMode;
+  final Value<int> amountMinor;
+  final Value<String> currency;
+  final Value<String> sourceAccountId;
+  final Value<String> payoutAccountId;
+  final Value<DateTime> startDate;
+  final Value<DateTime> maturityDate;
+  final Value<InvestmentPayoutFrequency> payoutFrequency;
+  final Value<DateTime?> nextContributionDue;
+  final Value<DateTime?> nextPayoutDue;
+  final Value<InvestmentStatus> status;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const InvestmentsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.instrumentType = const Value.absent(),
+    this.contributionMode = const Value.absent(),
+    this.amountMinor = const Value.absent(),
+    this.currency = const Value.absent(),
+    this.sourceAccountId = const Value.absent(),
+    this.payoutAccountId = const Value.absent(),
+    this.startDate = const Value.absent(),
+    this.maturityDate = const Value.absent(),
+    this.payoutFrequency = const Value.absent(),
+    this.nextContributionDue = const Value.absent(),
+    this.nextPayoutDue = const Value.absent(),
+    this.status = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  InvestmentsCompanion.insert({
+    required String id,
+    required String name,
+    required InvestmentInstrumentType instrumentType,
+    required InvestmentContributionMode contributionMode,
+    required int amountMinor,
+    this.currency = const Value.absent(),
+    required String sourceAccountId,
+    required String payoutAccountId,
+    required DateTime startDate,
+    required DateTime maturityDate,
+    required InvestmentPayoutFrequency payoutFrequency,
+    this.nextContributionDue = const Value.absent(),
+    this.nextPayoutDue = const Value.absent(),
+    this.status = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       instrumentType = Value(instrumentType),
+       contributionMode = Value(contributionMode),
+       amountMinor = Value(amountMinor),
+       sourceAccountId = Value(sourceAccountId),
+       payoutAccountId = Value(payoutAccountId),
+       startDate = Value(startDate),
+       maturityDate = Value(maturityDate),
+       payoutFrequency = Value(payoutFrequency);
+  static Insertable<InvestmentRow> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? instrumentType,
+    Expression<String>? contributionMode,
+    Expression<int>? amountMinor,
+    Expression<String>? currency,
+    Expression<String>? sourceAccountId,
+    Expression<String>? payoutAccountId,
+    Expression<DateTime>? startDate,
+    Expression<DateTime>? maturityDate,
+    Expression<String>? payoutFrequency,
+    Expression<DateTime>? nextContributionDue,
+    Expression<DateTime>? nextPayoutDue,
+    Expression<String>? status,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (instrumentType != null) 'instrument_type': instrumentType,
+      if (contributionMode != null) 'contribution_mode': contributionMode,
+      if (amountMinor != null) 'amount_minor': amountMinor,
+      if (currency != null) 'currency': currency,
+      if (sourceAccountId != null) 'source_account_id': sourceAccountId,
+      if (payoutAccountId != null) 'payout_account_id': payoutAccountId,
+      if (startDate != null) 'start_date': startDate,
+      if (maturityDate != null) 'maturity_date': maturityDate,
+      if (payoutFrequency != null) 'payout_frequency': payoutFrequency,
+      if (nextContributionDue != null)
+        'next_contribution_due': nextContributionDue,
+      if (nextPayoutDue != null) 'next_payout_due': nextPayoutDue,
+      if (status != null) 'status': status,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  InvestmentsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<InvestmentInstrumentType>? instrumentType,
+    Value<InvestmentContributionMode>? contributionMode,
+    Value<int>? amountMinor,
+    Value<String>? currency,
+    Value<String>? sourceAccountId,
+    Value<String>? payoutAccountId,
+    Value<DateTime>? startDate,
+    Value<DateTime>? maturityDate,
+    Value<InvestmentPayoutFrequency>? payoutFrequency,
+    Value<DateTime?>? nextContributionDue,
+    Value<DateTime?>? nextPayoutDue,
+    Value<InvestmentStatus>? status,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return InvestmentsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      instrumentType: instrumentType ?? this.instrumentType,
+      contributionMode: contributionMode ?? this.contributionMode,
+      amountMinor: amountMinor ?? this.amountMinor,
+      currency: currency ?? this.currency,
+      sourceAccountId: sourceAccountId ?? this.sourceAccountId,
+      payoutAccountId: payoutAccountId ?? this.payoutAccountId,
+      startDate: startDate ?? this.startDate,
+      maturityDate: maturityDate ?? this.maturityDate,
+      payoutFrequency: payoutFrequency ?? this.payoutFrequency,
+      nextContributionDue: nextContributionDue ?? this.nextContributionDue,
+      nextPayoutDue: nextPayoutDue ?? this.nextPayoutDue,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (instrumentType.present) {
+      map['instrument_type'] = Variable<String>(
+        $InvestmentsTable.$converterinstrumentType.toSql(instrumentType.value),
+      );
+    }
+    if (contributionMode.present) {
+      map['contribution_mode'] = Variable<String>(
+        $InvestmentsTable.$convertercontributionMode.toSql(
+          contributionMode.value,
+        ),
+      );
+    }
+    if (amountMinor.present) {
+      map['amount_minor'] = Variable<int>(amountMinor.value);
+    }
+    if (currency.present) {
+      map['currency'] = Variable<String>(currency.value);
+    }
+    if (sourceAccountId.present) {
+      map['source_account_id'] = Variable<String>(sourceAccountId.value);
+    }
+    if (payoutAccountId.present) {
+      map['payout_account_id'] = Variable<String>(payoutAccountId.value);
+    }
+    if (startDate.present) {
+      map['start_date'] = Variable<DateTime>(startDate.value);
+    }
+    if (maturityDate.present) {
+      map['maturity_date'] = Variable<DateTime>(maturityDate.value);
+    }
+    if (payoutFrequency.present) {
+      map['payout_frequency'] = Variable<String>(
+        $InvestmentsTable.$converterpayoutFrequency.toSql(
+          payoutFrequency.value,
+        ),
+      );
+    }
+    if (nextContributionDue.present) {
+      map['next_contribution_due'] = Variable<DateTime>(
+        nextContributionDue.value,
+      );
+    }
+    if (nextPayoutDue.present) {
+      map['next_payout_due'] = Variable<DateTime>(nextPayoutDue.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(
+        $InvestmentsTable.$converterstatus.toSql(status.value),
+      );
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('InvestmentsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('instrumentType: $instrumentType, ')
+          ..write('contributionMode: $contributionMode, ')
+          ..write('amountMinor: $amountMinor, ')
+          ..write('currency: $currency, ')
+          ..write('sourceAccountId: $sourceAccountId, ')
+          ..write('payoutAccountId: $payoutAccountId, ')
+          ..write('startDate: $startDate, ')
+          ..write('maturityDate: $maturityDate, ')
+          ..write('payoutFrequency: $payoutFrequency, ')
+          ..write('nextContributionDue: $nextContributionDue, ')
+          ..write('nextPayoutDue: $nextPayoutDue, ')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TransactionsTable extends Transactions
     with TableInfo<$TransactionsTable, TransactionRow> {
   @override
@@ -1951,6 +2961,20 @@ class $TransactionsTable extends Transactions
       'REFERENCES loans (id)',
     ),
   );
+  static const VerificationMeta _investmentIdMeta = const VerificationMeta(
+    'investmentId',
+  );
+  @override
+  late final GeneratedColumn<String> investmentId = GeneratedColumn<String>(
+    'investment_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES investments (id)',
+    ),
+  );
   static const VerificationMeta _dateMeta = const VerificationMeta('date');
   @override
   late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
@@ -2006,6 +3030,7 @@ class $TransactionsTable extends Transactions
     destinationAccountId,
     categoryId,
     loanId,
+    investmentId,
     date,
     description,
     createdAt,
@@ -2072,6 +3097,15 @@ class $TransactionsTable extends Transactions
       context.handle(
         _loanIdMeta,
         loanId.isAcceptableOrUnknown(data['loan_id']!, _loanIdMeta),
+      );
+    }
+    if (data.containsKey('investment_id')) {
+      context.handle(
+        _investmentIdMeta,
+        investmentId.isAcceptableOrUnknown(
+          data['investment_id']!,
+          _investmentIdMeta,
+        ),
       );
     }
     if (data.containsKey('date')) {
@@ -2146,6 +3180,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.string,
         data['${effectivePrefix}loan_id'],
       ),
+      investmentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}investment_id'],
+      ),
       date: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}date'],
@@ -2203,6 +3241,15 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
   /// `LOAN_PAYMENT` rows, and null for all ordinary activity (ADR-004).
   final String? loanId;
 
+  /// The investment this movement belongs to. Set only for
+  /// `INVESTMENT_CONTRIBUTION` and `INVESTMENT_PAYOUT` rows, and null for all
+  /// ordinary activity (docs/adr/009-investment-accounting.md). [accountId]
+  /// carries the actual account affected — the investment's source account for
+  /// a contribution, its payout account for a payout — the same way a loan
+  /// movement's [accountId] is whichever account the loan's cash moved
+  /// through.
+  final String? investmentId;
+
   /// The calendar date the financial event happened (docs/DATA_MODEL.md §41).
   /// This is the financial event date, not the record-creation timestamp.
   final DateTime date;
@@ -2220,6 +3267,7 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     this.destinationAccountId,
     this.categoryId,
     this.loanId,
+    this.investmentId,
     required this.date,
     required this.description,
     required this.createdAt,
@@ -2246,6 +3294,9 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     if (!nullToAbsent || loanId != null) {
       map['loan_id'] = Variable<String>(loanId);
     }
+    if (!nullToAbsent || investmentId != null) {
+      map['investment_id'] = Variable<String>(investmentId);
+    }
     map['date'] = Variable<DateTime>(date);
     map['description'] = Variable<String>(description);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -2269,6 +3320,9 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       loanId: loanId == null && nullToAbsent
           ? const Value.absent()
           : Value(loanId),
+      investmentId: investmentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(investmentId),
       date: Value(date),
       description: Value(description),
       createdAt: Value(createdAt),
@@ -2292,6 +3346,7 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       ),
       categoryId: serializer.fromJson<String?>(json['categoryId']),
       loanId: serializer.fromJson<String?>(json['loanId']),
+      investmentId: serializer.fromJson<String?>(json['investmentId']),
       date: serializer.fromJson<DateTime>(json['date']),
       description: serializer.fromJson<String>(json['description']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -2310,6 +3365,7 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       'destinationAccountId': serializer.toJson<String?>(destinationAccountId),
       'categoryId': serializer.toJson<String?>(categoryId),
       'loanId': serializer.toJson<String?>(loanId),
+      'investmentId': serializer.toJson<String?>(investmentId),
       'date': serializer.toJson<DateTime>(date),
       'description': serializer.toJson<String>(description),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -2326,6 +3382,7 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     Value<String?> destinationAccountId = const Value.absent(),
     Value<String?> categoryId = const Value.absent(),
     Value<String?> loanId = const Value.absent(),
+    Value<String?> investmentId = const Value.absent(),
     DateTime? date,
     String? description,
     DateTime? createdAt,
@@ -2341,6 +3398,7 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
         : this.destinationAccountId,
     categoryId: categoryId.present ? categoryId.value : this.categoryId,
     loanId: loanId.present ? loanId.value : this.loanId,
+    investmentId: investmentId.present ? investmentId.value : this.investmentId,
     date: date ?? this.date,
     description: description ?? this.description,
     createdAt: createdAt ?? this.createdAt,
@@ -2362,6 +3420,9 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
           ? data.categoryId.value
           : this.categoryId,
       loanId: data.loanId.present ? data.loanId.value : this.loanId,
+      investmentId: data.investmentId.present
+          ? data.investmentId.value
+          : this.investmentId,
       date: data.date.present ? data.date.value : this.date,
       description: data.description.present
           ? data.description.value
@@ -2382,6 +3443,7 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
           ..write('destinationAccountId: $destinationAccountId, ')
           ..write('categoryId: $categoryId, ')
           ..write('loanId: $loanId, ')
+          ..write('investmentId: $investmentId, ')
           ..write('date: $date, ')
           ..write('description: $description, ')
           ..write('createdAt: $createdAt, ')
@@ -2400,6 +3462,7 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     destinationAccountId,
     categoryId,
     loanId,
+    investmentId,
     date,
     description,
     createdAt,
@@ -2417,6 +3480,7 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
           other.destinationAccountId == this.destinationAccountId &&
           other.categoryId == this.categoryId &&
           other.loanId == this.loanId &&
+          other.investmentId == this.investmentId &&
           other.date == this.date &&
           other.description == this.description &&
           other.createdAt == this.createdAt &&
@@ -2432,6 +3496,7 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
   final Value<String?> destinationAccountId;
   final Value<String?> categoryId;
   final Value<String?> loanId;
+  final Value<String?> investmentId;
   final Value<DateTime> date;
   final Value<String> description;
   final Value<DateTime> createdAt;
@@ -2446,6 +3511,7 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     this.destinationAccountId = const Value.absent(),
     this.categoryId = const Value.absent(),
     this.loanId = const Value.absent(),
+    this.investmentId = const Value.absent(),
     this.date = const Value.absent(),
     this.description = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -2461,6 +3527,7 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     this.destinationAccountId = const Value.absent(),
     this.categoryId = const Value.absent(),
     this.loanId = const Value.absent(),
+    this.investmentId = const Value.absent(),
     required DateTime date,
     this.description = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -2480,6 +3547,7 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     Expression<String>? destinationAccountId,
     Expression<String>? categoryId,
     Expression<String>? loanId,
+    Expression<String>? investmentId,
     Expression<DateTime>? date,
     Expression<String>? description,
     Expression<DateTime>? createdAt,
@@ -2496,6 +3564,7 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
         'destination_account_id': destinationAccountId,
       if (categoryId != null) 'category_id': categoryId,
       if (loanId != null) 'loan_id': loanId,
+      if (investmentId != null) 'investment_id': investmentId,
       if (date != null) 'date': date,
       if (description != null) 'description': description,
       if (createdAt != null) 'created_at': createdAt,
@@ -2513,6 +3582,7 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     Value<String?>? destinationAccountId,
     Value<String?>? categoryId,
     Value<String?>? loanId,
+    Value<String?>? investmentId,
     Value<DateTime>? date,
     Value<String>? description,
     Value<DateTime>? createdAt,
@@ -2528,6 +3598,7 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
       destinationAccountId: destinationAccountId ?? this.destinationAccountId,
       categoryId: categoryId ?? this.categoryId,
       loanId: loanId ?? this.loanId,
+      investmentId: investmentId ?? this.investmentId,
       date: date ?? this.date,
       description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
@@ -2567,6 +3638,9 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     if (loanId.present) {
       map['loan_id'] = Variable<String>(loanId.value);
     }
+    if (investmentId.present) {
+      map['investment_id'] = Variable<String>(investmentId.value);
+    }
     if (date.present) {
       map['date'] = Variable<DateTime>(date.value);
     }
@@ -2596,6 +3670,7 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
           ..write('destinationAccountId: $destinationAccountId, ')
           ..write('categoryId: $categoryId, ')
           ..write('loanId: $loanId, ')
+          ..write('investmentId: $investmentId, ')
           ..write('date: $date, ')
           ..write('description: $description, ')
           ..write('createdAt: $createdAt, ')
@@ -6320,6 +7395,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $FinancialAccountsTable(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $LoansTable loans = $LoansTable(this);
+  late final $InvestmentsTable investments = $InvestmentsTable(this);
   late final $TransactionsTable transactions = $TransactionsTable(this);
   late final $BudgetsTable budgets = $BudgetsTable(this);
   late final $PreferencesTable preferences = $PreferencesTable(this);
@@ -6341,6 +7417,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     financialAccounts,
     categories,
     loans,
+    investments,
     transactions,
     budgets,
     preferences,
@@ -8263,6 +9340,767 @@ typedef $$LoansTableProcessedTableManager =
         bool transactionsRefs,
       })
     >;
+typedef $$InvestmentsTableCreateCompanionBuilder =
+    InvestmentsCompanion Function({
+      required String id,
+      required String name,
+      required InvestmentInstrumentType instrumentType,
+      required InvestmentContributionMode contributionMode,
+      required int amountMinor,
+      Value<String> currency,
+      required String sourceAccountId,
+      required String payoutAccountId,
+      required DateTime startDate,
+      required DateTime maturityDate,
+      required InvestmentPayoutFrequency payoutFrequency,
+      Value<DateTime?> nextContributionDue,
+      Value<DateTime?> nextPayoutDue,
+      Value<InvestmentStatus> status,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$InvestmentsTableUpdateCompanionBuilder =
+    InvestmentsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<InvestmentInstrumentType> instrumentType,
+      Value<InvestmentContributionMode> contributionMode,
+      Value<int> amountMinor,
+      Value<String> currency,
+      Value<String> sourceAccountId,
+      Value<String> payoutAccountId,
+      Value<DateTime> startDate,
+      Value<DateTime> maturityDate,
+      Value<InvestmentPayoutFrequency> payoutFrequency,
+      Value<DateTime?> nextContributionDue,
+      Value<DateTime?> nextPayoutDue,
+      Value<InvestmentStatus> status,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$InvestmentsTableReferences
+    extends BaseReferences<_$AppDatabase, $InvestmentsTable, InvestmentRow> {
+  $$InvestmentsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $FinancialAccountsTable _sourceAccountIdTable(_$AppDatabase db) => db
+      .financialAccounts
+      .createAlias('investments__source_account_id__financial_accounts__id');
+
+  $$FinancialAccountsTableProcessedTableManager get sourceAccountId {
+    final $_column = $_itemColumn<String>('source_account_id')!;
+
+    final manager = $$FinancialAccountsTableTableManager(
+      $_db,
+      $_db.financialAccounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sourceAccountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $FinancialAccountsTable _payoutAccountIdTable(_$AppDatabase db) => db
+      .financialAccounts
+      .createAlias('investments__payout_account_id__financial_accounts__id');
+
+  $$FinancialAccountsTableProcessedTableManager get payoutAccountId {
+    final $_column = $_itemColumn<String>('payout_account_id')!;
+
+    final manager = $$FinancialAccountsTableTableManager(
+      $_db,
+      $_db.financialAccounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_payoutAccountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$TransactionsTable, List<TransactionRow>>
+  _transactionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.transactions,
+    aliasName: 'investments__id__transactions__investment_id',
+  );
+
+  $$TransactionsTableProcessedTableManager get transactionsRefs {
+    final manager = $$TransactionsTableTableManager(
+      $_db,
+      $_db.transactions,
+    ).filter((f) => f.investmentId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_transactionsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$InvestmentsTableFilterComposer
+    extends Composer<_$AppDatabase, $InvestmentsTable> {
+  $$InvestmentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<
+    InvestmentInstrumentType,
+    InvestmentInstrumentType,
+    String
+  >
+  get instrumentType => $composableBuilder(
+    column: $table.instrumentType,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<
+    InvestmentContributionMode,
+    InvestmentContributionMode,
+    String
+  >
+  get contributionMode => $composableBuilder(
+    column: $table.contributionMode,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<int> get amountMinor => $composableBuilder(
+    column: $table.amountMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startDate => $composableBuilder(
+    column: $table.startDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get maturityDate => $composableBuilder(
+    column: $table.maturityDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<
+    InvestmentPayoutFrequency,
+    InvestmentPayoutFrequency,
+    String
+  >
+  get payoutFrequency => $composableBuilder(
+    column: $table.payoutFrequency,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextContributionDue => $composableBuilder(
+    column: $table.nextContributionDue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextPayoutDue => $composableBuilder(
+    column: $table.nextPayoutDue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<InvestmentStatus, InvestmentStatus, String>
+  get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$FinancialAccountsTableFilterComposer get sourceAccountId {
+    final $$FinancialAccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceAccountId,
+      referencedTable: $db.financialAccounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FinancialAccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.financialAccounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$FinancialAccountsTableFilterComposer get payoutAccountId {
+    final $$FinancialAccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.payoutAccountId,
+      referencedTable: $db.financialAccounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FinancialAccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.financialAccounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> transactionsRefs(
+    Expression<bool> Function($$TransactionsTableFilterComposer f) f,
+  ) {
+    final $$TransactionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.transactions,
+      getReferencedColumn: (t) => t.investmentId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionsTableFilterComposer(
+            $db: $db,
+            $table: $db.transactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$InvestmentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $InvestmentsTable> {
+  $$InvestmentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get instrumentType => $composableBuilder(
+    column: $table.instrumentType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contributionMode => $composableBuilder(
+    column: $table.contributionMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get amountMinor => $composableBuilder(
+    column: $table.amountMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startDate => $composableBuilder(
+    column: $table.startDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get maturityDate => $composableBuilder(
+    column: $table.maturityDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payoutFrequency => $composableBuilder(
+    column: $table.payoutFrequency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get nextContributionDue => $composableBuilder(
+    column: $table.nextContributionDue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get nextPayoutDue => $composableBuilder(
+    column: $table.nextPayoutDue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$FinancialAccountsTableOrderingComposer get sourceAccountId {
+    final $$FinancialAccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceAccountId,
+      referencedTable: $db.financialAccounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FinancialAccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.financialAccounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$FinancialAccountsTableOrderingComposer get payoutAccountId {
+    final $$FinancialAccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.payoutAccountId,
+      referencedTable: $db.financialAccounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FinancialAccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.financialAccounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$InvestmentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $InvestmentsTable> {
+  $$InvestmentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<InvestmentInstrumentType, String>
+  get instrumentType => $composableBuilder(
+    column: $table.instrumentType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<InvestmentContributionMode, String>
+  get contributionMode => $composableBuilder(
+    column: $table.contributionMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get amountMinor => $composableBuilder(
+    column: $table.amountMinor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get currency =>
+      $composableBuilder(column: $table.currency, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startDate =>
+      $composableBuilder(column: $table.startDate, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get maturityDate => $composableBuilder(
+    column: $table.maturityDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<InvestmentPayoutFrequency, String>
+  get payoutFrequency => $composableBuilder(
+    column: $table.payoutFrequency,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get nextContributionDue => $composableBuilder(
+    column: $table.nextContributionDue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get nextPayoutDue => $composableBuilder(
+    column: $table.nextPayoutDue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<InvestmentStatus, String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$FinancialAccountsTableAnnotationComposer get sourceAccountId {
+    final $$FinancialAccountsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.sourceAccountId,
+          referencedTable: $db.financialAccounts,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$FinancialAccountsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.financialAccounts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+
+  $$FinancialAccountsTableAnnotationComposer get payoutAccountId {
+    final $$FinancialAccountsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.payoutAccountId,
+          referencedTable: $db.financialAccounts,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$FinancialAccountsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.financialAccounts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+
+  Expression<T> transactionsRefs<T extends Object>(
+    Expression<T> Function($$TransactionsTableAnnotationComposer a) f,
+  ) {
+    final $$TransactionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.transactions,
+      getReferencedColumn: (t) => t.investmentId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.transactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$InvestmentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $InvestmentsTable,
+          InvestmentRow,
+          $$InvestmentsTableFilterComposer,
+          $$InvestmentsTableOrderingComposer,
+          $$InvestmentsTableAnnotationComposer,
+          $$InvestmentsTableCreateCompanionBuilder,
+          $$InvestmentsTableUpdateCompanionBuilder,
+          (InvestmentRow, $$InvestmentsTableReferences),
+          InvestmentRow,
+          PrefetchHooks Function({
+            bool sourceAccountId,
+            bool payoutAccountId,
+            bool transactionsRefs,
+          })
+        > {
+  $$InvestmentsTableTableManager(_$AppDatabase db, $InvestmentsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$InvestmentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$InvestmentsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$InvestmentsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<InvestmentInstrumentType> instrumentType =
+                    const Value.absent(),
+                Value<InvestmentContributionMode> contributionMode =
+                    const Value.absent(),
+                Value<int> amountMinor = const Value.absent(),
+                Value<String> currency = const Value.absent(),
+                Value<String> sourceAccountId = const Value.absent(),
+                Value<String> payoutAccountId = const Value.absent(),
+                Value<DateTime> startDate = const Value.absent(),
+                Value<DateTime> maturityDate = const Value.absent(),
+                Value<InvestmentPayoutFrequency> payoutFrequency =
+                    const Value.absent(),
+                Value<DateTime?> nextContributionDue = const Value.absent(),
+                Value<DateTime?> nextPayoutDue = const Value.absent(),
+                Value<InvestmentStatus> status = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => InvestmentsCompanion(
+                id: id,
+                name: name,
+                instrumentType: instrumentType,
+                contributionMode: contributionMode,
+                amountMinor: amountMinor,
+                currency: currency,
+                sourceAccountId: sourceAccountId,
+                payoutAccountId: payoutAccountId,
+                startDate: startDate,
+                maturityDate: maturityDate,
+                payoutFrequency: payoutFrequency,
+                nextContributionDue: nextContributionDue,
+                nextPayoutDue: nextPayoutDue,
+                status: status,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required InvestmentInstrumentType instrumentType,
+                required InvestmentContributionMode contributionMode,
+                required int amountMinor,
+                Value<String> currency = const Value.absent(),
+                required String sourceAccountId,
+                required String payoutAccountId,
+                required DateTime startDate,
+                required DateTime maturityDate,
+                required InvestmentPayoutFrequency payoutFrequency,
+                Value<DateTime?> nextContributionDue = const Value.absent(),
+                Value<DateTime?> nextPayoutDue = const Value.absent(),
+                Value<InvestmentStatus> status = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => InvestmentsCompanion.insert(
+                id: id,
+                name: name,
+                instrumentType: instrumentType,
+                contributionMode: contributionMode,
+                amountMinor: amountMinor,
+                currency: currency,
+                sourceAccountId: sourceAccountId,
+                payoutAccountId: payoutAccountId,
+                startDate: startDate,
+                maturityDate: maturityDate,
+                payoutFrequency: payoutFrequency,
+                nextContributionDue: nextContributionDue,
+                nextPayoutDue: nextPayoutDue,
+                status: status,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$InvestmentsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({
+                sourceAccountId = false,
+                payoutAccountId = false,
+                transactionsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (transactionsRefs) db.transactions,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (sourceAccountId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.sourceAccountId,
+                                    referencedTable:
+                                        $$InvestmentsTableReferences
+                                            ._sourceAccountIdTable(db),
+                                    referencedColumn:
+                                        $$InvestmentsTableReferences
+                                            ._sourceAccountIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (payoutAccountId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.payoutAccountId,
+                                    referencedTable:
+                                        $$InvestmentsTableReferences
+                                            ._payoutAccountIdTable(db),
+                                    referencedColumn:
+                                        $$InvestmentsTableReferences
+                                            ._payoutAccountIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (transactionsRefs)
+                        await $_getPrefetchedData<
+                          InvestmentRow,
+                          $InvestmentsTable,
+                          TransactionRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$InvestmentsTableReferences
+                              ._transactionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$InvestmentsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).transactionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.investmentId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$InvestmentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $InvestmentsTable,
+      InvestmentRow,
+      $$InvestmentsTableFilterComposer,
+      $$InvestmentsTableOrderingComposer,
+      $$InvestmentsTableAnnotationComposer,
+      $$InvestmentsTableCreateCompanionBuilder,
+      $$InvestmentsTableUpdateCompanionBuilder,
+      (InvestmentRow, $$InvestmentsTableReferences),
+      InvestmentRow,
+      PrefetchHooks Function({
+        bool sourceAccountId,
+        bool payoutAccountId,
+        bool transactionsRefs,
+      })
+    >;
 typedef $$TransactionsTableCreateCompanionBuilder =
     TransactionsCompanion Function({
       required String id,
@@ -8273,6 +10111,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String?> destinationAccountId,
       Value<String?> categoryId,
       Value<String?> loanId,
+      Value<String?> investmentId,
       required DateTime date,
       Value<String> description,
       Value<DateTime> createdAt,
@@ -8289,6 +10128,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String?> destinationAccountId,
       Value<String?> categoryId,
       Value<String?> loanId,
+      Value<String?> investmentId,
       Value<DateTime> date,
       Value<String> description,
       Value<DateTime> createdAt,
@@ -8367,6 +10207,24 @@ final class $$TransactionsTableReferences
       $_db.loans,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_loanIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $InvestmentsTable _investmentIdTable(_$AppDatabase db) => db
+      .investments
+      .createAlias('transactions__investment_id__investments__id');
+
+  $$InvestmentsTableProcessedTableManager? get investmentId {
+    final $_column = $_itemColumn<String>('investment_id');
+    if ($_column == null) return null;
+    final manager = $$InvestmentsTableTableManager(
+      $_db,
+      $_db.investments,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_investmentIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -8507,6 +10365,29 @@ class $$TransactionsTableFilterComposer
           }) => $$LoansTableFilterComposer(
             $db: $db,
             $table: $db.loans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$InvestmentsTableFilterComposer get investmentId {
+    final $$InvestmentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.investmentId,
+      referencedTable: $db.investments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$InvestmentsTableFilterComposer(
+            $db: $db,
+            $table: $db.investments,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -8657,6 +10538,29 @@ class $$TransactionsTableOrderingComposer
     );
     return composer;
   }
+
+  $$InvestmentsTableOrderingComposer get investmentId {
+    final $$InvestmentsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.investmentId,
+      referencedTable: $db.investments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$InvestmentsTableOrderingComposer(
+            $db: $db,
+            $table: $db.investments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$TransactionsTableAnnotationComposer
@@ -8789,6 +10693,29 @@ class $$TransactionsTableAnnotationComposer
     );
     return composer;
   }
+
+  $$InvestmentsTableAnnotationComposer get investmentId {
+    final $$InvestmentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.investmentId,
+      referencedTable: $db.investments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$InvestmentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.investments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$TransactionsTableTableManager
@@ -8809,6 +10736,7 @@ class $$TransactionsTableTableManager
             bool destinationAccountId,
             bool categoryId,
             bool loanId,
+            bool investmentId,
           })
         > {
   $$TransactionsTableTableManager(_$AppDatabase db, $TransactionsTable table)
@@ -8832,6 +10760,7 @@ class $$TransactionsTableTableManager
                 Value<String?> destinationAccountId = const Value.absent(),
                 Value<String?> categoryId = const Value.absent(),
                 Value<String?> loanId = const Value.absent(),
+                Value<String?> investmentId = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
                 Value<String> description = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -8846,6 +10775,7 @@ class $$TransactionsTableTableManager
                 destinationAccountId: destinationAccountId,
                 categoryId: categoryId,
                 loanId: loanId,
+                investmentId: investmentId,
                 date: date,
                 description: description,
                 createdAt: createdAt,
@@ -8862,6 +10792,7 @@ class $$TransactionsTableTableManager
                 Value<String?> destinationAccountId = const Value.absent(),
                 Value<String?> categoryId = const Value.absent(),
                 Value<String?> loanId = const Value.absent(),
+                Value<String?> investmentId = const Value.absent(),
                 required DateTime date,
                 Value<String> description = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -8876,6 +10807,7 @@ class $$TransactionsTableTableManager
                 destinationAccountId: destinationAccountId,
                 categoryId: categoryId,
                 loanId: loanId,
+                investmentId: investmentId,
                 date: date,
                 description: description,
                 createdAt: createdAt,
@@ -8896,6 +10828,7 @@ class $$TransactionsTableTableManager
                 destinationAccountId = false,
                 categoryId = false,
                 loanId = false,
+                investmentId = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -8976,6 +10909,21 @@ class $$TransactionsTableTableManager
                                   )
                                   as T;
                         }
+                        if (investmentId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.investmentId,
+                                    referencedTable:
+                                        $$TransactionsTableReferences
+                                            ._investmentIdTable(db),
+                                    referencedColumn:
+                                        $$TransactionsTableReferences
+                                            ._investmentIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
 
                         return state;
                       },
@@ -9005,6 +10953,7 @@ typedef $$TransactionsTableProcessedTableManager =
         bool destinationAccountId,
         bool categoryId,
         bool loanId,
+        bool investmentId,
       })
     >;
 typedef $$BudgetsTableCreateCompanionBuilder =
@@ -12045,6 +13994,8 @@ class $AppDatabaseManager {
       $$CategoriesTableTableManager(_db, _db.categories);
   $$LoansTableTableManager get loans =>
       $$LoansTableTableManager(_db, _db.loans);
+  $$InvestmentsTableTableManager get investments =>
+      $$InvestmentsTableTableManager(_db, _db.investments);
   $$TransactionsTableTableManager get transactions =>
       $$TransactionsTableTableManager(_db, _db.transactions);
   $$BudgetsTableTableManager get budgets =>

@@ -39,16 +39,19 @@ abstract final class BackupFormat {
   static const accountsKey = 'accounts';
   static const categoriesKey = 'categories';
   static const loansKey = 'loans';
+  static const investmentsKey = 'investments';
   static const transactionsKey = 'transactions';
   static const budgetsKey = 'budgets';
 
   /// Every table a backup carries, parents before their dependents.
   ///
-  /// Loans precede transactions because a loan movement references its loan.
+  /// Loans and investments precede transactions because a loan or investment
+  /// movement references its loan/investment.
   static const tableKeys = [
     accountsKey,
     categoriesKey,
     loansKey,
+    investmentsKey,
     transactionsKey,
     budgetsKey,
   ];
@@ -75,6 +78,7 @@ class BackupCounts {
     required this.transactions,
     required this.budgets,
     required this.loans,
+    this.investments = 0,
   });
 
   const BackupCounts.empty()
@@ -82,15 +86,18 @@ class BackupCounts {
       categories = 0,
       transactions = 0,
       budgets = 0,
-      loans = 0;
+      loans = 0,
+      investments = 0;
 
   final int accounts;
   final int categories;
   final int transactions;
   final int budgets;
   final int loans;
+  final int investments;
 
-  int get total => accounts + categories + transactions + budgets + loans;
+  int get total =>
+      accounts + categories + transactions + budgets + loans + investments;
 
   bool get isEmpty => total == 0;
 
@@ -101,14 +108,22 @@ class BackupCounts {
       other.categories == categories &&
       other.transactions == transactions &&
       other.budgets == budgets &&
-      other.loans == loans;
+      other.loans == loans &&
+      other.investments == investments;
 
   @override
-  int get hashCode =>
-      Object.hash(accounts, categories, transactions, budgets, loans);
+  int get hashCode => Object.hash(
+    accounts,
+    categories,
+    transactions,
+    budgets,
+    loans,
+    investments,
+  );
 
   @override
   String toString() =>
       'BackupCounts(accounts: $accounts, categories: $categories, '
-      'transactions: $transactions, budgets: $budgets, loans: $loans)';
+      'transactions: $transactions, budgets: $budgets, loans: $loans, '
+      'investments: $investments)';
 }

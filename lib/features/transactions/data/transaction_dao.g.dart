@@ -8,6 +8,7 @@ mixin _$TransactionDaoMixin on DatabaseAccessor<AppDatabase> {
       attachedDatabase.financialAccounts;
   $CategoriesTable get categories => attachedDatabase.categories;
   $LoansTable get loans => attachedDatabase.loans;
+  $InvestmentsTable get investments => attachedDatabase.investments;
   $TransactionsTable get transactions => attachedDatabase.transactions;
   TransactionDaoManager get managers => TransactionDaoManager(this);
 }
@@ -24,6 +25,8 @@ class TransactionDaoManager {
       $$CategoriesTableTableManager(_db.attachedDatabase, _db.categories);
   $$LoansTableTableManager get loans =>
       $$LoansTableTableManager(_db.attachedDatabase, _db.loans);
+  $$InvestmentsTableTableManager get investments =>
+      $$InvestmentsTableTableManager(_db.attachedDatabase, _db.investments);
   $$TransactionsTableTableManager get transactions =>
       $$TransactionsTableTableManager(_db.attachedDatabase, _db.transactions);
 }

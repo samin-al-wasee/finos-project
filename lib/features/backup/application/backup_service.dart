@@ -39,6 +39,7 @@ class BackupService {
     final accounts = await _database.select(_database.financialAccounts).get();
     final categories = await _database.select(_database.categories).get();
     final loans = await _database.select(_database.loans).get();
+    final investments = await _database.select(_database.investments).get();
     final transactions = await _database.select(_database.transactions).get();
     final budgets = await _database.select(_database.budgets).get();
     final budgetDao = BudgetDao(_database);
@@ -54,6 +55,9 @@ class BackupService {
           .map(BackupSerializer.categoryToJson)
           .toList(),
       BackupFormat.loansKey: loans.map(BackupSerializer.loanToJson).toList(),
+      BackupFormat.investmentsKey: investments
+          .map(BackupSerializer.investmentToJson)
+          .toList(),
       BackupFormat.transactionsKey: transactions
           .map(BackupSerializer.transactionToJson)
           .toList(),
@@ -81,6 +85,7 @@ class BackupService {
       transactions: await _count(_database.transactions),
       budgets: await _count(_database.budgets),
       loans: await _count(_database.loans),
+      investments: await _count(_database.investments),
     );
   }
 
@@ -126,6 +131,11 @@ class BackupService {
       BackupFormat.loansKey,
       BackupSerializer.loanFromJson,
     );
+    final investments = _readTable(
+      decoded,
+      BackupFormat.investmentsKey,
+      BackupSerializer.investmentFromJson,
+    );
     final transactions = _readTable(
       decoded,
       BackupFormat.transactionsKey,
@@ -136,6 +146,7 @@ class BackupService {
     _validateUniqueIds(accounts.map((a) => a.id), 'account');
     _validateUniqueIds(categories.map((c) => c.id), 'category');
     _validateUniqueIds(loans.map((l) => l.id), 'loan');
+    _validateUniqueIds(investments.map((i) => i.id), 'investment');
     _validateUniqueIds(transactions.map((t) => t.id), 'transaction');
     _validateUniqueIds(budgets.map((b) => b.id), 'budget');
 
@@ -143,6 +154,7 @@ class BackupService {
       accounts: accounts,
       categories: categories,
       loans: loans,
+      investments: investments,
       transactions: transactions,
       budgets: budgets,
       budgetCategoryIds: budgetCategoryIds,
@@ -152,6 +164,7 @@ class BackupService {
       accounts: accounts,
       categories: categories,
       loans: loans,
+      investments: investments,
       transactions: transactions,
       budgets: budgets,
       budgetCategoryIds: budgetCategoryIds,
@@ -214,12 +227,13 @@ class BackupService {
   Future<BackupCounts> restore(ParsedBackup backup) async {
     try {
       await _database.transaction(() async {
-        // Children first. Transactions reference accounts, categories, and
-        // loans; loans reference accounts; budget_categories references
-        // budgets and categories.
+        // Children first. Transactions reference accounts, categories,
+        // loans, and investments; loans and investments reference accounts;
+        // budget_categories references budgets and categories.
         await _database.delete(_database.budgetCategories).go();
         await _database.delete(_database.transactions).go();
         await _database.delete(_database.budgets).go();
+        await _database.delete(_database.investments).go();
         await _database.delete(_database.loans).go();
         await _database.delete(_database.categories).go();
         await _database.delete(_database.financialAccounts).go();
@@ -252,6 +266,7 @@ class BackupService {
           b.insertAll(_database.financialAccounts, backup.accounts);
           b.insertAll(_database.categories, backup.categories);
           b.insertAll(_database.loans, orderedLoans);
+          b.insertAll(_database.investments, backup.investments);
           b.insertAll(_database.transactions, backup.transactions);
           b.insertAll(_database.budgets, backup.budgets);
           b.insertAll(_database.budgetCategories, budgetCategoryRows);
@@ -357,6 +372,7 @@ class BackupService {
     required List<FinancialAccountRow> accounts,
     required List<CategoryRow> categories,
     required List<LoanRow> loans,
+    required List<InvestmentRow> investments,
     required List<TransactionRow> transactions,
     required List<BudgetRow> budgets,
     required Map<String, Set<String>> budgetCategoryIds,
@@ -364,6 +380,7 @@ class BackupService {
     final accountIds = accounts.map((a) => a.id).toSet();
     final categoryIds = categories.map((c) => c.id).toSet();
     final loanIds = loans.map((l) => l.id).toSet();
+    final investmentIds = investments.map((i) => i.id).toSet();
 
     for (final loan in loans) {
       final disbursement = loan.disbursementAccountId;
@@ -375,12 +392,34 @@ class BackupService {
       }
     }
 
+    for (final investment in investments) {
+      if (!accountIds.contains(investment.sourceAccountId)) {
+        throw ValidationException(
+          'An investment in this backup refers to a source account that the '
+          'backup does not contain (id "${investment.sourceAccountId}").',
+        );
+      }
+      if (!accountIds.contains(investment.payoutAccountId)) {
+        throw ValidationException(
+          'An investment in this backup refers to a payout account that the '
+          'backup does not contain (id "${investment.payoutAccountId}").',
+        );
+      }
+    }
+
     for (final transaction in transactions) {
       final loanId = transaction.loanId;
       if (loanId != null && !loanIds.contains(loanId)) {
         throw ValidationException(
           'A loan movement in this backup refers to a loan that the backup does '
           'not contain (id "$loanId").',
+        );
+      }
+      final investmentId = transaction.investmentId;
+      if (investmentId != null && !investmentIds.contains(investmentId)) {
+        throw ValidationException(
+          'An investment movement in this backup refers to an investment '
+          'that the backup does not contain (id "$investmentId").',
         );
       }
     }
@@ -455,6 +494,7 @@ class ParsedBackup {
     required this.transactions,
     required this.budgets,
     this.loans = const [],
+    this.investments = const [],
     this.budgetCategoryIds = const {},
   });
 
@@ -463,6 +503,7 @@ class ParsedBackup {
   final List<TransactionRow> transactions;
   final List<BudgetRow> budgets;
   final List<LoanRow> loans;
+  final List<InvestmentRow> investments;
 
   /// Each `MULTI_CATEGORY` budget's member categories, keyed by budget id
   /// (docs/adr/007-flexible-budget-scope.md). Every other scope type is
@@ -475,5 +516,6 @@ class ParsedBackup {
     transactions: transactions.length,
     budgets: budgets.length,
     loans: loans.length,
+    investments: investments.length,
   );
 }

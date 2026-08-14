@@ -12,11 +12,24 @@ import 'package:drift/drift.dart';
 /// so balance queries never need to join to the loan: a receipt adds to the
 /// account, a payment subtracts. Like transfers, they are balance-sheet movements
 /// and never count as income or expense.
-enum TransactionType { income, expense, transfer, loanReceipt, loanPayment }
+///
+/// [investmentContribution] and [investmentPayout] are the equivalent pair for
+/// fixed-term investments (docs/adr/009-investment-accounting.md): a
+/// contribution debits the investment's source account, a payout credits its
+/// payout account. Like loan movements, they are balance-sheet movements only.
+enum TransactionType {
+  income,
+  expense,
+  transfer,
+  loanReceipt,
+  loanPayment,
+  investmentContribution,
+  investmentPayout,
+}
 
 /// Maps [TransactionType] to its canonical uppercase storage value in the
-/// database (`INCOME`, `EXPENSE`, `TRANSFER`, `LOAN_RECEIPT`, `LOAN_PAYMENT` —
-/// docs/DATA_MODEL.md §13).
+/// database (`INCOME`, `EXPENSE`, `TRANSFER`, `LOAN_RECEIPT`, `LOAN_PAYMENT`,
+/// `INVESTMENT_CONTRIBUTION`, `INVESTMENT_PAYOUT` — docs/DATA_MODEL.md §13).
 class TransactionTypeConverter extends TypeConverter<TransactionType, String> {
   const TransactionTypeConverter();
 
@@ -26,6 +39,8 @@ class TransactionTypeConverter extends TypeConverter<TransactionType, String> {
     TransactionType.transfer: 'TRANSFER',
     TransactionType.loanReceipt: 'LOAN_RECEIPT',
     TransactionType.loanPayment: 'LOAN_PAYMENT',
+    TransactionType.investmentContribution: 'INVESTMENT_CONTRIBUTION',
+    TransactionType.investmentPayout: 'INVESTMENT_PAYOUT',
   };
 
   @override
@@ -42,10 +57,11 @@ class TransactionTypeConverter extends TypeConverter<TransactionType, String> {
 
 /// The types a user may create or edit directly.
 ///
-/// Loan movements are deliberately excluded: they are created and removed only
-/// through the loan feature, because editing one by hand would let a loan's
-/// outstanding balance diverge from the transactions it is derived from
-/// (ADR-004).
+/// Loan and investment movements are deliberately excluded: they are created
+/// and removed only through their own feature, because editing one by hand
+/// would let a loan's outstanding balance or an investment's contributed/paid
+/// totals diverge from the transactions they are derived from (ADR-004,
+/// docs/adr/009-investment-accounting.md).
 const userCreatableTransactionTypes = [
   TransactionType.income,
   TransactionType.expense,
@@ -55,3 +71,9 @@ const userCreatableTransactionTypes = [
 /// Whether [type] records a loan movement rather than ordinary activity.
 bool isLoanTransaction(TransactionType type) =>
     type == TransactionType.loanReceipt || type == TransactionType.loanPayment;
+
+/// Whether [type] records an investment movement rather than ordinary
+/// activity.
+bool isInvestmentTransaction(TransactionType type) =>
+    type == TransactionType.investmentContribution ||
+    type == TransactionType.investmentPayout;

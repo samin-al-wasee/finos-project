@@ -38,8 +38,8 @@ void main() {
       await database.close();
     });
 
-    test('starts at schema version 13', () {
-      expect(database.schemaVersion, 13);
+    test('starts at schema version 14', () {
+      expect(database.schemaVersion, 14);
     });
 
     test('seeds the built-in categories on a fresh database', () async {
@@ -1144,10 +1144,7 @@ void main() {
             rolloverEnabled: const Value(true),
           ),
         );
-        expect(
-          (await dao.getById('budget-safe-2'))!.rolloverEnabled,
-          isTrue,
-        );
+        expect((await dao.getById('budget-safe-2'))!.rolloverEnabled, isTrue);
       },
     );
   });
@@ -1278,7 +1275,7 @@ class _RawDatabase extends GeneratedDatabase {
   _RawDatabase(super.e);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   Iterable<TableInfo<Table, dynamic>> get allTables =>

@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../../accounts/data/account_table.dart';
 import '../../categories/data/category_table.dart';
+import '../../investments/data/investment_table.dart';
 import '../../loans/data/loan_table.dart';
 import '../domain/transaction_type.dart';
 
@@ -42,6 +43,16 @@ class Transactions extends Table {
   /// The loan this movement belongs to. Set only for `LOAN_RECEIPT` and
   /// `LOAN_PAYMENT` rows, and null for all ordinary activity (ADR-004).
   TextColumn get loanId => text().nullable().references(Loans, #id)();
+
+  /// The investment this movement belongs to. Set only for
+  /// `INVESTMENT_CONTRIBUTION` and `INVESTMENT_PAYOUT` rows, and null for all
+  /// ordinary activity (docs/adr/009-investment-accounting.md). [accountId]
+  /// carries the actual account affected — the investment's source account for
+  /// a contribution, its payout account for a payout — the same way a loan
+  /// movement's [accountId] is whichever account the loan's cash moved
+  /// through.
+  TextColumn get investmentId =>
+      text().nullable().references(Investments, #id)();
 
   /// The calendar date the financial event happened (docs/DATA_MODEL.md §41).
   /// This is the financial event date, not the record-creation timestamp.

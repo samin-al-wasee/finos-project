@@ -21,6 +21,9 @@ import '../features/budgets/domain/budget_status.dart';
 import '../features/categories/application/category_controller.dart';
 import '../features/categories/data/category_dao.dart';
 import '../features/dashboard/domain/dashboard_data.dart';
+import '../features/investments/application/investment_controller.dart';
+import '../features/investments/data/investment_dao.dart';
+import '../features/investments/domain/investment_progress.dart';
 import '../features/loans/application/loan_controller.dart';
 import '../features/loans/data/loan_dao.dart';
 import '../features/loans/domain/loan_group.dart';
@@ -527,6 +530,74 @@ final loanGroupForLoanProvider = FutureProvider.family<LoanGroup?, String>((
 });
 
 // ------------------------------------------------------------------
+// Investments
+// ------------------------------------------------------------------
+
+/// Data-access object for investments.
+final investmentDaoProvider = Provider<InvestmentDao>((ref) {
+  return InvestmentDao(ref.watch(appDatabaseProvider));
+});
+
+/// Application service for the investment lifecycle.
+final investmentControllerProvider = Provider<InvestmentController>((ref) {
+  return InvestmentController(
+    ref.watch(appDatabaseProvider),
+    ref.watch(investmentDaoProvider),
+    ref.watch(transactionDaoProvider),
+    ref.watch(accountDaoProvider),
+  );
+});
+
+/// Reactive stream of all investments, including archived ones.
+final investmentsStreamProvider = StreamProvider<List<InvestmentRow>>((ref) {
+  return _guardOpenTimeout(ref.watch(investmentDaoProvider).watchAll());
+});
+
+/// Investments paired with everything derived from their transactions.
+///
+/// Watches the transaction stream as well as the investment stream, so
+/// confirming a contribution or payout immediately updates the derived
+/// totals. Everything is derived on every read rather than stored
+/// (docs/adr/009-investment-accounting.md), so it cannot drift from the
+/// transactions behind it.
+final investmentProgressProvider = FutureProvider<List<InvestmentProgress>>((
+  ref,
+) async {
+  final investments = await ref.watch(investmentsStreamProvider.future);
+  await ref.watch(transactionsStreamProvider.future);
+  final controller = ref.watch(investmentControllerProvider);
+
+  final progress = <InvestmentProgress>[];
+  for (final investment in investments) {
+    progress.add(await controller.progressFor(investment));
+  }
+  return progress;
+});
+
+/// Derived figures for one investment, for the details screen.
+final investmentProgressByIdProvider =
+    FutureProvider.family<InvestmentProgress?, String>((
+      ref,
+      investmentId,
+    ) async {
+      final all = await ref.watch(investmentProgressProvider.future);
+      for (final entry in all) {
+        if (entry.investment.id == investmentId) return entry;
+      }
+      return null;
+    });
+
+/// The transactions belonging to one investment, newest first.
+final investmentMovementsProvider =
+    FutureProvider.family<List<TransactionRow>, String>((
+      ref,
+      investmentId,
+    ) async {
+      await ref.watch(transactionsStreamProvider.future);
+      return ref.watch(transactionDaoProvider).forInvestment(investmentId);
+    });
+
+// ------------------------------------------------------------------
 // Credit cards
 // ------------------------------------------------------------------
 
@@ -696,14 +767,22 @@ final accountBalancesProvider = FutureProvider<Map<String, int>>((ref) async {
 // Net worth
 // ------------------------------------------------------------------
 
-/// Assets minus liabilities, derived entirely at read time from accounts and
-/// loans (docs/ROADMAP.md §9.1) — reuses [accountBalancesProvider] and
-/// [loanProgressProvider] rather than recomputing either.
+/// Assets minus liabilities, derived entirely at read time from accounts,
+/// loans, and investments (docs/ROADMAP.md §9.1,
+/// docs/adr/009-investment-accounting.md) — reuses [accountBalancesProvider],
+/// [loanProgressProvider], and [investmentProgressProvider] rather than
+/// recomputing any of them.
 final netWorthProvider = FutureProvider<NetWorthData>((ref) async {
   final accounts = await ref.watch(accountsStreamProvider.future);
   final balances = await ref.watch(accountBalancesProvider.future);
   final loans = await ref.watch(loanProgressProvider.future);
-  return computeNetWorth(accounts: accounts, balances: balances, loans: loans);
+  final investments = await ref.watch(investmentProgressProvider.future);
+  return computeNetWorth(
+    accounts: accounts,
+    balances: balances,
+    loans: loans,
+    investments: investments,
+  );
 });
 
 // ------------------------------------------------------------------

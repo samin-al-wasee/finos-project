@@ -1,10 +1,16 @@
 import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/features/accounts/domain/account_status.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
+import 'package:finos_app/features/investments/domain/investment_contribution_mode.dart';
+import 'package:finos_app/features/investments/domain/investment_instrument_type.dart';
+import 'package:finos_app/features/investments/domain/investment_payout_frequency.dart';
+import 'package:finos_app/features/investments/domain/investment_progress.dart';
+import 'package:finos_app/features/investments/domain/investment_status.dart';
 import 'package:finos_app/features/loans/domain/loan_direction.dart';
 import 'package:finos_app/features/loans/domain/loan_progress.dart';
 import 'package:finos_app/features/loans/domain/loan_status.dart';
 import 'package:finos_app/features/net_worth/domain/net_worth_data.dart';
+import 'package:finos_app/features/recurring/domain/recurrence_frequency.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Tests for [computeNetWorth] — a pure function over already-loaded
@@ -51,6 +57,39 @@ void main() {
     ),
     repaidMinor: repaidMinor,
     repaymentCount: 0,
+  );
+
+  InvestmentProgress investment({
+    required String id,
+    int contributedMinor = 100000,
+    int payoutReceivedMinor = 0,
+    DateTime? latestPayoutDate,
+    InvestmentStatus status = InvestmentStatus.active,
+    DateTime? maturityDate,
+    InvestmentPayoutFrequency payoutFrequency =
+        const InvestmentPayoutFrequency.atMaturity(),
+  }) => InvestmentProgress(
+    investment: InvestmentRow(
+      id: id,
+      name: id,
+      instrumentType: InvestmentInstrumentType.fdr,
+      contributionMode: InvestmentContributionMode.lumpSum,
+      amountMinor: contributedMinor,
+      currency: 'BDT',
+      sourceAccountId: 'bank',
+      payoutAccountId: 'bank',
+      startDate: timestamp,
+      maturityDate: maturityDate ?? DateTime(2030, 1, 1),
+      payoutFrequency: payoutFrequency,
+      nextContributionDue: null,
+      nextPayoutDue: null,
+      status: status,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    ),
+    contributedMinor: contributedMinor,
+    payoutReceivedMinor: payoutReceivedMinor,
+    latestPayoutDate: latestPayoutDate,
   );
 
   test('a plain account contributes its balance as an asset', () {
@@ -199,5 +238,134 @@ void main() {
     expect(result.assetsMinor, 100000 + 20000);
     expect(result.liabilitiesMinor, 20000 + 50000);
     expect(result.netWorthMinor, (100000 + 20000) - (20000 + 50000));
+  });
+
+  group('investments', () {
+    test('an active investment contributes contributed-minus-paid-out as an '
+        'asset', () {
+      final result = computeNetWorth(
+        accounts: const [],
+        balances: const {},
+        loans: const [],
+        investments: [investment(id: 'fdr', contributedMinor: 500000)],
+      );
+
+      expect(result.assets, [
+        const NetWorthEntry(label: 'fdr', amountMinor: 500000),
+      ]);
+      expect(result.liabilities, isEmpty);
+    });
+
+    test('a Sanchayapatra mid-term with profit already withdrawn nets to '
+        'exactly the original principal, not principal-minus-withdrawn-profit '
+        '— a periodic payout is new profit already reflected in the payout '
+        "account's own balance elsewhere in the snapshot, not a return of "
+        'principal, so it must not reduce the locked value here (that would '
+        'both double-count nothing and understate the position)', () {
+      final result = computeNetWorth(
+        accounts: const [],
+        balances: const {},
+        loans: const [],
+        investments: [
+          investment(
+            id: 'sanchayapatra',
+            contributedMinor: 1000000,
+            // Three quarters of profit already paid out and sitting in
+            // the payout account's own balance — dated well before
+            // maturity, so the instrument is not settled.
+            payoutReceivedMinor: 45000,
+            latestPayoutDate: DateTime(2027, 10, 1),
+            maturityDate: DateTime(2031, 1, 1),
+            payoutFrequency: const InvestmentPayoutFrequency.periodic(
+              RecurrenceFrequency.quarterly,
+            ),
+          ),
+        ],
+      );
+
+      expect(result.assets, [
+        const NetWorthEntry(
+          label: 'sanchayapatra',
+          amountMinor: 1000000, // unaffected by the withdrawn profit
+        ),
+      ]);
+    });
+
+    test('an archived investment is excluded entirely', () {
+      final result = computeNetWorth(
+        accounts: const [],
+        balances: const {},
+        loans: const [],
+        investments: [
+          investment(
+            id: 'archived-fdr',
+            contributedMinor: 500000,
+            status: InvestmentStatus.archived,
+          ),
+        ],
+      );
+
+      expect(result.assets, isEmpty);
+    });
+
+    test('a settled investment (its maturity payout has been recorded) '
+        'contributes nothing, even if the payout amount differs from the '
+        'principal (interest included)', () {
+      final result = computeNetWorth(
+        accounts: const [],
+        balances: const {},
+        loans: const [],
+        investments: [
+          investment(
+            id: 'settled-fdr',
+            contributedMinor: 500000,
+            payoutReceivedMinor: 550000, // principal + interest
+            maturityDate: DateTime(2027, 1, 1),
+            latestPayoutDate: DateTime(2027, 1, 1),
+          ),
+        ],
+      );
+
+      expect(result.assets, isEmpty);
+    });
+
+    test('a matured-but-unsettled investment still counts — the maturity '
+        'payout has not happened yet, so the money has not moved', () {
+      final result = computeNetWorth(
+        accounts: const [],
+        balances: const {},
+        loans: const [],
+        investments: [
+          investment(
+            id: 'matured-fdr',
+            contributedMinor: 500000,
+            maturityDate: DateTime(2020, 1, 1), // long past
+          ),
+        ],
+      );
+
+      expect(result.assets, [
+        const NetWorthEntry(label: 'matured-fdr', amountMinor: 500000),
+      ]);
+    });
+
+    test('mixed accounts, loans, and investments net out correctly', () {
+      final result = computeNetWorth(
+        accounts: [account(id: 'bank')],
+        balances: {'bank': 100000},
+        loans: [
+          loan(
+            id: 'john',
+            direction: LoanDirection.lent,
+            principalMinor: 20000,
+          ),
+        ],
+        investments: [investment(id: 'fdr', contributedMinor: 30000)],
+      );
+
+      expect(result.assetsMinor, 100000 + 20000 + 30000);
+      expect(result.liabilitiesMinor, 0);
+      expect(result.netWorthMinor, 100000 + 20000 + 30000);
+    });
   });
 }

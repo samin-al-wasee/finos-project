@@ -17,6 +17,11 @@ import '../../features/categories/data/category_table.dart';
 import '../../features/categories/domain/category_origin.dart';
 import '../../features/categories/domain/category_status.dart';
 import '../../features/categories/domain/category_type.dart';
+import '../../features/investments/data/investment_table.dart';
+import '../../features/investments/domain/investment_contribution_mode.dart';
+import '../../features/investments/domain/investment_instrument_type.dart';
+import '../../features/investments/domain/investment_payout_frequency.dart';
+import '../../features/investments/domain/investment_status.dart';
 import '../../features/loans/data/loan_table.dart';
 import '../../features/loans/domain/loan_direction.dart';
 import '../../features/loans/domain/loan_status.dart';
@@ -48,6 +53,7 @@ part 'app_database.g.dart';
     SavedQueries,
     CreditCardDetails,
     BudgetCategories,
+    Investments,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -64,7 +70,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -176,6 +182,19 @@ class AppDatabase extends _$AppDatabase {
         // current schema, which already includes this column.
         await _addRolloverEnabledColumnIfMissing();
       }
+      if (from < 14) {
+        // Investments first: transactions.investment_id references it — same
+        // ordering rule the v6 loans migration follows.
+        await m.createTable(investments);
+        // Additive column, null for every existing row — no ordinary
+        // transaction belongs to an investment (docs/adr/009).
+        //
+        // Checked rather than added blindly for the same reason as
+        // `_addLoanIdColumnIfMissing`: an upgrade from before v3 just created
+        // the transactions table from the current schema, which already
+        // includes this column.
+        await _addInvestmentIdColumnIfMissing();
+      }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
     beforeOpen: (details) async {
@@ -254,6 +273,14 @@ class AppDatabase extends _$AppDatabase {
       // Same safety net for the v13 budgets.rollover_enabled column.
       if (details.versionNow >= 13 && !details.wasCreated) {
         await _addRolloverEnabledColumnIfMissing();
+      }
+
+      // Safety net for a v14 database missing part of the investments schema.
+      // Same rationale as _ensureLoansSchema (v6): this version both created a
+      // table and altered an existing one, so an interruption can leave
+      // either half undone.
+      if (details.versionNow >= 14 && !details.wasCreated) {
+        await _ensureInvestmentsSchema();
       }
     },
   );
@@ -471,6 +498,44 @@ class AppDatabase extends _$AppDatabase {
 
     debugPrint('[AppDatabase] budgets.rollover_enabled missing — adding');
     await Migrator(this).addColumn(budgets, budgets.rolloverEnabled);
+  }
+
+  /// Safety net for a v14 database missing part of the investments schema.
+  ///
+  /// Mirrors [_ensureLoansSchema] exactly: v14 both created a table and
+  /// altered an existing one, so an interruption can leave either half
+  /// undone. [Migrator.createTable] is `CREATE TABLE IF NOT EXISTS` and so is
+  /// safe to repeat, but `ALTER TABLE ADD COLUMN` is not — the column is
+  /// checked for first via `PRAGMA table_info`.
+  Future<void> _ensureInvestmentsSchema() async {
+    final migrator = Migrator(this);
+    await migrator.createTable(investments);
+    await _addInvestmentIdColumnIfMissing();
+  }
+
+  /// Adds `transactions.investment_id` only when it is absent.
+  ///
+  /// Mirrors [_addLoanIdColumnIfMissing] exactly: `ALTER TABLE ADD COLUMN` is
+  /// not idempotent, and there are two ways the column can already exist: the
+  /// transactions table may have just been created from the current schema
+  /// earlier in the same upgrade, or a previous run may have added it before
+  /// being interrupted.
+  Future<void> _addInvestmentIdColumnIfMissing() async {
+    final columns = await customSelect('PRAGMA table_info(transactions)').get();
+
+    // An empty result means the table does not exist at all — same edge case
+    // _addLoanIdColumnIfMissing documents. Skipping is correct: the v3 safety
+    // net creates the table from the current schema, which already includes
+    // this column.
+    if (columns.isEmpty) return;
+
+    final hasInvestmentId = columns.any(
+      (row) => row.read<String>('name') == 'investment_id',
+    );
+    if (hasInvestmentId) return;
+
+    debugPrint('[AppDatabase] transactions.investment_id missing — adding');
+    await Migrator(this).addColumn(transactions, transactions.investmentId);
   }
 
   /// Whether a table named [name] currently exists.

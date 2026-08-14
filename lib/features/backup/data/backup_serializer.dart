@@ -8,6 +8,10 @@ import '../../budgets/domain/budget_status.dart';
 import '../../categories/domain/category_origin.dart';
 import '../../categories/domain/category_status.dart';
 import '../../categories/domain/category_type.dart';
+import '../../investments/domain/investment_contribution_mode.dart';
+import '../../investments/domain/investment_instrument_type.dart';
+import '../../investments/domain/investment_payout_frequency.dart';
+import '../../investments/domain/investment_status.dart';
 import '../../loans/domain/loan_direction.dart';
 import '../../loans/domain/loan_status.dart';
 import '../../transactions/domain/transaction_type.dart';
@@ -60,6 +64,7 @@ abstract final class BackupSerializer {
     'destination_account_id': row.destinationAccountId,
     'category_id': row.categoryId,
     'loan_id': row.loanId,
+    'investment_id': row.investmentId,
     'date': _dateToJson(row.date),
     'description': row.description,
     'created_at': _dateToJson(row.createdAt),
@@ -78,6 +83,35 @@ abstract final class BackupSerializer {
     'disbursement_account_id': row.disbursementAccountId,
     'status': const LoanStatusConverter().toSql(row.status),
     'group_id': row.groupId,
+    'created_at': _dateToJson(row.createdAt),
+    'updated_at': _dateToJson(row.updatedAt),
+  };
+
+  static Map<String, Object?> investmentToJson(InvestmentRow row) => {
+    'id': row.id,
+    'name': row.name,
+    'instrument_type': const InvestmentInstrumentTypeConverter().toSql(
+      row.instrumentType,
+    ),
+    'contribution_mode': const InvestmentContributionModeConverter().toSql(
+      row.contributionMode,
+    ),
+    'amount_minor': row.amountMinor,
+    'currency': row.currency,
+    'source_account_id': row.sourceAccountId,
+    'payout_account_id': row.payoutAccountId,
+    'start_date': _dateToJson(row.startDate),
+    'maturity_date': _dateToJson(row.maturityDate),
+    'payout_frequency': const InvestmentPayoutFrequencyConverter().toSql(
+      row.payoutFrequency,
+    ),
+    'next_contribution_due': row.nextContributionDue == null
+        ? null
+        : _dateToJson(row.nextContributionDue!),
+    'next_payout_due': row.nextPayoutDue == null
+        ? null
+        : _dateToJson(row.nextPayoutDue!),
+    'status': const InvestmentStatusConverter().toSql(row.status),
     'created_at': _dateToJson(row.createdAt),
     'updated_at': _dateToJson(row.updatedAt),
   };
@@ -192,6 +226,7 @@ abstract final class BackupSerializer {
       ),
       categoryId: _optionalString(json, 'category_id', where),
       loanId: _optionalString(json, 'loan_id', where),
+      investmentId: _optionalString(json, 'investment_id', where),
       date: _date(json, 'date', where),
       description: _string(json, 'description', where, allowEmpty: true),
       createdAt: _date(json, 'created_at', where),
@@ -236,6 +271,62 @@ abstract final class BackupSerializer {
         const LoanStatusConverter().fromSql,
       ),
       groupId: _optionalString(json, 'group_id', where),
+      createdAt: _date(json, 'created_at', where),
+      updatedAt: _date(json, 'updated_at', where),
+    );
+  }
+
+  static InvestmentRow investmentFromJson(Map<String, Object?> json) {
+    const where = 'investment';
+    final amountMinor = _int(json, 'amount_minor', where);
+    // The invariant from docs/DATA_MODEL.md §46.
+    if (amountMinor <= 0) {
+      throw ValidationException(
+        'An investment in the backup has an amount of $amountMinor; '
+        'it must be greater than zero.',
+      );
+    }
+    final nextContributionDueValue = json['next_contribution_due'];
+    final nextPayoutDueValue = json['next_payout_due'];
+    return InvestmentRow(
+      id: _id(json, where),
+      name: _string(json, 'name', where),
+      instrumentType: _enumValue(
+        json,
+        'instrument_type',
+        where,
+        const InvestmentInstrumentTypeConverter().fromSql,
+      ),
+      contributionMode: _enumValue(
+        json,
+        'contribution_mode',
+        where,
+        const InvestmentContributionModeConverter().fromSql,
+      ),
+      amountMinor: amountMinor,
+      currency: _currency(json, where),
+      sourceAccountId: _string(json, 'source_account_id', where),
+      payoutAccountId: _string(json, 'payout_account_id', where),
+      startDate: _date(json, 'start_date', where),
+      maturityDate: _date(json, 'maturity_date', where),
+      payoutFrequency: _enumValue(
+        json,
+        'payout_frequency',
+        where,
+        const InvestmentPayoutFrequencyConverter().fromSql,
+      ),
+      nextContributionDue: nextContributionDueValue == null
+          ? null
+          : _date(json, 'next_contribution_due', where),
+      nextPayoutDue: nextPayoutDueValue == null
+          ? null
+          : _date(json, 'next_payout_due', where),
+      status: _enumValue(
+        json,
+        'status',
+        where,
+        const InvestmentStatusConverter().fromSql,
+      ),
       createdAt: _date(json, 'created_at', where),
       updatedAt: _date(json, 'updated_at', where),
     );
@@ -398,7 +489,9 @@ abstract final class BackupSerializer {
     final value = json[field];
     if (value == null) return fallback;
     if (value is! bool) {
-      throw ValidationException(_typeMessage(where, field, 'true/false', value));
+      throw ValidationException(
+        _typeMessage(where, field, 'true/false', value),
+      );
     }
     return value;
   }
