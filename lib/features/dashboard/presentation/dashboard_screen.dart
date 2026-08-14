@@ -12,6 +12,7 @@ import '../../accounts/presentation/account_form_screen.dart';
 import '../../accounts/presentation/accounts_list_screen.dart';
 import '../../budgets/presentation/budgets_list_screen.dart';
 import '../../categories/presentation/category_icon.dart';
+import '../../investments/presentation/investments_list_screen.dart';
 import '../../reports/presentation/reports_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../../transactions/presentation/transactions_list_screen.dart';
@@ -142,6 +143,13 @@ class _DashboardBody extends StatelessWidget {
                 onTap: () => _openAccounts(context),
               ),
               const SizedBox(height: AppSpacing.lg),
+              if (data.investmentsSummary != null) ...[
+                _InvestmentsSummaryCard(
+                  summary: data.investmentsSummary!,
+                  onTap: () => _openInvestments(context),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
               if (data.categorySpending.isNotEmpty) ...[
                 _CategorySpendingSummaryCard(
                   topSpending: data.categorySpending.first,
@@ -185,6 +193,12 @@ class _DashboardBody extends StatelessWidget {
     Navigator.of(
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => const BudgetsListScreen()));
+  }
+
+  void _openInvestments(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const InvestmentsListScreen()),
+    );
   }
 
   void _openReports(BuildContext context) {
@@ -419,6 +433,55 @@ class _AccountsSummaryCard extends StatelessWidget {
                     Text('Accounts', style: theme.textTheme.labelLarge),
                     Text(
                       '$accountCount ${accountCount == 1 ? 'account' : 'accounts'}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colors.mutedText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Aggregate summary of every active investment — a count and combined
+/// invested total, not the per-investment list (that's the Investments
+/// screen's job) — tapping through to it.
+class _InvestmentsSummaryCard extends StatelessWidget {
+  const _InvestmentsSummaryCard({required this.summary, required this.onTap});
+
+  final InvestmentsSummary summary;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<FinosColors>()!;
+
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            children: [
+              Icon(Icons.savings_outlined, color: colors.mutedText),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Investments', style: theme.textTheme.labelLarge),
+                    Text(
+                      '${summary.investmentCount} '
+                      '${summary.investmentCount == 1 ? 'investment' : 'investments'} · '
+                      '${formatMinorUnits(summary.totalInvestedMinor)}',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: colors.mutedText,
                       ),

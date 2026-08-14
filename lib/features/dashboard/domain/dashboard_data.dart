@@ -52,6 +52,23 @@ class BudgetStatusSummary {
   double get usedFraction => limitMinor <= 0 ? 0 : spentMinor / limitMinor;
 }
 
+/// A single-card summary of active investments for the dashboard.
+///
+/// Mirrors [BudgetStatusSummary]'s shape: a count plus a combined total,
+/// never the per-investment detail the Investments screen itself shows.
+/// [totalInvestedMinor] only ever includes an investment while it's neither
+/// archived nor settled — the same locked-principal rule
+/// `computeNetWorth` already applies (docs/adr/009-investment-accounting.md).
+class InvestmentsSummary {
+  const InvestmentsSummary({
+    required this.investmentCount,
+    required this.totalInvestedMinor,
+  });
+
+  final int investmentCount;
+  final int totalInvestedMinor;
+}
+
 /// Aggregated data rendered by the dashboard (FR-07).
 class DashboardData {
   const DashboardData({
@@ -61,6 +78,7 @@ class DashboardData {
     required this.accountBalances,
     required this.categorySpending,
     required this.budgetStatus,
+    required this.investmentsSummary,
     required this.recentTransactions,
     required this.transactionCountThisPeriod,
   });
@@ -77,6 +95,10 @@ class DashboardData {
   /// Summary across every active budget, or `null` when there are none to
   /// summarise — the section is hidden rather than shown empty.
   final BudgetStatusSummary? budgetStatus;
+
+  /// Summary across every active investment, or `null` when there are none
+  /// to summarise — the section is hidden rather than shown empty.
+  final InvestmentsSummary? investmentsSummary;
 
   /// Newest transactions, capped at five (docs/UI_DESIGN.md §8) — the
   /// Recent Activity summary card shows only the first of these as a

@@ -848,6 +848,19 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
   final openingSum = accounts.fold(0, (sum, a) => sum + a.openingBalanceMinor);
   final totalBalanceMinor = openingSum + await dao.totalBalanceImpact();
 
+  final activeInvestments = (await ref.watch(investmentProgressProvider.future))
+      .where((p) => !p.isArchived && !p.isSettled && p.contributedMinor > 0)
+      .toList();
+  final investmentsSummary = activeInvestments.isEmpty
+      ? null
+      : InvestmentsSummary(
+          investmentCount: activeInvestments.length,
+          totalInvestedMinor: activeInvestments.fold(
+            0,
+            (sum, p) => sum + p.contributedMinor,
+          ),
+        );
+
   return DashboardData(
     totalBalanceMinor: totalBalanceMinor,
     incomeMinor: totals.incomeMinor,
@@ -855,6 +868,7 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
     accountBalances: accountBalances,
     categorySpending: categorySpending.take(5).toList(),
     budgetStatus: budgetStatus,
+    investmentsSummary: investmentsSummary,
     recentTransactions: transactions.take(5).toList(),
     transactionCountThisPeriod: transactionCountThisPeriod,
   );

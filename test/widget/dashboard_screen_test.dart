@@ -14,6 +14,11 @@ import 'package:finos_app/features/budgets/presentation/budgets_list_screen.dart
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
 import 'package:finos_app/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:finos_app/features/investments/application/investment_controller.dart';
+import 'package:finos_app/features/investments/data/investment_dao.dart';
+import 'package:finos_app/features/investments/domain/investment_contribution_mode.dart';
+import 'package:finos_app/features/investments/domain/investment_instrument_type.dart';
+import 'package:finos_app/features/investments/presentation/investments_list_screen.dart';
 import 'package:finos_app/features/reports/presentation/reports_screen.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
 import 'package:finos_app/features/transactions/domain/transaction_type.dart';
@@ -387,6 +392,83 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(BudgetsListScreen), findsOneWidget);
+
+    await database.close();
+  });
+
+  testWidgets('shows an Investments card once an active investment exists', (
+    tester,
+  ) async {
+    final database = await pumpDashboard(tester);
+    final accounts = AccountDao(database);
+    await accounts.insertOne(
+      FinancialAccountsCompanion.insert(
+        id: 'acct-bank',
+        name: 'Main Bank',
+        type: AccountType.bank,
+        openingBalanceMinor: const Value(10000000),
+      ),
+    );
+
+    expect(find.text('Investments'), findsNothing);
+
+    final controller = InvestmentController(
+      database,
+      InvestmentDao(database),
+      TransactionDao(database),
+      accounts,
+    );
+    await controller.create(
+      name: '1-year FDR',
+      instrumentType: InvestmentInstrumentType.fdr,
+      contributionMode: InvestmentContributionMode.lumpSum,
+      amountMinor: 5000000,
+      sourceAccountId: 'acct-bank',
+      payoutAccountId: 'acct-bank',
+      maturityDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Investments'), findsOneWidget);
+    expect(find.text('1 investment · ${formatMinorUnits(5000000)}'), findsOneWidget);
+
+    await database.close();
+  });
+
+  testWidgets('tapping the Investments card opens the Investments screen', (
+    tester,
+  ) async {
+    final database = await pumpDashboard(tester);
+    final accounts = AccountDao(database);
+    await accounts.insertOne(
+      FinancialAccountsCompanion.insert(
+        id: 'acct-bank',
+        name: 'Main Bank',
+        type: AccountType.bank,
+        openingBalanceMinor: const Value(10000000),
+      ),
+    );
+    final controller = InvestmentController(
+      database,
+      InvestmentDao(database),
+      TransactionDao(database),
+      accounts,
+    );
+    await controller.create(
+      name: '1-year FDR',
+      instrumentType: InvestmentInstrumentType.fdr,
+      contributionMode: InvestmentContributionMode.lumpSum,
+      amountMinor: 5000000,
+      sourceAccountId: 'acct-bank',
+      payoutAccountId: 'acct-bank',
+      maturityDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Investments'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(InvestmentsListScreen), findsOneWidget);
 
     await database.close();
   });

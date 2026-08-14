@@ -862,6 +862,13 @@ This is where the application begins moving toward the long-term product vision.
 > and Cash/Bank/Receivables beyond what Accounts, Loans, and now Investments
 > already model are still not built; this is exactly the "Assets −
 > Liabilities" figure below, no more.
+>
+> **Update:** Dashboard now shows an Investments summary card (§9.3's
+> "possible fast-follows" list), following the same aggregate-count pattern
+> as the existing Accounts/Budgets cards — shown only when at least one
+> active investment exists, tapping through to the Investments screen. The
+> combined total reuses Net Worth's own locked-principal rule: an investment
+> counts toward the total only while it is neither archived nor settled.
 
 Introduce:
 
@@ -929,12 +936,14 @@ Progress
 > the same way loan movements are (ADR-004), never created automatically —
 > the user always confirms or skips a due one, the same rule Recurring
 > Transactions (§8.1) follows. Net Worth (§9.1) now includes an active
-> investment's contributed principal as an asset. Deliberately not built:
-> any interest-rate field or calculated expected payout (a real amount is
-> always entered by the user when confirmed), early encashment/partial
-> withdrawal, a Dashboard summary card, and Reports integration — all
-> possible fast-follows. **Stocks, Bonds, Mutual Funds, ETFs, Crypto, and
-> brokerage-style holdings below remain entirely unbuilt** — the rest of
+> investment's contributed principal as an asset, and the Dashboard now
+> shows an aggregate Investments summary card (see the Net Worth section's
+> update above). Deliberately not built: any interest-rate field or
+> calculated expected payout (a real amount is always entered by the user
+> when confirmed), early encashment/partial withdrawal, and Reports
+> integration — still possible fast-follows. **Stocks, Bonds, Mutual Funds,
+> ETFs, Crypto, and brokerage-style holdings below remain entirely
+> unbuilt** — the rest of
 > this section describes that unbuilt future scope.
 
 Introduce investment accounts and holdings.
