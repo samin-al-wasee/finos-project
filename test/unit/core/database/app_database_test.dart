@@ -38,8 +38,8 @@ void main() {
       await database.close();
     });
 
-    test('starts at schema version 14', () {
-      expect(database.schemaVersion, 14);
+    test('starts at schema version 15', () {
+      expect(database.schemaVersion, 15);
     });
 
     test('seeds the built-in categories on a fresh database', () async {
@@ -1275,7 +1275,7 @@ class _RawDatabase extends GeneratedDatabase {
   _RawDatabase(super.e);
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   Iterable<TableInfo<Table, dynamic>> get allTables =>

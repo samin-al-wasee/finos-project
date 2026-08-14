@@ -897,6 +897,24 @@ Potential liabilities:
 
 # 9.2 Savings Goals
 
+> **Status:** Implemented, at the user's explicit request — see
+> [ADR-011](adr/011-savings-goals.md). A goal is a target amount, an optional
+> deadline, and a single linked account: contributions debit that account
+> into the goal, withdrawals credit it back, the same transactions-table
+> pattern Loans (ADR-004) and Investments (ADR-009) use, but without any
+> contribution/payout schedule — every movement is on-demand, like a loan's
+> repayments. Reached from Settings, alongside Templates, Recurring
+> Transactions, and Investments. Net Worth now includes each active goal's
+> current amount as an asset — safe from double-counting because a
+> contribution genuinely debits the linked account, the same reasoning that
+> already applies to an investment's principal. Reaching the target does
+> not archive the goal or stop further contributions — a derived fact, not
+> a status, the same precedent investment early withdrawal set (ADR-010).
+> Deliberately not built: a recurring contribution schedule, any
+> interest/growth projection, and a Dashboard summary card or Reports
+> integration — all possible fast-follows, the same pattern Investments
+> followed.
+
 Users can create financial goals.
 
 Examples:

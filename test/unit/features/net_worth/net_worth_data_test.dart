@@ -11,6 +11,8 @@ import 'package:finos_app/features/loans/domain/loan_progress.dart';
 import 'package:finos_app/features/loans/domain/loan_status.dart';
 import 'package:finos_app/features/net_worth/domain/net_worth_data.dart';
 import 'package:finos_app/features/recurring/domain/recurrence_frequency.dart';
+import 'package:finos_app/features/savings_goals/domain/savings_goal_progress.dart';
+import 'package:finos_app/features/savings_goals/domain/savings_goal_status.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Tests for [computeNetWorth] — a pure function over already-loaded
@@ -92,6 +94,30 @@ void main() {
     payoutReceivedMinor: payoutReceivedMinor,
     withdrawnMinor: withdrawnMinor,
     latestPayoutDate: latestPayoutDate,
+  );
+
+  SavingsGoalProgress savingsGoal({
+    required String id,
+    int targetAmountMinor = 1000000,
+    int contributedMinor = 0,
+    int withdrawnMinor = 0,
+    SavingsGoalStatus status = SavingsGoalStatus.active,
+  }) => SavingsGoalProgress(
+    goal: SavingsGoalRow(
+      id: id,
+      name: id,
+      targetAmountMinor: targetAmountMinor,
+      currency: 'BDT',
+      accountId: 'bank',
+      startDate: timestamp,
+      deadlineDate: null,
+      description: '',
+      status: status,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    ),
+    contributedMinor: contributedMinor,
+    withdrawnMinor: withdrawnMinor,
   );
 
   test('a plain account contributes its balance as an asset', () {
@@ -409,6 +435,95 @@ void main() {
       expect(result.assetsMinor, 100000 + 20000 + 30000);
       expect(result.liabilitiesMinor, 0);
       expect(result.netWorthMinor, 100000 + 20000 + 30000);
+    });
+  });
+
+  group('savings goals', () {
+    test('an active goal contributes its current amount as an asset', () {
+      final result = computeNetWorth(
+        accounts: const [],
+        balances: const {},
+        loans: const [],
+        savingsGoals: [
+          savingsGoal(id: 'fund', contributedMinor: 400000, withdrawnMinor: 100000),
+        ],
+      );
+
+      expect(result.assets, [
+        const NetWorthEntry(label: 'fund', amountMinor: 300000),
+      ]);
+      expect(result.liabilities, isEmpty);
+    });
+
+    test('an archived goal is excluded entirely', () {
+      final result = computeNetWorth(
+        accounts: const [],
+        balances: const {},
+        loans: const [],
+        savingsGoals: [
+          savingsGoal(
+            id: 'archived-fund',
+            contributedMinor: 400000,
+            status: SavingsGoalStatus.archived,
+          ),
+        ],
+      );
+
+      expect(result.assets, isEmpty);
+    });
+
+    test('a fully withdrawn goal contributes nothing', () {
+      final result = computeNetWorth(
+        accounts: const [],
+        balances: const {},
+        loans: const [],
+        savingsGoals: [
+          savingsGoal(id: 'fund', contributedMinor: 200000, withdrawnMinor: 200000),
+        ],
+      );
+
+      expect(result.assets, isEmpty);
+    });
+
+    test('an achieved goal still contributes its current amount — reaching '
+        'the target does not zero it out', () {
+      final result = computeNetWorth(
+        accounts: const [],
+        balances: const {},
+        loans: const [],
+        savingsGoals: [
+          savingsGoal(
+            id: 'fund',
+            targetAmountMinor: 500000,
+            contributedMinor: 600000,
+          ),
+        ],
+      );
+
+      expect(result.assets, [
+        const NetWorthEntry(label: 'fund', amountMinor: 600000),
+      ]);
+    });
+
+    test('mixed accounts, loans, investments, and savings goals net out '
+        'correctly', () {
+      final result = computeNetWorth(
+        accounts: [account(id: 'bank')],
+        balances: {'bank': 100000},
+        loans: [
+          loan(
+            id: 'john',
+            direction: LoanDirection.lent,
+            principalMinor: 20000,
+          ),
+        ],
+        investments: [investment(id: 'fdr', contributedMinor: 30000)],
+        savingsGoals: [savingsGoal(id: 'fund', contributedMinor: 40000)],
+      );
+
+      expect(result.assetsMinor, 100000 + 20000 + 30000 + 40000);
+      expect(result.liabilitiesMinor, 0);
+      expect(result.netWorthMinor, 100000 + 20000 + 30000 + 40000);
     });
   });
 }

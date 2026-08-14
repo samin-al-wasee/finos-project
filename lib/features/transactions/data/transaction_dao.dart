@@ -92,6 +92,10 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                THEN amount_minor
           WHEN type = '${_storage(TransactionType.investmentWithdrawal)}'
                THEN amount_minor
+          WHEN type = '${_storage(TransactionType.savingsContribution)}'
+               THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.savingsWithdrawal)}'
+               THEN amount_minor
           ELSE 0
         END
       ), 0) AS impact
@@ -136,6 +140,10 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
           WHEN type = '${_storage(TransactionType.investmentPayout)}'
                THEN amount_minor
           WHEN type = '${_storage(TransactionType.investmentWithdrawal)}'
+               THEN amount_minor
+          WHEN type = '${_storage(TransactionType.savingsContribution)}'
+               THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.savingsWithdrawal)}'
                THEN amount_minor
           ELSE 0
         END
@@ -375,6 +383,10 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                THEN amount_minor
           WHEN type = '${_storage(TransactionType.investmentWithdrawal)}'
                THEN amount_minor
+          WHEN type = '${_storage(TransactionType.savingsContribution)}'
+               THEN -amount_minor
+          WHEN type = '${_storage(TransactionType.savingsWithdrawal)}'
+               THEN amount_minor
           ELSE 0
         END
       ), 0) AS impact
@@ -525,5 +537,78 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     await (delete(
       transactions,
     )..where((t) => t.investmentId.equals(investmentId))).go();
+  }
+
+  /// Sum of the savings goal movements of one [type] belonging to
+  /// [savingsGoalId].
+  ///
+  /// Used to derive a goal's contributed/withdrawn totals — the same role
+  /// [investmentMovementTotal] plays for an investment's contributed/paid-out
+  /// totals (docs/adr/011-savings-goals.md).
+  Future<int> savingsGoalMovementTotal(
+    String savingsGoalId,
+    TransactionType type,
+  ) async {
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(amount_minor), 0) AS total
+      FROM transactions
+      WHERE savings_goal_id = ? AND type = ?
+      ''',
+      variables: [Variable(savingsGoalId), Variable(_storage(type))],
+    ).getSingle();
+
+    return row.read<int>('total');
+  }
+
+  /// Every transaction belonging to [savingsGoalId], newest first.
+  Future<List<TransactionRow>> forSavingsGoal(String savingsGoalId) {
+    return (select(transactions)
+          ..where((t) => t.savingsGoalId.equals(savingsGoalId))
+          ..orderBy([(t) => OrderingTerm.desc(t.date)]))
+        .get();
+  }
+
+  /// Whether [savingsGoalId] has any transaction of [type].
+  Future<bool> hasSavingsGoalMovement(
+    String savingsGoalId,
+    TransactionType type,
+  ) async {
+    final rows =
+        await (select(transactions)
+              ..where(
+                (t) =>
+                    t.savingsGoalId.equals(savingsGoalId) &
+                    t.type.equalsValue(type),
+              )
+              ..limit(1))
+            .get();
+    return rows.isNotEmpty;
+  }
+
+  /// Whether [savingsGoalId] has any transaction at all.
+  ///
+  /// Unlike investments/loans, creating a savings goal never inserts a
+  /// transaction (docs/adr/011-savings-goals.md §5) — there is no automatic
+  /// origination movement to exempt — so the delete guard is simply "any
+  /// movement blocks deletion," checked with this rather than per-type.
+  Future<bool> hasAnySavingsGoalMovement(String savingsGoalId) async {
+    final rows =
+        await (select(transactions)
+              ..where((t) => t.savingsGoalId.equals(savingsGoalId))
+              ..limit(1))
+            .get();
+    return rows.isNotEmpty;
+  }
+
+  /// Deletes every transaction belonging to [savingsGoalId].
+  ///
+  /// Used when a savings goal is deleted outright; the caller is responsible
+  /// for running this inside the same transaction as the goal's own
+  /// deletion.
+  Future<void> deleteForSavingsGoal(String savingsGoalId) async {
+    await (delete(
+      transactions,
+    )..where((t) => t.savingsGoalId.equals(savingsGoalId))).go();
   }
 }

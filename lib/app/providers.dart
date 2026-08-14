@@ -40,6 +40,9 @@ import '../features/reports/domain/investment_activity.dart';
 import '../features/reports/domain/monthly_spending.dart';
 import '../features/reports/domain/report_data.dart';
 import '../features/reports/domain/report_period.dart';
+import '../features/savings_goals/application/savings_goal_controller.dart';
+import '../features/savings_goals/data/savings_goal_dao.dart';
+import '../features/savings_goals/domain/savings_goal_progress.dart';
 import '../features/settings/application/settings_controller.dart';
 import '../features/settings/data/settings_dao.dart';
 import '../features/settings/domain/app_settings.dart';
@@ -600,6 +603,68 @@ final investmentMovementsProvider =
     });
 
 // ------------------------------------------------------------------
+// Savings goals
+// ------------------------------------------------------------------
+
+/// Data-access object for savings goals.
+final savingsGoalDaoProvider = Provider<SavingsGoalDao>((ref) {
+  return SavingsGoalDao(ref.watch(appDatabaseProvider));
+});
+
+/// Application service for the savings goal lifecycle.
+final savingsGoalControllerProvider = Provider<SavingsGoalController>((ref) {
+  return SavingsGoalController(
+    ref.watch(appDatabaseProvider),
+    ref.watch(savingsGoalDaoProvider),
+    ref.watch(transactionDaoProvider),
+    ref.watch(accountDaoProvider),
+  );
+});
+
+/// Reactive stream of all savings goals, including archived ones.
+final savingsGoalsStreamProvider = StreamProvider<List<SavingsGoalRow>>((ref) {
+  return _guardOpenTimeout(ref.watch(savingsGoalDaoProvider).watchAll());
+});
+
+/// Savings goals paired with everything derived from their transactions.
+///
+/// Watches the transaction stream as well as the savings goal stream, so
+/// recording a contribution or withdrawal immediately updates the derived
+/// current amount. Everything is derived on every read rather than stored
+/// (docs/adr/011-savings-goals.md), so it cannot drift from the transactions
+/// behind it.
+final savingsGoalProgressProvider = FutureProvider<List<SavingsGoalProgress>>((
+  ref,
+) async {
+  final goals = await ref.watch(savingsGoalsStreamProvider.future);
+  await ref.watch(transactionsStreamProvider.future);
+  final controller = ref.watch(savingsGoalControllerProvider);
+
+  final progress = <SavingsGoalProgress>[];
+  for (final goal in goals) {
+    progress.add(await controller.progressFor(goal));
+  }
+  return progress;
+});
+
+/// Derived figures for one savings goal, for the details screen.
+final savingsGoalProgressByIdProvider =
+    FutureProvider.family<SavingsGoalProgress?, String>((ref, goalId) async {
+      final all = await ref.watch(savingsGoalProgressProvider.future);
+      for (final entry in all) {
+        if (entry.goal.id == goalId) return entry;
+      }
+      return null;
+    });
+
+/// The transactions belonging to one savings goal, newest first.
+final savingsGoalMovementsProvider =
+    FutureProvider.family<List<TransactionRow>, String>((ref, goalId) async {
+      await ref.watch(transactionsStreamProvider.future);
+      return ref.watch(transactionDaoProvider).forSavingsGoal(goalId);
+    });
+
+// ------------------------------------------------------------------
 // Credit cards
 // ------------------------------------------------------------------
 
@@ -805,11 +870,13 @@ final netWorthProvider = FutureProvider<NetWorthData>((ref) async {
   final balances = await ref.watch(accountBalancesProvider.future);
   final loans = await ref.watch(loanProgressProvider.future);
   final investments = await ref.watch(investmentProgressProvider.future);
+  final savingsGoals = await ref.watch(savingsGoalProgressProvider.future);
   return computeNetWorth(
     accounts: accounts,
     balances: balances,
     loans: loans,
     investments: investments,
+    savingsGoals: savingsGoals,
   );
 });
 

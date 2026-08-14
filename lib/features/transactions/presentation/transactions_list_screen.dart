@@ -353,10 +353,17 @@ class _TransactionList extends StatelessWidget {
         final category = row.categoryId == null
             ? null
             : categoriesById[row.categoryId];
-        // Loan movements are read-only here. Editing or deleting one directly
-        // would let a loan's outstanding balance diverge from the transactions it
-        // is derived from, so they are managed from the loan itself (ADR-004).
-        final isLoan = isLoanTransaction(row.type);
+        // Loan, investment, and savings-goal movements are read-only here.
+        // Editing or deleting one directly would let a loan's outstanding
+        // balance, an investment's contributed/paid-out totals, or a goal's
+        // current amount diverge from the transactions they are derived
+        // from, so they are managed from their own feature instead (ADR-004,
+        // docs/adr/009-investment-accounting.md,
+        // docs/adr/011-savings-goals.md).
+        final isReadOnly =
+            isLoanTransaction(row.type) ||
+            isInvestmentTransaction(row.type) ||
+            isSavingsGoalTransaction(row.type);
         children.add(
           TransactionTile(
             key: ValueKey(row.id),
@@ -368,8 +375,8 @@ class _TransactionList extends StatelessWidget {
                       row.destinationAccountId,
             categoryName: category?.name,
             categoryIconKey: category?.icon,
-            onTap: isLoan ? null : () => _openEdit(context, row),
-            onDelete: isLoan ? null : () => onDelete(row),
+            onTap: isReadOnly ? null : () => _openEdit(context, row),
+            onDelete: isReadOnly ? null : () => onDelete(row),
           ),
         );
       }
@@ -796,6 +803,8 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
         return 'Loan';
       case TransactionTypeFilter.investment:
         return 'Investment';
+      case TransactionTypeFilter.savingsGoal:
+        return 'Savings Goal';
     }
   }
 }

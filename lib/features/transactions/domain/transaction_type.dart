@@ -23,6 +23,12 @@ import 'package:drift/drift.dart';
 /// It credits the payout account exactly like [investmentPayout], but is a
 /// distinct type so a payout's date relative to maturity stays the only thing
 /// that decides profit-vs-principal (ADR-009 §2), never an inferred flag.
+///
+/// [savingsContribution] and [savingsWithdrawal] are the equivalent pair for
+/// savings goals (docs/adr/011-savings-goals.md): a contribution debits the
+/// goal's linked account, a withdrawal credits it back. Unlike investments, a
+/// single account serves both directions — a goal is money set aside from the
+/// user's own accounts, not a separate financial product.
 enum TransactionType {
   income,
   expense,
@@ -32,6 +38,8 @@ enum TransactionType {
   investmentContribution,
   investmentPayout,
   investmentWithdrawal,
+  savingsContribution,
+  savingsWithdrawal,
 }
 
 /// Maps [TransactionType] to its canonical uppercase storage value in the
@@ -49,6 +57,8 @@ class TransactionTypeConverter extends TypeConverter<TransactionType, String> {
     TransactionType.investmentContribution: 'INVESTMENT_CONTRIBUTION',
     TransactionType.investmentPayout: 'INVESTMENT_PAYOUT',
     TransactionType.investmentWithdrawal: 'INVESTMENT_WITHDRAWAL',
+    TransactionType.savingsContribution: 'SAVINGS_CONTRIBUTION',
+    TransactionType.savingsWithdrawal: 'SAVINGS_WITHDRAWAL',
   };
 
   @override
@@ -86,3 +96,9 @@ bool isInvestmentTransaction(TransactionType type) =>
     type == TransactionType.investmentContribution ||
     type == TransactionType.investmentPayout ||
     type == TransactionType.investmentWithdrawal;
+
+/// Whether [type] records a savings goal movement rather than ordinary
+/// activity.
+bool isSavingsGoalTransaction(TransactionType type) =>
+    type == TransactionType.savingsContribution ||
+    type == TransactionType.savingsWithdrawal;

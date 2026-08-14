@@ -15,6 +15,7 @@ This directory records significant architectural decisions for FinOS.
 | [008](008-budget-rollover.md) | Accepted | Budget rollover |
 | [009](009-investment-accounting.md) | Accepted | Investment accounting (fixed-term instruments) |
 | [010](010-investment-early-withdrawal.md) | Accepted | Investment early withdrawal |
+| [011](011-savings-goals.md) | Accepted | Savings goals |
 
 ## Conventions
 

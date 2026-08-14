@@ -4,6 +4,7 @@ import '../../accounts/data/account_table.dart';
 import '../../categories/data/category_table.dart';
 import '../../investments/data/investment_table.dart';
 import '../../loans/data/loan_table.dart';
+import '../../savings_goals/data/savings_goal_table.dart';
 import '../domain/transaction_type.dart';
 
 /// Drift table for financial transactions (docs/DATA_MODEL.md §11).
@@ -53,6 +54,14 @@ class Transactions extends Table {
   /// through.
   TextColumn get investmentId =>
       text().nullable().references(Investments, #id)();
+
+  /// The savings goal this movement belongs to. Set only for
+  /// `SAVINGS_CONTRIBUTION` and `SAVINGS_WITHDRAWAL` rows, and null for all
+  /// ordinary activity (docs/adr/011-savings-goals.md). [accountId] carries
+  /// the goal's single linked account for both directions, unlike a loan or
+  /// investment movement, which can differ per type.
+  TextColumn get savingsGoalId =>
+      text().nullable().references(SavingsGoals, #id)();
 
   /// The calendar date the financial event happened (docs/DATA_MODEL.md §41).
   /// This is the financial event date, not the record-creation timestamp.

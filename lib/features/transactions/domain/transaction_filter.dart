@@ -10,8 +10,17 @@ import 'transaction_type.dart';
 /// [TransactionType.investmentContribution],
 /// [TransactionType.investmentPayout], and
 /// [TransactionType.investmentWithdrawal] (docs/adr/009-investment-accounting.md,
-/// docs/adr/010-investment-early-withdrawal.md).
-enum TransactionTypeFilter { income, expense, transfer, loan, investment }
+/// docs/adr/010-investment-early-withdrawal.md). [savingsGoal] is the same
+/// grouping for [TransactionType.savingsContribution] and
+/// [TransactionType.savingsWithdrawal] (docs/adr/011-savings-goals.md).
+enum TransactionTypeFilter {
+  income,
+  expense,
+  transfer,
+  loan,
+  investment,
+  savingsGoal,
+}
 
 /// Maps a stored [TransactionType] to the [TransactionTypeFilter] it belongs to.
 TransactionTypeFilter typeFilterFor(TransactionType type) {
@@ -29,6 +38,9 @@ TransactionTypeFilter typeFilterFor(TransactionType type) {
     case TransactionType.investmentPayout:
     case TransactionType.investmentWithdrawal:
       return TransactionTypeFilter.investment;
+    case TransactionType.savingsContribution:
+    case TransactionType.savingsWithdrawal:
+      return TransactionTypeFilter.savingsGoal;
   }
 }
 

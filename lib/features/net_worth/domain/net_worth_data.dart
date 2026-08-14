@@ -4,6 +4,7 @@ import '../../accounts/domain/account_type.dart';
 import '../../investments/domain/investment_progress.dart';
 import '../../loans/domain/loan_direction.dart';
 import '../../loans/domain/loan_progress.dart';
+import '../../savings_goals/domain/savings_goal_progress.dart';
 
 /// One line contributing to either side of a net-worth snapshot — an
 /// account's balance or a loan's outstanding amount.
@@ -73,11 +74,19 @@ class NetWorthData {
 /// [payoutReceivedMinor] as a whole, only a withdrawal or the maturity
 /// settlement reduces this (docs/adr/009-investment-accounting.md,
 /// docs/adr/010-investment-early-withdrawal.md).
+///
+/// A savings goal contributes its [SavingsGoalProgress.currentAmountMinor]
+/// as an asset while not archived — safe from double-counting because a
+/// contribution genuinely debits the goal's linked account, the same
+/// reasoning that makes an investment's principal a separate asset line
+/// rather than still being inside any account's balance
+/// (docs/adr/011-savings-goals.md).
 NetWorthData computeNetWorth({
   required List<FinancialAccountRow> accounts,
   required Map<String, int> balances,
   required List<LoanProgress> loans,
   List<InvestmentProgress> investments = const [],
+  List<SavingsGoalProgress> savingsGoals = const [],
 }) {
   final assets = <NetWorthEntry>[];
   final liabilities = <NetWorthEntry>[];
@@ -115,6 +124,16 @@ NetWorthData computeNetWorth({
       NetWorthEntry(
         label: progress.investment.name,
         amountMinor: progress.remainingPrincipalMinor,
+      ),
+    );
+  }
+
+  for (final progress in savingsGoals) {
+    if (progress.isArchived || progress.currentAmountMinor <= 0) continue;
+    assets.add(
+      NetWorthEntry(
+        label: progress.goal.name,
+        amountMinor: progress.currentAmountMinor,
       ),
     );
   }

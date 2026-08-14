@@ -401,6 +401,9 @@ class _RuleCard extends ConsumerWidget {
       case TransactionType.investmentPayout:
       case TransactionType.investmentWithdrawal:
         return 'Investment';
+      case TransactionType.savingsContribution:
+      case TransactionType.savingsWithdrawal:
+        return 'Savings Goal';
     }
   }
 }

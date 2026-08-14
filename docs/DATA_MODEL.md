@@ -381,6 +381,23 @@ relative to the instrument's maturity date stays the only thing that decides
 profit-vs-principal (ADR-009 §2) — never an inferred or stored flag that
 could disagree with it.
 
+### V1 implementation — savings goal movements
+
+Two further types record cash moving because of a savings goal
+(docs/adr/011-savings-goals.md):
+
+```text
+SAVINGS_CONTRIBUTION   money leaving the goal's linked account into the goal
+SAVINGS_WITHDRAWAL     money entering the goal's linked account from the goal
+```
+
+Same rationale as the loan and investment types above, applied to §58b's
+`SavingsGoals` instead. They always carry a null `category_id` and a
+non-null `savings_goal_id`, and they are created only through the savings
+goals feature. Unlike a loan or investment movement, both types use the
+same single `account_id` — a goal's linked account, not a pair of
+source/payout accounts (§58b).
+
 ---
 
 # 13. Income
@@ -2172,6 +2189,83 @@ calculated expected payout amounts (a real amount is always entered by the
 user when confirmed), and no brokerage-style holdings. Early
 encashment/partial withdrawal is built (above); stocks, ETFs, mutual funds,
 and crypto remain unbuilt.
+
+---
+
+# 58b. Savings Goals
+
+`SavingsGoals` holds targets a user is saving toward — an emergency fund, a
+big purchase, and similar (docs/ROADMAP.md §9.2,
+docs/adr/011-savings-goals.md). Modeled on Loans' on-demand-movement shape
+rather than Investments' schedule machinery — a goal has no contribution or
+payout schedule at all.
+
+```text
+SavingsGoals
+  id
+  name
+  target_amount_minor    (> 0)
+  currency
+  account_id              (references FinancialAccount — contributions
+                            debit this account, withdrawals credit it back;
+                            a single field, unlike Investments' separate
+                            source/payout accounts)
+  start_date
+  deadline_date           (nullable — not every goal has one)
+  description
+  status                  (ACTIVE | ARCHIVED — see below)
+  created_at
+  updated_at
+```
+
+Contributions and withdrawals are recorded as ordinary rows in
+`Transactions` via two new types and a nullable `savings_goal_id`, the same
+pattern §29–§36's `Loan` and §58a's `Investments` use:
+
+```text
+SAVINGS_CONTRIBUTION   money leaving the linked account into the goal
+SAVINGS_WITHDRAWAL     money entering the linked account from the goal
+```
+
+A transaction's `account_id` is the goal's single `account_id` for both
+directions. Like loan and investment movements, these carry no category, so
+they cannot enter spending-by-category or budget consumption.
+
+Nothing about progress is stored — all of it is derived data (§45) computed
+at read time from the goal row plus its transactions:
+
+```text
+contributed        = Σ(contribution transactions for the goal)
+withdrawn           = Σ(withdrawal transactions for the goal)
+current amount      = max(0, contributed − withdrawn)
+progress fraction   = min(1.0, current amount / target amount)
+is achieved         = current amount >= target amount
+is overdue          = deadline_date is set AND NOT is achieved AND
+                      deadline_date has passed
+net worth value     = current amount (while not archived)
+```
+
+A withdrawal may never be recorded for more than `current amount`
+(over-withdrawal is rejected, mirroring §36's loan-overpayment rule); a
+contribution has no upper cap — saving beyond the target is ordinary.
+Reaching `is achieved` does not change `status` — it stays `ACTIVE` until
+the user explicitly archives it, the same as a fully-repaid loan (§39) or a
+fully-withdrawn investment (§58a).
+
+Unlike Loans/Investments, creating a goal never inserts a transaction —
+every contribution and withdrawal is a separate, on-demand action — so
+there is no automatic-origination exception to the delete guard: any
+movement at all blocks deletion (§47).
+
+Only `ACTIVE`/`ARCHIVED` are stored. There is no stored `ACHIEVED` status —
+it is always derived, so correcting a mistaken contribution or withdrawal is
+deleting that transaction, never undoing a status.
+
+V1 scope is limited to the fields above — no recurring contribution
+schedule (unlike DPS), no interest or growth projection, and no Dashboard
+summary card or Reports integration yet (both are possible fast-follows,
+the same "additive, not required on first ship" pattern Investments
+followed).
 
 ---
 

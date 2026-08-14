@@ -28,6 +28,8 @@ import '../../features/loans/domain/loan_status.dart';
 import '../../features/recurring/data/recurring_transaction_table.dart';
 import '../../features/recurring/domain/recurrence_frequency.dart';
 import '../../features/recurring/domain/recurring_status.dart';
+import '../../features/savings_goals/data/savings_goal_table.dart';
+import '../../features/savings_goals/domain/savings_goal_status.dart';
 import '../../features/settings/data/settings_table.dart';
 import '../../features/templates/data/template_table.dart';
 import '../../features/transactions/data/saved_query_table.dart';
@@ -54,6 +56,7 @@ part 'app_database.g.dart';
     CreditCardDetails,
     BudgetCategories,
     Investments,
+    SavingsGoals,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -70,7 +73,7 @@ class AppDatabase extends _$AppDatabase {
   // ------------------------------------------------------------------
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -195,6 +198,20 @@ class AppDatabase extends _$AppDatabase {
         // includes this column.
         await _addInvestmentIdColumnIfMissing();
       }
+      if (from < 15) {
+        // Savings goals first: transactions.savings_goal_id references it —
+        // same ordering rule the v6 loans and v14 investments migrations
+        // follow.
+        await m.createTable(savingsGoals);
+        // Additive column, null for every existing row — no ordinary
+        // transaction belongs to a savings goal (docs/adr/011).
+        //
+        // Checked rather than added blindly for the same reason as
+        // `_addInvestmentIdColumnIfMissing`: an upgrade from before v3 just
+        // created the transactions table from the current schema, which
+        // already includes this column.
+        await _addSavingsGoalIdColumnIfMissing();
+      }
       debugPrint('[AppDatabase] onUpgrade — done');
     },
     beforeOpen: (details) async {
@@ -281,6 +298,14 @@ class AppDatabase extends _$AppDatabase {
       // either half undone.
       if (details.versionNow >= 14 && !details.wasCreated) {
         await _ensureInvestmentsSchema();
+      }
+
+      // Safety net for a v15 database missing part of the savings goals
+      // schema. Same rationale as _ensureInvestmentsSchema (v14): this
+      // version both created a table and altered an existing one, so an
+      // interruption can leave either half undone.
+      if (details.versionNow >= 15 && !details.wasCreated) {
+        await _ensureSavingsGoalsSchema();
       }
     },
   );
@@ -536,6 +561,44 @@ class AppDatabase extends _$AppDatabase {
 
     debugPrint('[AppDatabase] transactions.investment_id missing — adding');
     await Migrator(this).addColumn(transactions, transactions.investmentId);
+  }
+
+  /// Safety net for a v15 database missing part of the savings goals schema.
+  ///
+  /// Mirrors [_ensureInvestmentsSchema] exactly: v15 both created a table and
+  /// altered an existing one, so an interruption can leave either half
+  /// undone. [Migrator.createTable] is `CREATE TABLE IF NOT EXISTS` and so is
+  /// safe to repeat, but `ALTER TABLE ADD COLUMN` is not — the column is
+  /// checked for first via `PRAGMA table_info`.
+  Future<void> _ensureSavingsGoalsSchema() async {
+    final migrator = Migrator(this);
+    await migrator.createTable(savingsGoals);
+    await _addSavingsGoalIdColumnIfMissing();
+  }
+
+  /// Adds `transactions.savings_goal_id` only when it is absent.
+  ///
+  /// Mirrors [_addInvestmentIdColumnIfMissing] exactly: `ALTER TABLE ADD
+  /// COLUMN` is not idempotent, and there are two ways the column can
+  /// already exist: the transactions table may have just been created from
+  /// the current schema earlier in the same upgrade, or a previous run may
+  /// have added it before being interrupted.
+  Future<void> _addSavingsGoalIdColumnIfMissing() async {
+    final columns = await customSelect('PRAGMA table_info(transactions)').get();
+
+    // An empty result means the table does not exist at all — same edge
+    // case _addLoanIdColumnIfMissing documents. Skipping is correct: the v3
+    // safety net creates the table from the current schema, which already
+    // includes this column.
+    if (columns.isEmpty) return;
+
+    final hasSavingsGoalId = columns.any(
+      (row) => row.read<String>('name') == 'savings_goal_id',
+    );
+    if (hasSavingsGoalId) return;
+
+    debugPrint('[AppDatabase] transactions.savings_goal_id missing — adding');
+    await Migrator(this).addColumn(transactions, transactions.savingsGoalId);
   }
 
   /// Whether a table named [name] currently exists.

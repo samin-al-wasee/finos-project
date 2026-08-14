@@ -56,11 +56,12 @@ class TransactionTile extends StatelessWidget {
     final isTransfer = type == TransactionType.transfer;
     final isLoan = isLoanTransaction(type);
     final isInvestment = isInvestmentTransaction(type);
+    final isSavingsGoal = isSavingsGoalTransaction(type);
 
-    // Loan and investment movements carry a description written by their own
-    // feature (e.g. "Lent to John" or "Contribution · 5-year Sanchayapatra"),
-    // so the title reads correctly without threading those names through
-    // every caller of this tile.
+    // Loan, investment, and savings-goal movements carry a description
+    // written by their own feature (e.g. "Lent to John" or "Contribution ·
+    // 5-year Sanchayapatra"), so the title reads correctly without threading
+    // those names through every caller of this tile.
     final String title;
     if (isTransfer) {
       title = 'Transfer · $accountName → $destinationAccountName';
@@ -71,6 +72,10 @@ class TransactionTile extends StatelessWidget {
     } else if (isInvestment) {
       title = transaction.description.isEmpty
           ? 'Investment'
+          : transaction.description;
+    } else if (isSavingsGoal) {
+      title = transaction.description.isEmpty
+          ? 'Savings Goal'
           : transaction.description;
     } else if (categoryName?.isNotEmpty ?? false) {
       title = categoryName!;
@@ -88,6 +93,8 @@ class TransactionTile extends StatelessWidget {
       leadingIcon = Icons.handshake_outlined;
     } else if (isInvestment) {
       leadingIcon = Icons.savings_outlined;
+    } else if (isSavingsGoal) {
+      leadingIcon = Icons.flag_outlined;
     } else {
       leadingIcon = categoryIcon(categoryIconKey ?? 'label');
     }
@@ -187,6 +194,12 @@ class _Amount extends StatelessWidget {
         sign = '+';
         color = colors.transfer;
       case TransactionType.investmentWithdrawal:
+        sign = '+';
+        color = colors.transfer;
+      case TransactionType.savingsContribution:
+        sign = '-';
+        color = colors.transfer;
+      case TransactionType.savingsWithdrawal:
         sign = '+';
         color = colors.transfer;
     }
