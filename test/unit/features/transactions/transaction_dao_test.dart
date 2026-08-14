@@ -1,6 +1,10 @@
 import 'package:finos_app/core/database/app_database.dart';
 import 'package:finos_app/features/accounts/data/account_dao.dart';
 import 'package:finos_app/features/accounts/domain/account_type.dart';
+import 'package:finos_app/features/investments/data/investment_dao.dart';
+import 'package:finos_app/features/investments/domain/investment_contribution_mode.dart';
+import 'package:finos_app/features/investments/domain/investment_instrument_type.dart';
+import 'package:finos_app/features/investments/domain/investment_payout_frequency.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
 import 'package:finos_app/features/transactions/domain/transaction_type.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,11 +13,13 @@ void main() {
   group('TransactionDao', () {
     late AppDatabase database;
     late AccountDao accounts;
+    late InvestmentDao investments;
     late TransactionDao dao;
 
     setUp(() {
       database = AppDatabase.inMemory();
       accounts = AccountDao(database);
+      investments = InvestmentDao(database);
       dao = TransactionDao(database);
     });
 
@@ -33,6 +39,24 @@ void main() {
       return id;
     }
 
+    Future<String> seedInvestment(String id, {required String accountId}) async {
+      await investments.insertOne(
+        InvestmentsCompanion.insert(
+          id: id,
+          name: id,
+          instrumentType: InvestmentInstrumentType.fdr,
+          contributionMode: InvestmentContributionMode.lumpSum,
+          amountMinor: 100000,
+          sourceAccountId: accountId,
+          payoutAccountId: accountId,
+          startDate: DateTime(2026, 1, 1),
+          maturityDate: DateTime(2027, 1, 1),
+          payoutFrequency: const InvestmentPayoutFrequency.atMaturity(),
+        ),
+      );
+      return id;
+    }
+
     Future<TransactionRow> seedTransaction(
       String id, {
       required String accountId,
@@ -40,6 +64,7 @@ void main() {
       int amountMinor = 1000,
       String? destinationAccountId,
       String? categoryId,
+      String? investmentId,
       DateTime? date,
     }) async {
       final row = TransactionRow(
@@ -50,6 +75,7 @@ void main() {
         accountId: accountId,
         destinationAccountId: destinationAccountId,
         categoryId: categoryId,
+        investmentId: investmentId,
         date: date ?? DateTime(2026, 8, 10),
         description: '',
         createdAt: DateTime(2026, 8, 10),
@@ -352,6 +378,86 @@ void main() {
 
         expect(totals.incomeMinor, 0);
         expect(totals.expenseMinor, 0);
+      });
+    });
+
+    group('investmentTotalsByInvestment', () {
+      test('returns an empty map when nothing is in range', () async {
+        final result = await dao.investmentTotalsByInvestment(
+          DateTime(2026, 8, 1),
+          DateTime(2026, 9, 1),
+        );
+
+        expect(result, isEmpty);
+      });
+
+      test(
+        'sums contributions and payouts per investment within the range',
+        () async {
+          final source = await seedAccount('One');
+          await seedInvestment('inv-1', accountId: source);
+          await seedInvestment('inv-2', accountId: source);
+          await seedTransaction(
+            'contrib-1',
+            accountId: source,
+            type: TransactionType.investmentContribution,
+            amountMinor: 500000,
+            investmentId: 'inv-1',
+            date: DateTime(2026, 8, 5),
+          );
+          await seedTransaction(
+            'payout-1',
+            accountId: source,
+            type: TransactionType.investmentPayout,
+            amountMinor: 12000,
+            investmentId: 'inv-1',
+            date: DateTime(2026, 8, 10),
+          );
+          await seedTransaction(
+            'contrib-2',
+            accountId: source,
+            type: TransactionType.investmentContribution,
+            amountMinor: 300000,
+            investmentId: 'inv-2',
+            date: DateTime(2026, 8, 12),
+          );
+          await seedTransaction(
+            'outside-range',
+            accountId: source,
+            type: TransactionType.investmentContribution,
+            amountMinor: 999999,
+            investmentId: 'inv-1',
+            date: DateTime(2026, 9, 1),
+          );
+
+          final result = await dao.investmentTotalsByInvestment(
+            DateTime(2026, 8, 1),
+            DateTime(2026, 9, 1),
+          );
+
+          expect(result['inv-1']!.contributedMinor, 500000);
+          expect(result['inv-1']!.payoutMinor, 12000);
+          expect(result['inv-2']!.contributedMinor, 300000);
+          expect(result['inv-2']!.payoutMinor, 0);
+        },
+      );
+
+      test('excludes ordinary transactions with no investment id', () async {
+        final source = await seedAccount('One');
+        await seedTransaction(
+          'expense',
+          accountId: source,
+          type: TransactionType.expense,
+          amountMinor: 1000,
+          date: DateTime(2026, 8, 5),
+        );
+
+        final result = await dao.investmentTotalsByInvestment(
+          DateTime(2026, 8, 1),
+          DateTime(2026, 9, 1),
+        );
+
+        expect(result, isEmpty);
       });
     });
   });

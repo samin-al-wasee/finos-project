@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../../core/database/app_database.dart';
+import '../../investments/domain/investment_period_totals.dart';
 import '../domain/period_totals.dart';
 import '../domain/transaction_type.dart';
 import 'transaction_table.dart';
@@ -441,6 +442,42 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     ).getSingle();
 
     return row.read<int>('total');
+  }
+
+  /// Contribution and payout totals for every investment with activity dated
+  /// `from <= date < to`, keyed by investment id — the Investment Activity
+  /// report section's query (docs/ROADMAP.md §8.4). One grouped query rather
+  /// than N calls to [investmentMovementTotal], the same reasoning
+  /// [expenseTotalsByCategory] already applies to categories.
+  Future<Map<String, InvestmentPeriodTotals>> investmentTotalsByInvestment(
+    DateTime from,
+    DateTime to,
+  ) async {
+    final rows = await customSelect(
+      '''
+      SELECT investment_id AS investmentId,
+      COALESCE(SUM(
+        CASE WHEN type = '${_storage(TransactionType.investmentContribution)}'
+             THEN amount_minor ELSE 0 END
+      ), 0) AS contributed,
+      COALESCE(SUM(
+        CASE WHEN type = '${_storage(TransactionType.investmentPayout)}'
+             THEN amount_minor ELSE 0 END
+      ), 0) AS paidOut
+      FROM transactions
+      WHERE investment_id IS NOT NULL AND date >= ? AND date < ?
+      GROUP BY investment_id
+      ''',
+      variables: [Variable(from), Variable(to)],
+    ).get();
+
+    return {
+      for (final row in rows)
+        row.read<String>('investmentId'): InvestmentPeriodTotals(
+          contributedMinor: row.read<int>('contributed'),
+          payoutMinor: row.read<int>('paidOut'),
+        ),
+    };
   }
 
   /// Every transaction belonging to [investmentId], newest first.

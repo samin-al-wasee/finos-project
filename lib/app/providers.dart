@@ -34,7 +34,9 @@ import '../features/recurring/data/recurring_transaction_dao.dart';
 import '../features/recurring/domain/due_occurrences.dart';
 import '../features/recurring/domain/due_recurring_group.dart';
 import '../features/recurring/domain/recurring_status.dart';
+import '../features/investments/domain/investment_period_totals.dart';
 import '../features/reports/domain/account_cash_flow.dart';
+import '../features/reports/domain/investment_activity.dart';
 import '../features/reports/domain/monthly_spending.dart';
 import '../features/reports/domain/report_data.dart';
 import '../features/reports/domain/report_period.dart';
@@ -708,11 +710,37 @@ final reportDataProvider =
         );
       }
 
+      final investments = await ref.watch(investmentsStreamProvider.future);
+      final investmentTotals = await dao.investmentTotalsByInvestment(
+        window.from,
+        window.to,
+      );
+      final previousInvestmentTotals = await dao
+          .investmentTotalsByInvestment(
+            previousWindow.from,
+            previousWindow.to,
+          );
+      const zeroInvestmentTotals = InvestmentPeriodTotals(
+        contributedMinor: 0,
+        payoutMinor: 0,
+      );
+      final investmentActivity = [
+        for (final investment in investments)
+          InvestmentActivity(
+            investment: investment,
+            totals: investmentTotals[investment.id] ?? zeroInvestmentTotals,
+            previousTotals:
+                previousInvestmentTotals[investment.id] ??
+                zeroInvestmentTotals,
+          ),
+      ];
+
       return ReportData(
         totals: totals,
         previousTotals: previousTotals,
         categorySpending: categorySpending,
         accountCashFlows: accountCashFlowsForReport(accountCashFlows),
+        investmentActivity: investmentActivityForReport(investmentActivity),
       );
     });
 

@@ -938,10 +938,27 @@ Progress
 > Transactions (§8.1) follows. Net Worth (§9.1) now includes an active
 > investment's contributed principal as an asset, and the Dashboard now
 > shows an aggregate Investments summary card (see the Net Worth section's
-> update above). Deliberately not built: any interest-rate field or
-> calculated expected payout (a real amount is always entered by the user
-> when confirmed), early encashment/partial withdrawal, and Reports
-> integration — still possible fast-follows. **Stocks, Bonds, Mutual Funds,
+> update above).
+>
+> **Update:** Reports (§8.4) now has an "Investment Activity" section, the
+> last of the three listed fast-follows to ship. It follows Cash Flow by
+> Account's shape most closely — one row per investment with activity this
+> period, plus the same figures for the immediately preceding period as
+> plain text — but unlike cash flow's single signed net, contribution and
+> payout are shown as two separate non-negative figures: a contribution
+> moving money in and a payout moving money out are both ordinary activity
+> for the same investment in the same period, not opposing directions of one
+> flow, so there is nothing to net them into. The query
+> (`TransactionDao.investmentTotalsByInvestment`) sums both transaction types
+> grouped by `investment_id` for a date range, mirroring
+> `expenseTotalsByCategory`'s one-query-not-N shape. Archived investments and
+> investments with no activity this period are excluded, the same rule
+> `accountCashFlowsForReport` already applies to accounts.
+>
+> Deliberately not built: any interest-rate field or calculated expected
+> payout (a real amount is always entered by the user when confirmed) and
+> early encashment/partial withdrawal — still a possible fast-follow.
+> **Stocks, Bonds, Mutual Funds,
 > ETFs, Crypto, and brokerage-style holdings below remain entirely
 > unbuilt** — the rest of
 > this section describes that unbuilt future scope.

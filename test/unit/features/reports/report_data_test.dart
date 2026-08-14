@@ -21,6 +21,7 @@ void main() {
       ),
       categorySpending: const [],
       accountCashFlows: const [],
+      investmentActivity: const [],
     );
   }
 

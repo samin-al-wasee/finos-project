@@ -1,5 +1,6 @@
 import '../../transactions/domain/period_totals.dart';
 import 'account_cash_flow.dart';
+import 'investment_activity.dart';
 
 /// One category's share of a report period's expense.
 class CategoryAmount {
@@ -18,6 +19,7 @@ class ReportData {
     required this.previousTotals,
     required this.categorySpending,
     required this.accountCashFlows,
+    required this.investmentActivity,
   });
 
   /// Income/expense for the selected period.
@@ -33,6 +35,11 @@ class ReportData {
   /// filtered to active accounts with activity this period (see
   /// `accountCashFlowsForReport`).
   final List<AccountCashFlow> accountCashFlows;
+
+  /// Per-investment contribution/payout activity for this period and the
+  /// previous one, already filtered to active investments with activity
+  /// this period (see `investmentActivityForReport`).
+  final List<InvestmentActivity> investmentActivity;
 
   /// Percentage change in expense vs the previous period.
   ///

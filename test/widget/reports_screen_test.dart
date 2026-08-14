@@ -10,6 +10,10 @@ import 'package:finos_app/features/budgets/domain/budget_period.dart';
 import 'package:finos_app/features/budgets/domain/budget_status.dart';
 import 'package:finos_app/features/categories/data/category_dao.dart';
 import 'package:finos_app/features/categories/domain/category_type.dart';
+import 'package:finos_app/features/investments/application/investment_controller.dart';
+import 'package:finos_app/features/investments/data/investment_dao.dart';
+import 'package:finos_app/features/investments/domain/investment_contribution_mode.dart';
+import 'package:finos_app/features/investments/domain/investment_instrument_type.dart';
 import 'package:finos_app/features/reports/presentation/reports_screen.dart';
 import 'package:finos_app/features/transactions/data/transaction_dao.dart';
 import 'package:finos_app/features/transactions/domain/transaction_type.dart';
@@ -317,6 +321,36 @@ void main() {
     // The Net card and the account's own row show the same net amount,
     // since this is the only account with activity.
     expect(find.text('-৳400.00'), findsNWidgets(2));
+
+    await database.close();
+  });
+
+  testWidgets('shows an investment with contribution activity this period '
+      'in Investment Activity', (tester) async {
+    final database = await pumpReports(tester);
+    final accounts = AccountDao(database);
+    final controller = InvestmentController(
+      database,
+      InvestmentDao(database),
+      TransactionDao(database),
+      accounts,
+    );
+
+    await controller.create(
+      name: '1-year FDR',
+      instrumentType: InvestmentInstrumentType.fdr,
+      contributionMode: InvestmentContributionMode.lumpSum,
+      amountMinor: 500000, // ৳5,000
+      sourceAccountId: 'acct-1',
+      payoutAccountId: 'acct-1',
+      startDate: thisMonth,
+      maturityDate: DateTime(thisMonth.year + 1, thisMonth.month, 1),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Investment Activity'), findsOneWidget);
+    expect(find.text('1-year FDR'), findsOneWidget);
+    expect(find.text('Contributed ৳5,000.00'), findsOneWidget);
 
     await database.close();
   });

@@ -18,6 +18,7 @@ import '../../budgets/presentation/budget_labels.dart';
 import '../../categories/presentation/category_icon.dart';
 import '../domain/account_cash_flow.dart';
 import '../domain/budget_performance.dart';
+import '../domain/investment_activity.dart';
 import '../domain/monthly_spending.dart';
 import '../domain/report_data.dart';
 import '../domain/report_period.dart';
@@ -195,6 +196,7 @@ class _ReportBody extends StatelessWidget {
         data.totals.expenseMinor == 0 &&
         data.categorySpending.isEmpty &&
         budgetPerformance.isEmpty &&
+        data.investmentActivity.isEmpty &&
         !hasMonthlySpending) {
       return const EmptyState(
         icon: Icons.bar_chart_outlined,
@@ -275,6 +277,16 @@ class _ReportBody extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           for (final flow in data.accountCashFlows)
             _AccountCashFlowRow(flow: flow),
+        ],
+        if (data.investmentActivity.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Investment Activity',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final activity in data.investmentActivity)
+            _InvestmentActivityRow(activity: activity),
         ],
         const SizedBox(height: AppSpacing.lg),
       ],
@@ -689,6 +701,77 @@ class _AccountCashFlowRow extends StatelessWidget {
                 Text(
                   'Last period: '
                   '${formatMinorUnits(previousNetMinor, symbol: symbol)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.mutedText,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One row in the Investment Activity section — one investment's
+/// contribution and payout for the selected period, plus the same two
+/// figures for the previous period as plain text.
+///
+/// Unlike [_AccountCashFlowRow], contribution and payout are two separate
+/// non-negative figures rather than one signed net: a contribution moving
+/// money in and a payout moving money out are both ordinary activity for the
+/// same investment in the same period, not opposing directions of a single
+/// flow, so there's nothing to net them into (docs/ROADMAP.md §8.4).
+class _InvestmentActivityRow extends StatelessWidget {
+  const _InvestmentActivityRow({required this.activity});
+
+  final InvestmentActivity activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<FinosColors>()!;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: MergeSemantics(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.savings_outlined, size: 18, color: colors.mutedText),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                activity.investment.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  'Contributed ${formatMinorUnits(activity.totals.contributedMinor)}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (activity.totals.payoutMinor != 0)
+                  Text(
+                    'Payout ${formatMinorUnits(activity.totals.payoutMinor)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors.income,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                Text(
+                  'Last period: '
+                  '${formatMinorUnits(activity.previousTotals.contributedMinor)} '
+                  'contributed, '
+                  '${formatMinorUnits(activity.previousTotals.payoutMinor)} '
+                  'payout',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colors.mutedText,
                   ),
